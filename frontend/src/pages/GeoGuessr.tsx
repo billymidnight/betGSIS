@@ -438,7 +438,10 @@ export default function GeoGuessr() {
                     </div>
 
                     <div style={{marginTop:12}}>
-                      <ContinentPropsList />
+                      <h3 className="country-props-heading">Continent Totals</h3>
+                      <div style={{marginTop:8}}>
+                        <ContinentPropsList />
+                      </div>
                     </div>
                   </div>
                 ) : market === 'moneyline' ? (
