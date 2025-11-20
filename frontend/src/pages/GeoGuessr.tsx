@@ -6,7 +6,7 @@ import Footer from '../components/Layout/Footer';
 import BetSlip from '../components/GeoGuessr/BetSlip';
 import ContinentPropsList from '../components/GeoGuessr/ContinentPropsList';
 import ToastContainer from '../components/Shared/ToastContainer';
-import { fetchGeoTotals, fetchPricingLines, fetchPricingFirstGuess, fetchPricingCountryProps, fetchMoneylinesPrices, fetchSpecialsPrices, fetchFirstContinentRows } from '../lib/api/api';
+import { fetchGeoTotals, fetchPricingLines, fetchPricingFirstGuess, fetchPricingCountryProps, fetchMoneylinesPrices, fetchSpecialsPrices, fetchFirstContinentRows, fetchLocks } from '../lib/api/api';
 import { americanToDecimal } from '../lib/format';
 import './GeoGuessr.css';
 import { useBetsStore } from '../lib/state/betsStore';
@@ -18,6 +18,8 @@ export default function GeoGuessr() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingOdds, setIsUpdatingOdds] = useState<Record<number, boolean>>({});
+  const [masterLocked, setMasterLocked] = useState(false);
+  const [marketLocks, setMarketLocks] = useState<Record<string, boolean>>({});
   const addSelection = useBetsStore((s) => s.addSelection);
 
   // Load players on mount
@@ -90,7 +92,44 @@ export default function GeoGuessr() {
       }
     };
     loadPlayers();
+    // load locks
+    (async () => {
+      try {
+        const l = await fetchLocks();
+        const js = (l && (l.data || l)) || {};
+        const master = !!js.master;
+        setMasterLocked(master);
+        const mk: Record<string, boolean> = {};
+        const markets = Array.isArray(js.markets) ? js.markets : (js.markets || []);
+        markets.forEach((m: any) => {
+          const name = String(m.market || '').toLowerCase().trim();
+          const locked = !!m.locked;
+          // Map backend market names to frontend keys
+          if (name === 'master') {
+            // already handled
+          } else if (name.includes('totals')) mk['totals'] = locked;
+          else if (name.includes('first guess') || name.includes('first-guess') || name === 'first guess') mk['first-guess'] = locked;
+          else if (name.includes('last guess') || name.includes('last-guess')) mk['last-guess'] = locked;
+          else if (name.includes('spreads')) mk['spreads'] = locked;
+          else if (name.includes('country props') || name.includes('country-props') || name.includes('country')) mk['country-props'] = locked;
+          else if (name.includes('specials')) mk['specials'] = locked;
+          else if (name.includes('first round continent') || name === 'frc' || name.includes('frc')) mk['frc'] = locked;
+          else {
+            // fallback: store by raw lowercase name
+            mk[name] = locked;
+          }
+        });
+        setMarketLocks(mk);
+      } catch (e) {
+        console.warn('Failed to fetch locks', e);
+      }
+    })();
   }, []);
+
+  const isLocked = (key: string) => {
+    if (masterLocked) return true;
+    return !!marketLocks[key];
+  };
 
   // helper to update a single player's price (debounced per player)
   const debounceTimers = React.useRef<Record<number, ReturnType<typeof setTimeout>>>({});
@@ -130,7 +169,7 @@ export default function GeoGuessr() {
   // First-guess thresholds: 2100 .. 3900 step 300
   const FG_THRESHOLDS = Array.from({ length: Math.floor((3900 - 2100) / 300) + 1 }, (_, i) => 2100 + i * 300);
 
-  function CountryPropsList() {
+  function CountryPropsList({ locked = false }: { locked?: boolean }) {
     const [countries, setCountries] = useState<any[]>([]);
     const [expanded, setExpanded] = useState(false);
     const [loadingCountries, setLoadingCountries] = useState(false);
@@ -171,6 +210,9 @@ export default function GeoGuessr() {
 
     return (
       <div className="country-props-list-inner">
+        {locked && (
+          <div style={{padding: 8, fontWeight: 700, color: '#ff6b6b'}}>🔒 betGSIS traders have locked this market for now.</div>
+        )}
         {loadingCountries ? (
           <div>Loading countries...</div>
         ) : (
@@ -186,28 +228,24 @@ export default function GeoGuessr() {
                 <div className="player-prices" style={{display: 'flex', gap: '0.5rem'}}>
                   <button
                     className="price-btn over"
-                    onClick={() => {
-                      const sel = { playerId: c.country_id, playerName: c.country, threshold: 0, side: 'over' as const, decimalOdds: Number(c.odds_yes_decimal) || 1.0, stake: 0, market: 'country-props' };
-                      addSelection(sel as any);
-                    }}
-                    style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.35rem', cursor: 'pointer', borderRadius: '8px', border: '2px solid #28a745', backgroundColor: 'rgba(40, 167, 69, 0.03)'}}
+                    onClick={() => { if (locked) return; const sel = { playerId: c.country_id, playerName: c.country, threshold: 0, side: 'over' as const, decimalOdds: Number(c.odds_yes_decimal) || 1.0, stake: 0, market: 'country-props' }; addSelection(sel as any); }}
+                    disabled={locked}
+                    style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.35rem', cursor: locked ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '2px solid #28a745', backgroundColor: 'rgba(40, 167, 69, 0.03)'}}
                   >
                     <div style={{fontSize: '1.15rem', color: '#0ff', fontWeight: 800, textTransform: 'uppercase'}}>YES</div>
-                    <div style={{fontSize: '1.25rem', fontWeight: 900, color: '#fff'}}>{c.odds_yes_american}</div>
-                    <div style={{fontSize: '0.75rem', color: '#999', marginTop: '0.15rem'}}>{(c.odds_yes_decimal || 0).toFixed(2)}</div>
+                    {locked ? <div style={{fontSize:'1.4rem'}}>🔒</div> : <div style={{fontSize: '1.25rem', fontWeight: 900, color: '#fff'}}>{c.odds_yes_american}</div>}
+                    {!locked && <div style={{fontSize: '0.75rem', color: '#999', marginTop: '0.15rem'}}>{(c.odds_yes_decimal || 0).toFixed(2)}</div>}
                   </button>
 
                   <button
                     className="price-btn under"
-                    onClick={() => {
-                      const sel = { playerId: c.country_id, playerName: c.country, threshold: 0, side: 'under' as const, decimalOdds: Number(c.odds_no_decimal) || 1.0, stake: 0, market: 'country-props' };
-                      addSelection(sel as any);
-                    }}
-                    style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.35rem', cursor: 'pointer', borderRadius: '8px', border: '2px solid #d97706', backgroundColor: 'rgba(217, 119, 6, 0.03)'}}
+                    onClick={() => { if (locked) return; const sel = { playerId: c.country_id, playerName: c.country, threshold: 0, side: 'under' as const, decimalOdds: Number(c.odds_no_decimal) || 1.0, stake: 0, market: 'country-props' }; addSelection(sel as any); }}
+                    disabled={locked}
+                    style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.35rem', cursor: locked ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '2px solid #d97706', backgroundColor: 'rgba(217, 119, 6, 0.03)'}}
                   >
                     <div style={{fontSize: '1.15rem', color: '#d97706', fontWeight: 800, textTransform: 'uppercase'}}>NO</div>
-                    <div style={{fontSize: '1.25rem', fontWeight: 900, color: '#fff'}}>{c.odds_no_american}</div>
-                    <div style={{fontSize: '0.75rem', color: '#999', marginTop: '0.15rem'}}>{(c.odds_no_decimal || 0).toFixed(2)}</div>
+                    {locked ? <div style={{fontSize:'1.4rem'}}>🔒</div> : <div style={{fontSize: '1.25rem', fontWeight: 900, color: '#fff'}}>{c.odds_no_american}</div>}
+                    {!locked && <div style={{fontSize: '0.75rem', color: '#999', marginTop: '0.15rem'}}>{(c.odds_no_decimal || 0).toFixed(2)}</div>}
                   </button>
                 </div>
               </div>
@@ -224,7 +262,7 @@ export default function GeoGuessr() {
     );
   }
 
-  function MoneylineList() {
+  function MoneylineList({ locked = false }: { locked?: boolean }) {
     const [data, setData] = useState<any | null>(null);
     const [loading, setLoading] = useState(false);
     const addSelection = useBetsStore((s) => s.addSelection);
@@ -268,31 +306,43 @@ export default function GeoGuessr() {
                   <div key={`${sec.key}-${entry.player_id}`} className="player-card" style={{padding:'0.5rem', borderRadius:8}}>
                     <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                       <div style={{fontWeight:700}}>{entry.player}</div>
-                      <button className="price-btn over" onClick={() => {
-                        // For display in the betslip we set outcome to include the player name
-                        // followed by the human-readable moneyline label (this is what the
-                        // BetslipItem renders beneath the player name). The DB outcome is
-                        // generated when placing the bet and uses the short "ML" suffix
-                        // for first/last round (see BetSlip.tsx).
-                        let displayOutcome = '';
-                        // Build market string per user preference
-                        let marketStr = 'Moneyline';
-                        if (sec.key === 'classic') {
-                          marketStr = `${entry.player} - Moneyline`;
-                          displayOutcome = `${entry.player}: Moneyline`;
-                        } else if (sec.key === 'firstRound') {
-                          marketStr = `${entry.player}: First Round Moneyline`;
-                          displayOutcome = `${entry.player}: First Round Moneyline`;
-                        } else if (sec.key === 'lastRound') {
-                          marketStr = `${entry.player}: Last Round Moneyline`;
-                          displayOutcome = `${entry.player}: Last Round Moneyline`;
-                        }
-                        const sel = { playerId: entry.player_id, playerName: entry.player, threshold: null, side: 'win' as const, decimalOdds: Number(entry.decimal) || 1.0, stake: 0, market: marketStr, outcome: displayOutcome, odds_american: entry.american };
-                        addSelection(sel as any);
-                      }} style={{display:'flex', alignItems:'center', justifyContent:'center', padding:'0.35rem'}}>
+                      <button
+                        className="price-btn over"
+                        onClick={() => {
+                          if (locked) return;
+                          // For display in the betslip we set outcome to include the player name
+                          // followed by the human-readable moneyline label (this is what the
+                          // BetslipItem renders beneath the player name). The DB outcome is
+                          // generated when placing the bet and uses the short "ML" suffix
+                          // for first/last round (see BetSlip.tsx).
+                          let displayOutcome = '';
+                          // Build market string per user preference
+                          let marketStr = 'Moneyline';
+                          if (sec.key === 'classic') {
+                            marketStr = `${entry.player} - Moneyline`;
+                            displayOutcome = `${entry.player}: Moneyline`;
+                          } else if (sec.key === 'firstRound') {
+                            marketStr = `${entry.player}: First Round Moneyline`;
+                            displayOutcome = `${entry.player}: First Round Moneyline`;
+                          } else if (sec.key === 'lastRound') {
+                            marketStr = `${entry.player}: Last Round Moneyline`;
+                            displayOutcome = `${entry.player}: Last Round Moneyline`;
+                          }
+                          const sel = { playerId: entry.player_id, playerName: entry.player, threshold: null, side: 'win' as const, decimalOdds: Number(entry.decimal) || 1.0, stake: 0, market: marketStr, outcome: displayOutcome, odds_american: entry.american };
+                          addSelection(sel as any);
+                        }}
+                        disabled={locked}
+                        style={{display:'flex', alignItems:'center', justifyContent:'center', padding:'0.35rem', cursor: locked ? 'not-allowed' : undefined}}
+                      >
                         <div className="odds-box">
-                          <div className="price-large">{entry.american}</div>
-                          <div className="price-small">{(Number(entry.decimal) || 1.0).toFixed(2)}</div>
+                          {locked ? (
+                            <div style={{fontSize:'1.4rem'}}>🔒</div>
+                          ) : (
+                            <>
+                              <div className="price-large">{entry.american}</div>
+                              <div className="price-small">{(Number(entry.decimal) || 1.0).toFixed(2)}</div>
+                            </>
+                          )}
                         </div>
                       </button>
                     </div>
@@ -306,7 +356,7 @@ export default function GeoGuessr() {
     );
   }
 
-  function SpecialsList() {
+  function SpecialsList({ locked = false }: { locked?: boolean }) {
     const [rows, setRows] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const addSelection = useBetsStore((s) => s.addSelection);
@@ -335,6 +385,9 @@ export default function GeoGuessr() {
 
     return (
       <div style={{display:'grid', gap:8}}>
+        {locked && (
+          <div style={{padding:8, fontWeight:700, color:'#ff6b6b'}}>🔒 betGSIS traders have locked this market for now.</div>
+        )}
         {rows.map((r: any) => {
           // parse American odds string to decimal for betslip
           let amerRaw = r.odds;
@@ -353,12 +406,9 @@ export default function GeoGuessr() {
               <div style={{display:'grid', gridTemplateColumns: '1fr 140px', alignItems: 'center', gap: 8}}>
                 <div style={{fontSize: '1.8rem', fontWeight: 900}}>{r.outcome}</div>
                 <div style={{display:'flex', justifyContent:'flex-end'}}>
-                      <button className="price-btn over" onClick={() => {
-                        const sel = { playerId: null, playerName: null, threshold: null, side: 'special' as const, decimalOdds: dec, stake: 0, market: 'Specials', outcome: r.outcome, odds_american: (r.odds || '').toString() };
-                        addSelection(sel as any);
-                      }} style={{minWidth:140, display:'flex', alignItems:'center', justifyContent:'center'}}>
+                      <button className="price-btn over" onClick={() => { if (locked) return; const sel = { playerId: null, playerName: null, threshold: null, side: 'special' as const, decimalOdds: dec, stake: 0, market: 'Specials', outcome: r.outcome, odds_american: (r.odds || '').toString() }; addSelection(sel as any); }} disabled={locked} style={{minWidth:140, display:'flex', alignItems:'center', justifyContent:'center', cursor: locked ? 'not-allowed' : undefined}}>
                     <div className="odds-box">
-                      <div className="price-large">{r.odds}</div>
+                      {locked ? <div style={{fontSize:'1.4rem'}}>🔒</div> : <div className="price-large">{r.odds}</div>}
                     </div>
                   </button>
                 </div>
@@ -370,7 +420,7 @@ export default function GeoGuessr() {
     );
   }
 
-  function FirstContinentList() {
+  function FirstContinentList({ locked = false }: { locked?: boolean }) {
     const [rows, setRows] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const addSelection = useBetsStore((s) => s.addSelection);
@@ -399,6 +449,9 @@ export default function GeoGuessr() {
 
     return (
       <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8}}>
+        {locked && (
+          <div style={{gridColumn: '1 / -1', padding: 8, fontWeight: 700, color: '#ff6b6b'}}>🔒 betGSIS traders have locked this market for now.</div>
+        )}
         {rows.map((r: any) => {
           const p = Number(r.probability_first_round) || 0;
           let p_adj = p * 1.05;
@@ -421,13 +474,18 @@ export default function GeoGuessr() {
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                 <div style={{fontWeight:700}}>{r.continent_name}</div>
                 <button className="price-btn over" onClick={() => {
+                  if (locked) return;
                   const outcome = `${r.continent_name}: First Round Appearance`;
                   const sel = { playerId: Number(r.continent_id), playerName: r.continent_name, threshold: null, side: 'over' as const, decimalOdds: Number(dec) || 1.0, stake: 0, market: 'frc', outcome, odds_american: amer };
                   addSelection(sel as any);
-                }} style={{display:'flex', alignItems:'center', justifyContent:'center', padding:'0.35rem'}}>
+                }} disabled={locked} style={{display:'flex', alignItems:'center', justifyContent:'center', padding:'0.35rem', cursor: locked ? 'not-allowed' : 'pointer'}}>
                   <div className="odds-box">
-                    <div className="price-large">{amer}</div>
-                    <div className="price-small" style={{opacity:0.7}}>{(Number(dec) || 0).toFixed(2)}</div>
+                    {locked ? <div style={{fontSize:'1.4rem'}}>🔒</div> : (
+                      <>
+                        <div className="price-large">{amer}</div>
+                        <div className="price-small" style={{opacity:0.7}}>{(Number(dec) || 0).toFixed(2)}</div>
+                      </>
+                    )}
                   </div>
                 </button>
               </div>
@@ -506,29 +564,29 @@ export default function GeoGuessr() {
                 {market === 'country-props' ? (
                   <div className="country-props">
                     <h3 className="country-props-heading">To Appear</h3>
-                    <div className="country-props-list">
+                      <div className="country-props-list">
                       {/* show top 5, expandable */}
-                      <CountryPropsList />
+                      <CountryPropsList locked={isLocked('country-props')} />
                     </div>
 
-                    <div style={{marginTop:12}}>
+                        <div style={{marginTop:12}}>
                       <h3 className="country-props-heading">Continent Totals</h3>
                       <div style={{marginTop:8}}>
-                        <ContinentPropsList />
+                        <ContinentPropsList locked={isLocked('country-props')} />
                       </div>
                     </div>
                   </div>
                 ) : market === 'moneyline' ? (
-                  <div className="moneyline-panel">
-                    <MoneylineList />
-                  </div>
+                              <div className="moneyline-panel">
+                                <MoneylineList locked={isLocked('moneyline')} />
+                              </div>
                 ) : market === 'frc' ? (
                   <div className="frc-panel">
-                    <FirstContinentList />
+                    <FirstContinentList locked={isLocked('frc')} />
                   </div>
                 ) : market === 'specials' ? (
                   <div className="specials-panel">
-                    <SpecialsList />
+                    <SpecialsList locked={isLocked('specials')} />
                   </div>
                 ) : (
                 <div className="players-list">
@@ -564,27 +622,41 @@ export default function GeoGuessr() {
                       <div className="player-prices">
                         {(() => {
                           const displayedLine = (market === 'first-guess' || market === 'last-guess') ? (p.first_guess_line || p.line) : p.line;
+                          const marketKeyForPlayers = market === 'totals' ? 'totals' : market === 'first-guess' ? 'first-guess' : market === 'last-guess' ? 'last-guess' : '';
+                          const marketLocked = marketKeyForPlayers ? isLocked(marketKeyForPlayers) : false;
                           return (
                             <>
-                              <button className="price-btn over" disabled={!!isUpdatingOdds[p.player_id]} onClick={() => {
-                                if (isUpdatingOdds[p.player_id]) return;
+                              <button className="price-btn over" disabled={!!isUpdatingOdds[p.player_id] || marketLocked} onClick={() => {
+                                if (isUpdatingOdds[p.player_id] || marketLocked) return;
                                 const sel = { playerId: p.player_id, playerName: p.name, threshold: p.current_threshold, side: 'over' as const, decimalOdds: Number(displayedLine?.odds_over_decimal) || 1.0, stake: 0, market };
                                 addSelection(sel as any);
                               }}>
                                 <div className="odds-box">
-                                  <div className="price-large">{displayedLine ? displayedLine.odds_over_american : '—'}</div>
-                                  <div className="price-small">{displayedLine ? (Number(displayedLine.odds_over_decimal || displayedLine.odds_over || 0)).toFixed(2) : ''}</div>
+                                  {marketLocked ? (
+                                    <div style={{fontSize: '1.4rem'}}>🔒</div>
+                                  ) : (
+                                    <>
+                                      <div className="price-large">{displayedLine ? displayedLine.odds_over_american : '—'}</div>
+                                      <div className="price-small">{displayedLine ? (Number(displayedLine.odds_over_decimal || displayedLine.odds_over || 0)).toFixed(2) : ''}</div>
+                                    </>
+                                  )}
                                 </div>
                               </button>
 
-                              <button className="price-btn under" disabled={!!isUpdatingOdds[p.player_id]} onClick={() => {
-                                if (isUpdatingOdds[p.player_id]) return;
+                              <button className="price-btn under" disabled={!!isUpdatingOdds[p.player_id] || marketLocked} onClick={() => {
+                                if (isUpdatingOdds[p.player_id] || marketLocked) return;
                                 const sel = { playerId: p.player_id, playerName: p.name, threshold: p.current_threshold, side: 'under' as const, decimalOdds: Number(displayedLine?.odds_under_decimal) || 1.0, stake: 0, market };
                                 addSelection(sel as any);
                               }}>
                                 <div className="odds-box">
-                                  <div className="price-large">{displayedLine ? displayedLine.odds_under_american : '—'}</div>
-                                  <div className="price-small">{displayedLine ? (Number(displayedLine.odds_under_decimal || displayedLine.odds_under || 0)).toFixed(2) : ''}</div>
+                                  {marketLocked ? (
+                                    <div style={{fontSize: '1.4rem'}}>🔒</div>
+                                  ) : (
+                                    <>
+                                      <div className="price-large">{displayedLine ? displayedLine.odds_under_american : '—'}</div>
+                                      <div className="price-small">{displayedLine ? (Number(displayedLine.odds_under_decimal || displayedLine.odds_under || 0)).toFixed(2) : ''}</div>
+                                    </>
+                                  )}
                                 </div>
                               </button>
                             </>

@@ -3,7 +3,9 @@ import { fetchPricingContinentProps } from '../../lib/api/api';
 import { useBetsStore } from '../../lib/state/betsStore';
 import { americanToDecimal } from '../../lib/format';
 
-export default function ContinentPropsList() {
+interface Props { locked?: boolean }
+
+export default function ContinentPropsList({ locked = false }: Props) {
   const [continents, setContinents] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [expanded, setExpanded] = useState<boolean>(false);
@@ -40,6 +42,11 @@ export default function ContinentPropsList() {
 
   return (
     <div className="continent-props">
+      {locked && (
+        <div style={{padding: 8, fontWeight: 700, color: '#ff6b6b'}}>
+          🔒 betGSIS traders have locked this market for now.
+        </div>
+      )}
       {continents.map((c: any) => (
         <div key={c.name} className="continent-block player-card" style={{padding: '0.5rem', borderRadius: 8, marginBottom: 8}}>
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
@@ -88,24 +95,34 @@ export default function ContinentPropsList() {
                   <div style={{fontSize: '0.9rem', color: '#bbb', fontWeight: 700, marginBottom: 4}}>{`Over ${formattedHook} / Under ${formattedHook}`}</div>
                   <div className="hook-row" style={{display: 'flex', gap: 8}}>
                   <button className="price-btn over" onClick={() => {
+                    if (locked) return;
                     const sel = { playerId: -1, playerName: c.name, point: processedHook, threshold: processedHook, side: 'over' as const, decimalOdds: overDec, stake: 0, market: 'Continent Totals', outcome: `${c.name}: Over ${formattedHook}`, odds_american: overA };
                     addSelection(sel as any);
-                  }} style={{flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                  }} disabled={locked} style={{flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                       <div className="odds-box">
                         <div className="hook-label" style={{fontSize: '0.95rem', fontWeight: 800, color: '#6a0dad', marginBottom: 6}}>{`Over ${formattedHook}`}</div>
-                        <div className="price-large">{h.overOddsAmerican || overA}</div>
-                        <div className="price-small">{(overDec || 1.0).toFixed(2)}</div>
+                        {locked ? <div style={{fontSize:'1.4rem'}}>🔒</div> : (
+                          <>
+                            <div className="price-large">{h.overOddsAmerican || overA}</div>
+                            <div className="price-small">{(overDec || 1.0).toFixed(2)}</div>
+                          </>
+                        )}
                       </div>
                   </button>
 
                   <button className="price-btn under" onClick={() => {
+                    if (locked) return;
                     const sel = { playerId: -1, playerName: c.name, point: processedHook, threshold: processedHook, side: 'under' as const, decimalOdds: underDec, stake: 0, market: 'Continent Totals', outcome: `${c.name}: Under ${formattedHook}`, odds_american: underA };
                     addSelection(sel as any);
-                  }} style={{flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                  }} disabled={locked} style={{flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                     <div className="odds-box">
                       <div className="hook-label" style={{fontSize: '0.95rem', fontWeight: 800, color: '#6a0dad', marginBottom: 6}}>{`Under ${formattedHook}`}</div>
-                      <div className="price-large">{h.underOddsAmerican || underA}</div>
-                      <div className="price-small">{(underDec || 1.0).toFixed(2)}</div>
+                      {locked ? <div style={{fontSize:'1.4rem'}}>🔒</div> : (
+                        <>
+                          <div className="price-large">{h.underOddsAmerican || underA}</div>
+                          <div className="price-small">{(underDec || 1.0).toFixed(2)}</div>
+                        </>
+                      )}
                     </div>
                   </button>
                 </div>
