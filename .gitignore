@@ -9,3 +9,18 @@ build/
 .DS_Store
 *.log
 .env
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+*.log
+.venv/
+env/
+
+# Python virtual environments
+env/
+venv/
+.venv/
+backend/env/
