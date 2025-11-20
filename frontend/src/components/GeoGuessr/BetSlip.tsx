@@ -52,7 +52,8 @@ export default function BetSlip() {
         if (sel.market === 'country-props') {
           // continent markets are represented with playerId === -1 and a non-zero threshold
           if (sel.playerId === -1 || (sel.threshold && Number(sel.threshold) > 0)) {
-            bet_name = `${sel.playerName}: ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold} Appearances`;
+            // Continent totals: include the numeric threshold in the label
+            bet_name = `${sel.playerName}: ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
           } else {
             bet_name = `${sel.playerName}: To Appear - ${sel.side === 'over' ? 'Yes' : 'No'}`;
           }

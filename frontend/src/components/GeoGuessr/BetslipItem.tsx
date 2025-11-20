@@ -39,12 +39,14 @@ export default function BetslipItem({ selection }: Props) {
               <div style={{fontWeight:700}}>{String(selection.outcome).split(':').slice(1).join(':').trim() || 'Moneyline'}</div>
             ) : selection.market === 'first-guess' ? (
               <>{selection.side.toUpperCase()} {`${selection.threshold} - First Round`}</>
+            ) : selection.market === 'first-guess' ? (
+              <>{selection.side.toUpperCase()} {`${selection.threshold} - First Round`}</>
             ) : selection.market === 'country-props' ? (
-            // Distinguish continent-style props (playerId === -1 and threshold > 0)
-            (selection.playerId === -1 || (selection.threshold && Number(selection.threshold) > 0)) ? (
+            // Distinguish continent-style props (also support Continent Totals and selections with a `point` field)
+            (selection.market === 'Continent Totals' || selection.playerId === -1 || (selection.threshold && Number(selection.threshold) > 0) || (selection as any).point != null) ? (
               <>
                 <span style={{color: selection.side === 'over' ? '#28a745' : '#d97706', fontWeight: 700}}>
-                  {selection.side === 'over' ? 'Over' : 'Under'} {selection.threshold} Appearances
+                  {selection.side === 'over' ? 'Over' : 'Under'} {(selection.threshold ?? (selection as any).point) ?? ''}
                 </span>
               </>
             ) : (
