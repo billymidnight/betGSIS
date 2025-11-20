@@ -14,7 +14,7 @@ import { useBetsStore } from '../lib/state/betsStore';
 export default function GeoGuessr() {
   const [geoPlayers, setGeoPlayers] = useState<any[]>([]);
   const [thresholdList, setThresholdList] = useState<number[]>([]);
-  const [market, setMarket] = useState<'totals' | 'first-guess' | 'country-props' | 'moneyline' | 'specials'>('totals');
+  const [market, setMarket] = useState<'totals' | 'first-guess' | 'last-guess' | 'country-props' | 'moneyline' | 'specials'>('totals');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingOdds, setIsUpdatingOdds] = useState<Record<number, boolean>>({});
@@ -110,15 +110,15 @@ export default function GeoGuessr() {
           const byPlayer = results[pidKey] || {};
           const entry = byPlayer[String(threshold)] || null;
           setGeoPlayers((prev) => prev.map((p) => (p.player_id === playerId ? { ...p, current_threshold: threshold, line: entry } : p)));
-        } else if (market === 'first-guess') {
-          // first-guess market: call new endpoint with 700 bps default
-          res = await fetchPricingFirstGuess([playerId], [threshold], 'normal', 700);
-          const results = res.results || res || {};
-          const pidKey = String(playerId);
-          const byPlayer = results[pidKey] || {};
-          const entry = byPlayer[String(threshold)] || null;
-          setGeoPlayers((prev) => prev.map((p) => (p.player_id === playerId ? { ...p, current_threshold: threshold, first_guess_line: entry } : p)));
-        }
+        } else if (market === 'first-guess' || market === 'last-guess') {
+           // first-guess market: call new endpoint with 700 bps default
+           res = await fetchPricingFirstGuess([playerId], [threshold], 'normal', 700);
+           const results = res.results || res || {};
+           const pidKey = String(playerId);
+           const byPlayer = results[pidKey] || {};
+           const entry = byPlayer[String(threshold)] || null;
+           setGeoPlayers((prev) => prev.map((p) => (p.player_id === playerId ? { ...p, current_threshold: threshold, first_guess_line: entry } : p)));
+         }
       } catch (e) {
         console.error(e);
       } finally {
@@ -351,7 +351,7 @@ export default function GeoGuessr() {
           return (
             <div key={`spec-${r.betid || r.betId || r.id || r.outcome}`} className="player-card" style={{padding: '0.5rem', borderRadius:8}}>
               <div style={{display:'grid', gridTemplateColumns: '1fr 140px', alignItems: 'center', gap: 8}}>
-                <div style={{fontSize: '1.05rem', fontWeight: 900}}>{r.outcome}</div>
+                <div style={{fontSize: '1.8rem', fontWeight: 900}}>{r.outcome}</div>
                 <div style={{display:'flex', justifyContent:'flex-end'}}>
                       <button className="price-btn over" onClick={() => {
                         const sel = { playerId: null, playerName: null, threshold: null, side: 'special' as const, decimalOdds: dec, stake: 0, market: 'Specials', outcome: r.outcome, odds_american: (r.odds || '').toString() };
@@ -370,12 +370,12 @@ export default function GeoGuessr() {
     );
   }
 
-  const handleMarketChange = (m: 'totals' | 'first-guess' | 'country-props') => {
+  const handleMarketChange = (m: 'totals' | 'first-guess' | 'last-guess' | 'country-props') => {
     if (m === market) return;
     setMarket(m);
 
     // when switching to first-guess, compute default per-player threshold (nearest 300 to mean/5)
-    if (m === 'first-guess') {
+    if (m === 'first-guess' || m === 'last-guess') {
       // compute per-player default FG threshold (nearest 300, clamped to FG_THRESHOLDS)
       setGeoPlayers((prev) => prev.map((p) => {
         const mu = p.mean_score || 0;
@@ -417,6 +417,7 @@ export default function GeoGuessr() {
             <button className={`market-tab ${market === 'totals' ? 'active' : ''}`} onClick={() => handleMarketChange('totals')}>Totals</button>
             <button className="market-tab" disabled>Spreads (coming)</button>
             <button className={`market-tab ${market === 'first-guess' ? 'active' : ''}`} onClick={() => handleMarketChange('first-guess')}>First Guess Points</button>
+            <button className={`market-tab ${market === 'last-guess' ? 'active' : ''}`} onClick={() => handleMarketChange('last-guess')}>Last Guess Points</button>
             <button className={`market-tab ${market === 'country-props' ? 'active' : ''}`} onClick={() => handleMarketChange('country-props')}>Country Props</button>
             <button className={`market-tab ${market === 'moneyline' ? 'active' : ''}`} onClick={() => setMarket('moneyline')}>Moneyline</button>
             <button className={`market-tab ${market === 'specials' ? 'active' : ''}`} onClick={() => setMarket('specials')}>Specials</button>
@@ -458,6 +459,12 @@ export default function GeoGuessr() {
                   </div>
                 ) : (
                 <div className="players-list">
+                  {market === 'first-guess' && (
+                    <h3 className="country-props-heading">First Round Totals</h3>
+                  )}
+                  {market === 'last-guess' && (
+                    <h3 className="country-props-heading">Last Round Totals</h3>
+                  )}
                   {geoPlayers.map((p: any) => (
                     <div key={p.player_id} className="player-card">
                       <div className="player-top">
@@ -483,7 +490,7 @@ export default function GeoGuessr() {
 
                       <div className="player-prices">
                         {(() => {
-                          const displayedLine = market === 'first-guess' ? (p.first_guess_line || p.line) : p.line;
+                          const displayedLine = (market === 'first-guess' || market === 'last-guess') ? (p.first_guess_line || p.line) : p.line;
                           return (
                             <>
                               <button className="price-btn over" disabled={!!isUpdatingOdds[p.player_id]} onClick={() => {

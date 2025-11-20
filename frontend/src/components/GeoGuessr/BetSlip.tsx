@@ -58,6 +58,8 @@ export default function BetSlip() {
           }
         } else if (sel.market === 'first-guess') {
           bet_name = `${sel.playerName}: First Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
+        } else if (String(sel.market) === 'last-guess') {
+          bet_name = `${sel.playerName}: Last Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
         } else {
           bet_name = `${sel.playerName}: ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold} Points`;
         }
@@ -74,31 +76,56 @@ export default function BetSlip() {
           payloadOutcome = sel.outcome || sel.playerName || null;
         } else if (typeof (sel.market || '') === 'string' && (sel.market || '').toLowerCase().includes('moneyline')) {
           // Moneyline selections: normalize market to generic 'Moneyline'.
-          // DB outcome naming rules (short forms for DB):
-          //  - Overall -> "<PlayerName>: Moneyline"
-          //  - First Round -> "<PlayerName>: First Round ML"
-          //  - Last Round -> "<PlayerName>: Last Round ML"
-          // The user-facing selection.outcome contains longer, human-readable labels
-          // (e.g. "Pam: First Round Moneyline") which BetslipItem displays under
-          // the player name. Here we only set the DB outcome string to the exact
-          // canonical values required.
+          // REQUIREMENT: Store the DB `outcome` exactly as shown on the betslip
+          // beneath the player name in the form: "<PlayerName>: <OutcomeText>".
+          // The selection object already carries a human-readable `outcome`
+          // (e.g. "Pam: First Round Moneyline") which BetslipItem renders.
+          // Use that verbatim for DB insertion. Only fall back to constructing
+          // the string if sel.outcome is missing.
           payloadMarket = 'Moneyline';
-          const m = String(sel.market || '');
-          if (m.toLowerCase().includes('first')) {
-            payloadOutcome = `${sel.playerName}: First Round ML`;
-          } else if (m.toLowerCase().includes('last')) {
-            payloadOutcome = `${sel.playerName}: Last Round ML`;
+          if (sel.outcome && typeof sel.outcome === 'string' && sel.outcome.trim() !== '') {
+            payloadOutcome = sel.outcome;
           } else {
-            payloadOutcome = `${sel.playerName}: Moneyline`;
+            // fallback: build the full human-readable label
+            const m = String(sel.market || '');
+            if (m.toLowerCase().includes('first')) {
+              payloadOutcome = `${sel.playerName}: First Round Moneyline`;
+            } else if (m.toLowerCase().includes('last')) {
+              payloadOutcome = `${sel.playerName}: Last Round Moneyline`;
+            } else {
+              payloadOutcome = `${sel.playerName}: Moneyline`;
+            }
           }
         } else if (sel.market === 'first-guess') {
           payloadOutcome = `${sel.playerName}: First Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
+        } else if (String(sel.market) === 'last-guess') {
+          payloadOutcome = `${sel.playerName}: Last Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
         } else if (sel.market === 'country-props') {
           // continent markets: if playerId === -1 use human-readable bet_name
           if (sel.playerId === -1 || (sel.threshold && Number(sel.threshold) > 0)) {
             payloadOutcome = bet_name;
           } else {
-            payloadOutcome = `${sel.playerName}: To Appear - ${sel.side === 'over' ? 'Yes' : 'No'}`;
+            // For To Appear bets prefer the human-readable outcome provided
+            // on the selection (sel.outcome) so DB matches the betslip exactly.
+            // Fallback to constructing "<Country>: To Appear - Yes/No" only
+            // if sel.outcome is missing.
+            if (sel.outcome && typeof sel.outcome === 'string' && sel.outcome.trim() !== '') {
+              // Use the exact human-readable outcome when available (matches betslip)
+              payloadOutcome = sel.outcome;
+            } else {
+              // Try to infer Yes/No from available selection fields (robust normalization)
+              let yn: string | null = null;
+              try {
+                const candidate = String((sel as any).side ?? (sel as any).choice ?? (sel as any).selected ?? '').trim().toLowerCase();
+                if (/\b(?:yes|y|true|over|1)\b/.test(candidate)) yn = 'Yes';
+                else if (/\b(?:no|n|false|under|0)\b/.test(candidate)) yn = 'No';
+                // As a last resort, default to 'Yes' (do NOT hardcode 'No')
+                if (!yn) yn = 'Yes';
+              } catch (e) {
+                yn = 'Yes';
+              }
+              payloadOutcome = `${sel.playerName}: To Appear - ${yn}`;
+            }
           }
         } else {
           // default totals-like naming
@@ -114,7 +141,12 @@ export default function BetSlip() {
           playerName: sel.playerName || null,
           playerId: sel.playerId || null,
         };
+        // Debugging: log payload for country-props to verify outcome value
         try {
+          if (payload.market === 'country-props') {
+            // eslint-disable-next-line no-console
+            console.debug('[BetSlip] placing country-props payload:', payload);
+          }
           const resp = await placeBetServer(payload);
           placeBetAction(sel);
         } catch (e: any) {

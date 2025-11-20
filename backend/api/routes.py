@@ -177,6 +177,11 @@ def bets_place():
         return ('', 200)
     # New secure endpoint: expects Authorization: Bearer <access_token>
     payload = request.get_json(force=True) or {}
+    # Log incoming payload for debugging country-props outcome mismatches
+    try:
+        app.logger.debug(f"bets_place incoming payload: {payload}")
+    except Exception:
+        print('bets_place incoming payload:', payload)
     explicit_game_id = payload.get('game_id')
 
     # Log incoming auth header for debugging
@@ -289,10 +294,24 @@ def bets_place():
         player_name = payload.get('playerName') or payload.get('player_name') or payload.get('player') or None
         # Normalize market string for matching
         mnorm = (market or '').lower()
+        # Expose the raw outcome the client supplied (if any) and log payload for debugging
+        payload_outcome = payload.get('outcome') if isinstance(payload, dict) else None
+        try:
+            app.logger.info(f"[bets_place] raw payload: {payload}")
+        except Exception:
+            try:
+                print(f"[bets_place] raw payload: {payload}")
+            except Exception:
+                pass
 
         # If this is a Specials market, respect the exact outcome string provided by the client.
         # The frontend stores the exact DB `outcome` text in payload.outcome; use it verbatim.
         if str(mnorm).strip() == 'specials':
+            outcome_str = payload.get('outcome') or None
+        # If this is a Moneyline market, also respect the exact human-readable
+        # outcome string sent by the frontend (e.g. "Pam: First Round Moneyline").
+        # This ensures the DB `outcome` column matches the betslip label exactly.
+        elif 'moneyline' in str(mnorm):
             outcome_str = payload.get('outcome') or None
         else:
             def fmt_totals(name, side, pt):
@@ -323,7 +342,11 @@ def bets_place():
 
             outcome_str = None
             try:
-                if 'country' in mnorm or 'appear' in mnorm or 'country-props' in mnorm:
+                # If the frontend explicitly provided an outcome string that includes
+                # 'To Appear', prefer it verbatim rather than reformatting here.
+                if payload_outcome and isinstance(payload_outcome, str) and 'to appear' in payload_outcome.lower():
+                    outcome_str = payload_outcome
+                elif 'country' in mnorm or 'appear' in mnorm or 'country-props' in mnorm:
                     outcome_str = fmt_country(pname or 'Unknown', outcome)
                 elif 'first' in mnorm or 'first-guess' in mnorm:
                     outcome_str = fmt_first_last(pname or 'Unknown', outcome, point, round_label='First Round')
@@ -377,6 +400,14 @@ def bets_place():
         except Exception:
             rounded_amer_int = None
             rounded_amer_str = None
+
+        try:
+            app.logger.info(f"[bets_place] final outcome_str: {outcome_str}")
+        except Exception:
+            try:
+                print(f"[bets_place] final outcome_str: {outcome_str}")
+            except Exception:
+                pass
 
         insert_payload = {
             'user_id': str(user_id),
