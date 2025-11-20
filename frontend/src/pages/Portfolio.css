@@ -1,0 +1,129 @@
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--color-bg);
+}
+
+.container.portfolio-page {
+  flex: 1;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  padding: var(--space-xl) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  position: relative;
+}
+
+/* subtle blue-white gradient background for portfolio content area */
+.container.portfolio-page::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 220px;
+  background: linear-gradient(180deg, rgba(10,36,64,0.95), rgba(26,56,97,0.85));
+  z-index: -1;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.portfolio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.portfolio-title {
+  font-size: 2rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-accent);
+  margin: 0;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-lg);
+}
+
+.stat-card .stat-value {
+  font-size: 3rem;
+  font-weight: 700;
+  color: #ffffff; /* neutral stats are white */
+}
+
+.stat-card .stat-label {
+  font-size: 1.3rem;
+}
+
+.graph-card {
+  padding: var(--space-lg);
+}
+
+.graph-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.range-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.range-btn {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.range-btn.active {
+  background: var(--color-text-accent);
+  color: var(--color-bg);
+}
+
+.market-card {
+  padding: var(--space-lg);
+}
+
+/* small tweaks to ensure table fits */
+.table-wrapper { background: transparent; }
+
+@media (max-width: 768px) {
+  .summary-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .summary-grid { grid-template-columns: 1fr; }
+}
+
+/* make cards slightly bluish and glossy */
+.card.card--default, .card.card--elevated, .card.card--interactive {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+.stat-label { color: rgba(255,255,255,0.8); font-weight: 600; }
+
+.portfolio-title { color: #ebf4ff; font-size: 2.5rem; font-weight: 700; margin: 0 0 8px 0 }
+
+.stat-value.positive { color: #2ed573; }
+.stat-value.negative { color: #ff4757; }
+
+/* make table header stand out with blue tint */
+.table-header { background: linear-gradient(90deg, rgba(10,36,64,0.95), rgba(26,56,97,0.95)); color: #e6f3ff; }
+
+.table-row:nth-child(odd) { background: rgba(255,255,255,0.01); }
+
+.range-btn.active { background: #0b63c6; color: #fff; border-color: #0b63c6; }

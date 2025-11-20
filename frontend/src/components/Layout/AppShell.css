@@ -1,0 +1,12 @@
+.app-root { display:flex; flex-direction:column; min-height:100vh }
+
+/* The content area sits below the Navbar and stretches to fill available height */
+.app-content { display:flex; flex:1; width:100%; }
+
+.main { flex:1; }
+
+/* ensure footer always at bottom spacing */
+.footer { margin-top: 24px }
+
+/* Provide spacing so the AppShell does not overlap the sticky Navbar */
+.main.container { padding-top: 18px; }

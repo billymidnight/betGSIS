@@ -1,0 +1,22 @@
+.bet-settler-page { padding: 28px 20px; }
+.settler-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+.settler-table th, .settler-table td { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); text-align: left; }
+.settler-table th { font-size: 15px; color: var(--color-text-muted); }
+.settler-table td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace; }
+.icon-btn { background: transparent; border: 1px solid rgba(255,255,255,0.04); padding:8px 10px; border-radius:8px; cursor:pointer; color: #f6c85f; font-size: 16px; display:inline-flex; align-items:center; justify-content:center }
+.icon-btn:hover { background: rgba(246,200,95,0.08); border-color: rgba(246,200,95,0.22); transform: translateY(-1px); }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:200; }
+.modal-card { background: rgba(24,24,24,0.96); padding: 24px; border-radius:12px; width: min(900px, 96%); box-shadow: 0 18px 50px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.04); color: var(--color-text); }
+.modal-row { margin: 10px 0; }
+.modal-actions { display:flex; justify-content:flex-end; gap:14px; margin-top:18px; }
+.btn { padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600 }
+.btn-primary { background: var(--color-accent); color: white; border: none; box-shadow: 0 8px 22px rgba(32,124,229,0.12); transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(32,124,229,0.18); }
+.btn-primary:active { transform: translateY(0); box-shadow: 0 6px 16px rgba(32,124,229,0.10); }
+
+/* make the select and modal inputs clearer */
+.modal-card select { padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.03); color: var(--color-text); border: 1px solid rgba(255,255,255,0.04); }
+.btn-secondary { background: transparent; border: 1px solid rgba(255,255,255,0.06); color: var(--color-text); }
+.muted { color: var(--color-text-muted); margin-top:8px }
+.page-title { margin: 0 0 8px 0; font-size: 2.5rem; font-weight:700 }

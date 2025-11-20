@@ -1,0 +1,76 @@
+
+ok you need to ask it to make a critical modification change to the pricing
+
+currently if probs ever go below 0.01 then on the other side it just stays static at -10000
+i think it's doing this as soe kind of guardrail globally to never have to deal with decimals that are exactly 1 when rounded and stuff
+but make it only apply that guardrail to when it's like less than 0.0005 so 0.05% prob, until -200000 it can keep going and show.
+
+so have it do that. i'm sic of it cutting it off at -10000 right now
+
+i dont know its exact method if implementation, but this needs to be applied globally to all the markets.
+
+so come on now , i need this beautiful fix asap as fuck
+
+A-FUCKINGGGG-SAP COME ONNNN
+
+so if there's like a 0.005 market and a 0.995 market it can jsust show -19900 and 19900
+
+this is just an example, such a market wont actually exist because of vig obv
+
+ok come on now, lets have this cooking, write it up for me, cook it fully over here now come on then come on
+
+######################
+
+
+next i want you yourself to first give me a py simulation fo something before i go to copilot about it.
+
+it's the new markets for everythign related to moneylines and want notits for monte carlos
+
+given some n players' as input each player's name, mean and stddev, we need to simualte the following game:
+those means are roundwise means, not fucking gamewise means so they're fore ach of the five rounds.
+each game has 5 rounds of the following:
+sim all players, sample frmo normal with their means and std devs
+
+then at the end of the 5 rounds, keep tab of who won and return everyone's totals too.
+
+and then this is for a single game/iteration
+
+we will write a simulation that does this maybe for 10000 iterations
+ok understand?
+if you did, write a py script that takes in inputs as those n players object with those 3 things per playerand sims this
+just write that py func
+i want to test it as an isolated py script. show this script for me
+and then try it with this sample input and trying
+name: Pam, mean: 2600, std dev: 1000
+name: Sohan, mean: 3100, std dev: 750
+name: Pritesh, mean: 3000, std dev: 1000
+name: Naresh, mean: 2200, std dev: 1500
+
+
+another very important thing is that the max for all of these is actually 5000. anytime the number sampled exceeds 5k guardrail by picking unifmromly from range (4950, 5000) this is cirticla
+
+code it up now the py wscript and print clearly on py terminal wheni run it so i can all stats
+
+#######
+market pricing
+
+No Europe and Oceania > 1.5:
+for this can be priced via simulation only. ask it to make a func called europelessoceania() where it just smis. given each continent's probabilities:
+for example, (JUST EXAMPLE): europe: 0.55, asia: 0.1, africa: 0.15, south america: 0.14, north america: 0.03, oceania: 0.03
+
+then with htese probs wrighted, it will run a 5 round version:
+for each round sample from those weights
+
+in the end mark this ITERATION as true if no europe and oceania > 1.5
+if not mark as falase
+
+in the end it needs to find how many were true divided by iterations to get true prob.
+
+then we'll apply vig and give the market out there ok then ready let's go then come on now
+
+next market is:
+
+3 Europe, 1 Asia, 1 Africa:
+again exact same idea where it sims the 5 round game and counts as true when there are 3 europes, 1 asia and 1 africa in any order
+
+next ask it to 

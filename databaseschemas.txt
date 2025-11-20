@@ -1,0 +1,117 @@
+BETS TABLE
+
+bet_id
+
+No description
+
+integer	int4		
+user_id
+
+No description
+
+uuid	uuid		
+market
+
+No description
+
+text	text		
+point
+
+No description
+
+numeric	numeric		
+outcome
+
+No description
+
+text	text		
+bet_size
+
+No description
+
+numeric	numeric		
+odds_american
+
+No description
+
+text	text		
+placed_at
+
+No description
+
+timestamp with time zone	timestamptz		
+result
+
+No description
+
+text	text		
+bet_pnl
+
+No description
+
+numeric	numeric		
+game_id
+
+No description
+
+integer	int4	
+
+LOCKS TABLE
+
+Name	Description	Data Type	Format	Nullable	
+lockid
+
+No description
+
+integer	int4		
+market
+
+No description
+
+text	text		
+locked
+
+No description
+
+boolean	bool		
+
+USERS:
+
+Name	Description	Data Type	Format	Nullable	
+user_id
+
+No description
+
+uuid	uuid		
+email
+
+No description
+
+text	text		
+password
+
+No description
+
+text	text		
+created_at
+
+No description
+
+timestamp with time zone	timestamptz		
+net_pnl
+
+No description
+
+numeric	numeric		
+screenname
+
+No description
+
+text	text		
+role
+
+No description
+
+text	text		
+
+

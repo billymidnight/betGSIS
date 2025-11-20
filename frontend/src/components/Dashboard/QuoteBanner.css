@@ -1,0 +1,77 @@
+/* Quote Banner styling */
+.quote-banner {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  text-align: center;
+  padding: var(--space-xl);
+}
+
+.quote-container {
+  position: relative;
+  z-index: 1;
+  animation: slideInUp var(--transition-slow) ease-out;
+}
+
+.quote-text {
+  font-size: 48px;
+  font-weight: var(--font-weight-bold);
+  line-height: 1.4;
+  color: var(--color-text-accent);
+  margin-bottom: var(--space-xl);
+  letter-spacing: -0.5px;
+  animation: neonGlow 3s ease-in-out infinite;
+  text-shadow: 0 0 20px rgba(0, 255, 132, 0.3);
+}
+
+@media (max-width: 768px) {
+  .quote-text {
+    font-size: 32px;
+  }
+}
+
+.quote-author {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-mono);
+  font-style: italic;
+  margin-top: var(--space-lg);
+  opacity: 0.8;
+}
+
+.quote-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(0, 255, 132, 0.1) 0%, transparent 70%);
+  border-radius: 50%;
+  z-index: 0;
+  pointer-events: none;
+  animation: pulse 4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 0.3;
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -1,0 +1,6 @@
+.gc-panel{background:#08101a;color:#e6f7ff;padding:0.6rem;border-radius:8px;text-align:center;box-shadow:0 8px 20px rgba(0,0,0,0.6)}
+.gc-odometer{font-family:monospace;font-size:2.2rem;font-weight:900;color:#7be4c7}
+.gc-meta{font-size:0.8rem;color:#9fbccf;margin-top:0.4rem}
+.gc-btn{margin-top:0.6rem;padding:0.5rem 0.75rem;border-radius:8px;border:none;background:#2b8cff;color:#fff;font-weight:800;cursor:pointer}
+.gc-btn:active{transform:translateY(1px)}
+@media(max-width:800px){.gc-odometer{font-size:1.6rem}}

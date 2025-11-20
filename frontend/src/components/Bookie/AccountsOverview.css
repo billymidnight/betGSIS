@@ -1,0 +1,10 @@
+.accounts-panel{background:#0f1724;color:#fff;padding:12px;border-radius:8px}
+.accounts-title{font-size:0.95rem;margin:0 0 8px 0}
+.accounts-table{display:flex;flex-direction:column;gap:6px}
+.accounts-row{display:grid;grid-template-columns:1fr 90px 60px;align-items:center;padding:6px;border-radius:6px}
+.accounts-head{opacity:0.8;font-weight:700;color:#9ca3af}
+.acc-name{font-weight:600}
+.acc-pnl.positive{color:#28a745}
+.acc-pnl.negative{color:#e55353}
+.acc-unsettled{text-align:right;color:#cbd5e1}
+.accounts-empty{color:#94a3b8;padding:8px}

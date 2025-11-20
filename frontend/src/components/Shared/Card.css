@@ -1,0 +1,49 @@
+/* Card component styling */
+.card {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  transition: all var(--transition-normal) ease;
+}
+
+.card--default {
+  box-shadow: var(--shadow-sm);
+}
+
+.card--interactive {
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--color-text-accent);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-text-accent);
+    outline-offset: 2px;
+  }
+}
+
+.card--elevated {
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(0, 255, 132, 0.1);
+}
+
+.card-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-accent);
+  margin: 0 0 var(--space-md) 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--font-family-mono);
+}
+
+.card-content {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}

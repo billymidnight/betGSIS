@@ -1,0 +1,6 @@
+.bem-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000}
+.bem-modal{background:#0b1220;color:#fff;padding:16px;border-radius:8px;min-width:360px}
+.bem-row{margin:8px 0}
+.bem-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.bem-btn{padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#071025;color:#fff}
+.bem-btn.primary{background:#2563eb;border-color:#1d4ed8}

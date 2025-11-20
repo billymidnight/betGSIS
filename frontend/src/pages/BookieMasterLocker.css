@@ -1,0 +1,5 @@
+.bookie-hub-page{padding:1rem;background:linear-gradient(180deg,#04060a 0%,#071017 100%);min-height:calc(100vh - 80px)}
+.bookie-hub-main{display:flex;gap:1rem}
+.hub-left{flex:1}
+.hub-right{width:360px;display:flex;flex-direction:column;gap:0.6rem}
+@media(max-width:1000px){.bookie-hub-main{flex-direction:column}.hub-right{width:100%}}

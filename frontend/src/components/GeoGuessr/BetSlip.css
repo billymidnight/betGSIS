@@ -1,0 +1,314 @@
+/* BetSlip component styling */
+.bet-slip {
+  position: sticky;
+  top: 80px;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+.bet-slip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bet-slip-title {
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: var(--color-text-accent);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-family: var(--font-family-mono);
+}
+
+.bet-slip-clear {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  font-weight: 800;
+  font-family: var(--font-family-mono);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  transition: color var(--transition-normal) ease;
+
+  &:hover {
+    color: #ff6b6b;
+  }
+}
+
+.bet-slip-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl) var(--space-md);
+  text-align: center;
+}
+
+.bet-slip-empty p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-mono);
+
+  &:first-child {
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
+.bet-slip-empty-hint {
+  font-size: var(--font-size-xs) !important;
+  opacity: 0.7;
+}
+
+.bet-slip-selections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.selection-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: var(--space-md);
+  align-items: center;
+  padding: var(--space-md);
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  position: relative; /* for absolute remove button */
+}
+
+.selection-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.selection-player {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-accent);
+  font-family: var(--font-family-mono);
+  font-size: 0.95rem;
+}
+
+.fg-player {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: var(--color-text-primary);
+}
+
+.cp-player {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #28a745;
+  text-transform: uppercase;
+}
+
+.fg-market {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+.cp-market {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Make the market name bigger and more prominent */
+.betslip-market {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  font-family: var(--font-family-mono);
+}
+
+.selection-details {
+  display: flex;
+  gap: var(--space-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-mono);
+}
+
+.selection-side {
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
+.selection-threshold {
+  opacity: 0.7;
+}
+
+.selection-odds {
+  display: flex;
+  align-items: center;
+}
+
+.selection-stake {
+  width: 80px;
+}
+
+.stake-input {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: var(--font-family-mono);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-text-accent);
+  }
+}
+
+.fg-stake {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.cp-stake {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.betslip-odds {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.betslip-odds-american {
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.betslip-odds-dec {
+  font-size: 0.85rem;
+  opacity: 0.6;
+  margin-top: 2px;
+}
+
+.betslip-payout-value {
+  font-weight: 700;
+}
+
+.fg-payout {
+  color: #2dd4bf; /* teal-ish */
+  font-weight: 800;
+}
+
+.cp-payout {
+  color: #28a745;
+  font-weight: 800;
+}
+
+/* Larger labels for Stake and Payout */
+.betslip-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+
+.betslip-payout-value {
+  font-size: 1.05rem;
+}
+
+/* Remove button positioning */
+.betslip-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.03);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease;
+}
+
+.betslip-remove:hover {
+  background: rgba(255,255,255,0.04);
+  color: #ff6b6b;
+  transform: scale(1.05);
+}
+
+/* Slightly more space so the market text doesn't collide with remove button */
+.betslip-item-header { padding-right: 46px; }
+
+.selection-remove {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  padding: 4px 8px;
+  transition: color var(--transition-normal) ease;
+
+  &:hover {
+    color: #ff4757;
+  }
+}
+
+.bet-slip-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-mono);
+
+  &--highlight {
+    padding: var(--space-sm) 0;
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-accent);
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
+.place-bet-btn {
+  width: 100%;
+  margin-top: var(--space-md);
+}

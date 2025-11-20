@@ -1,0 +1,94 @@
+/* ThresholdSelector component styling */
+.threshold-selector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.threshold-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--font-family-mono);
+}
+
+.threshold-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--color-bg);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-text-muted);
+    border-radius: 2px;
+
+    &:hover {
+      background: var(--color-text-accent);
+    }
+  }
+}
+
+.threshold-items {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+  width: fit-content;
+}
+
+.threshold-item {
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-bg);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-mono);
+  cursor: pointer;
+  transition: all var(--transition-normal) ease;
+  flex-shrink: 0;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-text-accent);
+    color: var(--color-text-accent);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &.active {
+    background-color: var(--color-text-accent);
+    color: var(--color-bg);
+    border-color: var(--color-text-accent);
+  }
+}
+
+.threshold-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+}
+
+.threshold-current {
+  color: var(--color-text-muted);
+  font-family: var(--font-family-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}

@@ -1,0 +1,257 @@
+/* GeoGuessr page styling */
+.geoguessr-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--color-bg);
+}
+
+.geoguessr-main {
+  flex: 1;
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+  padding: var(--space-xl) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.geoguessr-header {
+  margin-bottom: var(--space-lg);
+}
+
+.geoguessr-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.geoguessr-title {
+  font-size: 48px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-accent);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: var(--font-family-mono);
+}
+
+.geoguessr-subtitle {
+  font-size: var(--font-size-md);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.geoguessr-layout {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: var(--space-xl);
+  grid-template-rows: auto 1fr;
+
+  @media (max-width: 1200px) {
+    grid-template-columns: 1fr 350px;
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.market-ribbon {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.geoguessr-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  max-height: calc(100vh - 400px);
+  overflow-y: auto;
+}
+
+.geoguessr-sidebar {
+  display: flex;
+  flex-direction: column;
+
+  @media (max-width: 768px) {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 90;
+    max-height: 50vh;
+    border-top: 1px solid var(--color-border);
+    border-radius: 0;
+  }
+}
+
+.geoguessr-error {
+  padding: var(--space-lg);
+  background-color: rgba(255, 71, 87, 0.1);
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  border-radius: var(--radius-md);
+  color: #ff4757;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+}
+
+.geoguessr-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-height: 400px;
+  color: var(--color-text-muted);
+}
+
+/* Totals market styles */
+.market-ribbon {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.market-tab {
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+  border: 1px solid rgba(255,255,255,0.04);
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.market-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.market-tab.active {
+  background: linear-gradient(90deg, rgba(143, 211, 255, 0.12), rgba(160, 102, 255, 0.06));
+  border: 1px solid rgba(100,120,255,0.18);
+  color: rgba(143, 211, 255, 1);
+}
+
+.totals-market {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.market-header {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.country-props {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.country-props-heading {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-text-accent);
+  margin: 8px 0;
+}
+.country-row {
+  padding: 12px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(5,15,10,0.45), rgba(0,0,0,0.45));
+  border: 1px solid rgba(0,255,150,0.04);
+}
+.country-props-list-inner .player-prices {
+  display: flex;
+  gap: 12px;
+}
+.coming-soon { font-size: 0.9rem; color: var(--color-text-muted); margin-left: 8px; }
+.players-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+}
+.player-card {
+  background: linear-gradient(180deg, rgba(12,40,20,0.6), rgba(0,0,0,0.6));
+  border: 1px solid rgba(0,255,150,0.06);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+}
+.player-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 50px rgba(0,0,0,0.7);
+}
+.player-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.player-slider {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.player-slider input[type="range"] {
+  flex: 1;
+}
+.slider-value {
+  min-width: 90px;
+  text-align: right;
+}
+.player-prices {
+  display: flex;
+  gap: 12px;
+}
+.price-btn {
+  flex: 1;
+  padding: 8px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+.price-btn:hover { transform: translateY(-4px); }
+.price-btn:active { transform: translateY(-1px); }
+
+/* Odds box inside button */
+.odds-box {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(10,40,20,0.65), rgba(0,0,0,0.45));
+  border: 1px solid rgba(0,255,150,0.06);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+}
+.price-btn.over .odds-box { background: linear-gradient(180deg, rgba(2,60,30,0.8), rgba(0,0,0,0.5)); border-color: rgba(0,255,150,0.12); }
+.price-btn.under .odds-box { background: linear-gradient(180deg, rgba(30,10,10,0.6), rgba(0,0,0,0.45)); border-color: rgba(255,120,120,0.06); }
+
+.price-large { font-size: 2rem; font-weight: 900; font-family: var(--font-family-mono); color: #eafff0; }
+.price-btn.over .price-large { color: #39FF14; text-shadow: 0 2px 8px rgba(57,255,20,0.12); }
+.price-btn.under .price-large { color: #ffffff; text-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+.price-small { font-size: 0.95rem; color: rgba(255,255,255,0.75); }
+
+/* subtle gradients and background for main panel */
+.geoguessr-main {
+  background: linear-gradient(180deg, #041b0f 0%, #00110a 40%, #000000 100%);
+  border-radius: 8px;
+  padding: 28px;
+}
+

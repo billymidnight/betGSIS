@@ -1,0 +1,7 @@
+body .bet-portfolio { font-size: 1rem; }
+.bet-portfolio .stats-box { font-size: 1.05rem; }
+.bet-portfolio table { font-size: 0.95rem; border-collapse: collapse; }
+.bet-portfolio table th, .bet-portfolio table td { padding: 10px 8px; }
+.bet-portfolio table thead th { color: #94a3b8; font-weight: 700; }
+.bet-portfolio .all-bets-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.04); }
+.bet-portfolio h1 { font-size: 1.5rem; }

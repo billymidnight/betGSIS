@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: geo_user
+      POSTGRES_PASSWORD: example
+      POSTGRES_DB: geo_book
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:
+
+# Note: This is optional local Postgres for development. The scaffold defaults to using
+# SUPABASE / DATABASE_URL in envs for production. If you use docker-compose, set
+# DATABASE_URL=postgres://geo_user:example@localhost:5432/geo_book in backend/.env

@@ -1,0 +1,9 @@
+.bk-panel{background:#071017;color:#e6f7ff;padding:0.75rem;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.6)}
+.bk-title{color:#7be4c7;font-weight:800;margin-bottom:0.6rem}
+.bk-row{display:flex;justify-content:space-between;padding:0.45rem 0;border-bottom:1px dashed rgba(255,255,255,0.03)}
+.bk-label{color:#bcdff3}
+.bk-value{font-weight:800;color:#fff}
+.bk-value.positive{color:#28a745}
+.bk-value.negative{color:#e55353}
+.bk-section-header{font-size:0.85rem;color:#94a3b8;font-weight:700;margin-top:6px;margin-bottom:6px}
+@media(max-width:800px){.bk-panel{font-size:0.9rem}}

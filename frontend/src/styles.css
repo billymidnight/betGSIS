@@ -1,0 +1,23 @@
+:root{
+  --bg:#04130a; /* deep black-green */
+  --panel:#081f12;
+  --accent:#00ff7f; /* bright green */
+  --muted:#8fb39f;
+  --text:#dfffe6;
+}
+*{box-sizing:border-box}
+html,body,#root{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter, "Segoe UI", Roboto, -apple-system, "Segoe UI Emoji", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Symbol", system-ui, sans-serif}
+.app-root{display:flex;min-height:100vh}
+.sidebar{width:220px;background:linear-gradient(180deg,var(--panel),#03100b);padding:20px;border-right:1px solid rgba(0,255,127,0.06)}
+.brand{font-weight:800;color:var(--accent);font-size:18px;margin-bottom:18px}
+.sidebar nav a{display:block;color:var(--muted);text-decoration:none;padding:8px 0}
+.sidebar nav a:hover{color:var(--accent)}
+.main{flex:1;padding:28px}
+.panel{background:rgba(3,16,11,0.6);padding:18px;border-radius:8px;border:1px solid rgba(0,255,127,0.06)}
+.btn{background:transparent;border:1px solid var(--accent);color:var(--accent);padding:10px 12px;border-radius:6px;cursor:pointer}
+.muted{color:var(--muted)}
+
+/* Emoji font fallback for consistent emoji rendering across platforms */
+.emoji {
+  font-family: "Segoe UI Emoji", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Symbol", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}

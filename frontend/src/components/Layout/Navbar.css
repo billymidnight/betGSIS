@@ -1,0 +1,196 @@
+/* Navbar component styling */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: blur(10px);
+}
+
+.navbar-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 var(--space-lg);
+  height: 72px; /* slightly taller for improved legibility */
+  gap: var(--space-lg);
+}
+
+.navbar-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  text-decoration: none;
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: var(--color-text-accent);
+  letter-spacing: 1px;
+  transition: all var(--transition-normal) ease;
+
+  &:hover {
+    filter: brightness(1.2);
+  }
+}
+
+.navbar-logo-icon {
+  font-size: var(--font-size-lg);
+}
+
+.navbar-menu {
+  display: flex;
+  gap: var(--space-xl);
+  flex: 1;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+}
+
+.navbar-link {
+  color: var(--color-text-primary);
+  text-decoration: none;
+  font-size: 1.05rem; /* slightly bigger for readability */
+  font-family: var(--font-family-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: color var(--transition-normal) ease;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background-color: var(--color-text-accent);
+    transition: width var(--transition-normal) ease;
+  }
+
+  &:hover,
+  &:focus {
+    color: var(--color-text-accent);
+    outline: none;
+
+    &::after {
+      width: 100%;
+    }
+  }
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  position: relative;
+}
+
+.navbar-game { display:flex; flex-direction:column; align-items:flex-end; margin-right:8px }
+.navbar-game-label { font-size: 11px; color: var(--color-text-muted); text-transform: uppercase; }
+.navbar-game-num { font-weight:800; font-size:14px; color: var(--color-text-accent); }
+
+.navbar-pnl {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+}
+
+.navbar-pnl-label {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-family-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.navbar-hamburger {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-sm);
+  flex-direction: column;
+  gap: 4px;
+
+  @media (max-width: 768px) {
+    display: flex;
+  }
+}
+
+.hamburger-line {
+  width: 20px;
+  height: 2px;
+  background-color: var(--color-text-accent);
+  transition: all var(--transition-normal) ease;
+
+  &.active {
+    &:nth-child(1) {
+      transform: rotate(45deg) translateY(10px);
+    }
+
+    &:nth-child(2) {
+      opacity: 0;
+    }
+
+    &:nth-child(3) {
+      transform: rotate(-45deg) translateY(-10px);
+    }
+  }
+}
+
+.navbar-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  /* make dropdown more opaque for readability */
+  background-color: rgba(8,12,18,0.98);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  min-width: 200px;
+  margin-top: var(--space-sm);
+  box-shadow: var(--shadow-lg);
+  animation: slideInUp var(--transition-normal) ease;
+
+  @media (max-width: 768px) {
+    left: 0;
+  }
+}
+
+.navbar-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-md) var(--space-lg);
+  text-align: left;
+  color: var(--color-text-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-mono);
+  text-decoration: none;
+  transition: all var(--transition-normal) ease;
+
+  &:hover {
+    background-color: var(--color-bg);
+    color: var(--color-text-accent);
+  }
+
+  &:first-child {
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+.navbar-dropdown-logout {
+  color: #ff4757;
+
+  &:hover {
+    background-color: rgba(255, 71, 87, 0.1);
+  }
+}

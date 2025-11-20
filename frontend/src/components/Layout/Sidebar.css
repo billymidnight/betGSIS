@@ -1,0 +1,14 @@
+.sidebar {
+  width: 220px;
+  background: linear-gradient(180deg, rgba(4,27,15,0.95), rgba(3,16,11,0.95));
+  padding: 20px;
+  border-right: 1px solid rgba(255,255,255,0.03);
+  min-height: 100vh;
+  position: sticky;
+  top: 72px; /* below navbar */
+}
+
+.sidebar .brand { font-weight: 800; color: var(--color-text-accent); font-size: 18px; margin-bottom: 18px }
+.sidebar nav a { display:block; color: var(--color-text-primary); text-decoration:none; padding:8px 0; font-weight:600 }
+.sidebar nav a:hover { color: var(--color-accent); }
+.sidebar-section-title { color: var(--color-text-muted); font-size: 0.85rem; margin: 8px 0 6px; font-weight:700; text-transform:uppercase }
