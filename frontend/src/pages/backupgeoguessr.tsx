@@ -44,15 +44,12 @@ export default function GeoGuessr() {
 
         const pls = (res.players || []).map((p: any) => {
           const mu = p.mean_score || 0;
-          // default first-guess threshold: nearest 300 to mean/5, clamped to 2100..3900
-          const defaultFGThreshold = Math.max(2100, Math.min(3900, Math.round((mu / 5.0) / 300.0) * 300));
+          const defaultFGThreshold = Math.max(1700, Math.min(4700, Math.round((mu / 5.0) / 300.0) * 300));
           return {
             ...p,
-            // keep totals/current_threshold behavior unchanged; store computed FG default separately
             current_threshold: p.default_threshold || (tlist.find((x: number) => x >= 10000) || tlist[0]),
             line: p.initial || null,
-            // keep placeholder default value for quick reference; actual pricing entry will replace this when fetch completes
-            first_guess_line: p.first_guess_line ?? null,
+            first_guess_line: null,
             default_first_guess_threshold: defaultFGThreshold,
           };
         });
@@ -127,8 +124,7 @@ export default function GeoGuessr() {
     }, 200);
   };
 
-  // First-guess thresholds: 2100 .. 3900 step 300
-  const FG_THRESHOLDS = Array.from({ length: Math.floor((3900 - 2100) / 300) + 1 }, (_, i) => 2100 + i * 300);
+  const FG_THRESHOLDS = Array.from({ length: Math.floor((4700 - 1700) / 300) + 1 }, (_, i) => 1700 + i * 300);
 
   function CountryPropsList() {
     const [countries, setCountries] = useState<any[]>([]);
@@ -376,23 +372,23 @@ export default function GeoGuessr() {
 
     // when switching to first-guess, compute default per-player threshold (nearest 300 to mean/5)
     if (m === 'first-guess') {
-      // compute per-player default FG threshold (nearest 300, clamped to FG_THRESHOLDS)
       setGeoPlayers((prev) => prev.map((p) => {
         const mu = p.mean_score || 0;
         const defaultThresh = Math.max(FG_THRESHOLDS[0], Math.min(FG_THRESHOLDS[FG_THRESHOLDS.length - 1], Math.round((mu / 5.0) / 300.0) * 300));
-        // set the slider position for first-guess to the computed default (do not null out first_guess_line)
-        return { ...p, current_threshold: defaultThresh, /* keep or will be replaced by updatePlayerPrice */ };
+        // clear existing line until we fetch fresh first-guess odds
+        return { ...p, current_threshold: defaultThresh, first_guess_line: null };
       }));
 
-      // immediately request first-guess prices for each player using the computed FG range
-      {
-        const snapshot = geoPlayers || [];
+      // trigger price requests for all players for their default first-guess thresholds
+      setTimeout(() => {
+        const snapshot = (geoPlayers || []);
         snapshot.forEach((p) => {
+          const pid = p.player_id;
           const mu = p.mean_score || 0;
-          const defaultThresh = Math.max(FG_THRESHOLDS[0], Math.min(FG_THRESHOLDS[FG_THRESHOLDS.length - 1], Math.round((mu / 5.0) / 300.0) * 300));
-          updatePlayerPrice(p.player_id, defaultThresh);
+          const defaultThresh = Math.max(1700, Math.min(4700, Math.round((mu / 5.0) / 300.0) * 300));
+          updatePlayerPrice(pid, defaultThresh);
         });
-      }
+      }, 0);
     } else {
       // switching back to totals: restore each player's default threshold from server-initialized default if available
       setGeoPlayers((prev) => prev.map((p) => ({ ...p, current_threshold: p.default_threshold || p.current_threshold, line: p.initial || p.line })));

@@ -98,9 +98,21 @@ export async function fetchContinentMarkets(rounds = 5) {
   return r.data;
 }
 
+export async function fetchPricingContinentProps(rounds = 5) {
+  const headers = { 'Content-Type': 'application/json', 'x-user-role': 'book' } as Record<string, string>;
+  const r = await api.get(`/pricing/continent-props?rounds=${rounds}`, { headers });
+  return r.data;
+}
+
 export async function fetchMoneylinesPrices() {
   const headers = { 'Content-Type': 'application/json', 'x-user-role': 'book' } as Record<string, string>;
   const r = await api.get('/moneylines/prices', { headers });
+  return r.data;
+}
+
+export async function fetchSpecialsPrices() {
+  const headers = { 'Content-Type': 'application/json', 'x-user-role': 'book' } as Record<string, string>;
+  const r = await api.get('/specials/prices', { headers });
   return r.data;
 }
 

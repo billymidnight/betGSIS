@@ -115,3 +115,49 @@ No description
 text	text		
 
 
+
+
+SCHEMA FOR geo_countries table:
+
+
+Name	Description	Data Type	Format	Nullable	
+id
+
+No description
+
+integer	int4		
+country
+
+No description
+
+text	text		
+freq
+
+No description
+
+numeric	numeric		
+continent
+
+No description
+
+text	text		
+
+
+SPECIALS table
+
+
+betid
+
+No description
+
+integer	int4		
+outcome
+
+No description
+
+text	text		
+odds
+
+No description
+
+character varying	varchar		

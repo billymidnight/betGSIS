@@ -23,7 +23,7 @@ export default function BetslipItem({ selection }: Props) {
     <div className="betslip-item">
       <div className="betslip-item-header">
         <div className={`betslip-player ${selection.market === 'first-guess' ? 'fg-player' : selection.market === 'country-props' ? 'cp-player' : ''}`}>
-          {selection.playerName}
+          {selection.market === 'Specials' ? 'Specials' : selection.playerName}
         </div>
         <button className="betslip-remove" onClick={() => removeSelection(selection.id)} aria-label="Remove">
           ✕
@@ -32,9 +32,14 @@ export default function BetslipItem({ selection }: Props) {
 
       <div className="betslip-item-body">
         <div className={`betslip-market ${selection.market === 'first-guess' ? 'fg-market' : selection.market === 'country-props' ? 'cp-market' : ''}`}>
-          {selection.market === 'first-guess' ? (
-            <>{selection.side.toUpperCase()} {`${selection.threshold} - First Round`}</>
-          ) : selection.market === 'country-props' ? (
+          {selection.market === 'Specials' ? (
+              <div style={{fontWeight:700}}>{selection.outcome || selection.playerName}</div>
+            ) : (selection.outcome && String(selection.outcome).toLowerCase().includes('moneyline')) ? (
+              // Show Moneyline label (text after colon) when outcome is like "Name: Moneyline"
+              <div style={{fontWeight:700}}>{String(selection.outcome).split(':').slice(1).join(':').trim() || 'Moneyline'}</div>
+            ) : selection.market === 'first-guess' ? (
+              <>{selection.side.toUpperCase()} {`${selection.threshold} - First Round`}</>
+            ) : selection.market === 'country-props' ? (
             // Distinguish continent-style props (playerId === -1 and threshold > 0)
             (selection.playerId === -1 || (selection.threshold && Number(selection.threshold) > 0)) ? (
               <>

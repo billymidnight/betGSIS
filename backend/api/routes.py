@@ -290,45 +290,50 @@ def bets_place():
         # Normalize market string for matching
         mnorm = (market or '').lower()
 
-        def fmt_totals(name, side, pt):
-            # "<Player_name>: Over (Under) X Points"
-            side_word = 'Over' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'Under'
-            return f"{name}: {side_word} {int(pt) if pt is not None else ''} Points"
+        # If this is a Specials market, respect the exact outcome string provided by the client.
+        # The frontend stores the exact DB `outcome` text in payload.outcome; use it verbatim.
+        if str(mnorm).strip() == 'specials':
+            outcome_str = payload.get('outcome') or None
+        else:
+            def fmt_totals(name, side, pt):
+                # "<Player_name>: Over (Under) X Points"
+                side_word = 'Over' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'Under'
+                return f"{name}: {side_word} {int(pt) if pt is not None else ''} Points"
 
-        def fmt_first_last(name, side, pt, round_label='First Round'):
-            # "<Player_name>: First Round (Last Round) - Over (Under) X Points"
-            side_word = 'Over' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'Under'
-            return f"{name}: {round_label} - {side_word} {int(pt) if pt is not None else ''} Points"
+            def fmt_first_last(name, side, pt, round_label='First Round'):
+                # "<Player_name>: First Round (Last Round) - Over (Under) X Points"
+                side_word = 'Over' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'Under'
+                return f"{name}: {round_label} - {side_word} {int(pt) if pt is not None else ''} Points"
 
-        def fmt_country(name, side):
-            # "<Country_name>: To Appear - YES/NO"
-            yesno = 'YES' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'NO'
-            return f"{name}: To Appear - {yesno}"
+            def fmt_country(name, side):
+                # "<Country_name>: To Appear - YES/NO"
+                yesno = 'YES' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'NO'
+                return f"{name}: To Appear - {yesno}"
 
-        # Fallback player/country name
-        pname = player_name or payload.get('playerName') or payload.get('player_name') or None
-        if not pname:
-            # try to pull from payload.market if it includes a name (e.g., when frontend used bet_name as market)
-            # attempt naive split before ':'
+            # Fallback player/country name
+            pname = player_name or payload.get('playerName') or payload.get('player_name') or None
+            if not pname:
+                # try to pull from payload.market if it includes a name (e.g., when frontend used bet_name as market)
+                # attempt naive split before ':'
+                try:
+                    if isinstance(market, str) and ':' in market:
+                        pname = market.split(':', 1)[0].strip()
+                except Exception:
+                    pname = None
+
+            outcome_str = None
             try:
-                if isinstance(market, str) and ':' in market:
-                    pname = market.split(':', 1)[0].strip()
+                if 'country' in mnorm or 'appear' in mnorm or 'country-props' in mnorm:
+                    outcome_str = fmt_country(pname or 'Unknown', outcome)
+                elif 'first' in mnorm or 'first-guess' in mnorm:
+                    outcome_str = fmt_first_last(pname or 'Unknown', outcome, point, round_label='First Round')
+                elif 'last' in mnorm or 'last-guess' in mnorm:
+                    outcome_str = fmt_first_last(pname or 'Unknown', outcome, point, round_label='Last Round')
+                else:
+                    # default to totals naming
+                    outcome_str = fmt_totals(pname or 'Unknown', outcome, point)
             except Exception:
-                pname = None
-
-        outcome_str = None
-        try:
-            if 'country' in mnorm or 'appear' in mnorm or 'country-props' in mnorm:
-                outcome_str = fmt_country(pname or 'Unknown', outcome)
-            elif 'first' in mnorm or 'first-guess' in mnorm:
-                outcome_str = fmt_first_last(pname or 'Unknown', outcome, point, round_label='First Round')
-            elif 'last' in mnorm or 'last-guess' in mnorm:
-                outcome_str = fmt_first_last(pname or 'Unknown', outcome, point, round_label='Last Round')
-            else:
-                # default to totals naming
-                outcome_str = fmt_totals(pname or 'Unknown', outcome, point)
-        except Exception:
-            outcome_str = str(outcome) if outcome is not None else None
+                outcome_str = str(outcome) if outcome is not None else None
 
         # determine current game id using geo_game_counter counter_id=1 first
         # NOTE: be tolerant of different column names in the counter table. Prefer fields in this order:
@@ -629,6 +634,58 @@ def pricing_country_props():
         # log error and return JSON with error key but HTTP 200 for frontend compatibility
         print(f"✗ pricing_country_props ERROR: {e}")
         return jsonify({'error': str(e), 'results': []}), 200
+
+
+@api_bp.route('/pricing/continent-props', methods=['GET', 'OPTIONS'])
+def pricing_continent_props():
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    try:
+        rounds = int(request.args.get('rounds', 5) or 5)
+        from services.pricing_service import continent_markets  # type: ignore
+        res = continent_markets(rounds=rounds)
+        # Ensure we return a stable JSON shape expected by frontend: { config, continents }
+        return jsonify(res), 200
+    except Exception as e:
+        logging.exception('pricing_continent_props error')
+        return jsonify({'error': str(e), 'config': {'rounds': 5}, 'continents': []}), 500
+
+
+@api_bp.route('/pricing/moneyline', methods=['GET', 'OPTIONS'])
+def pricing_moneyline():
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    try:
+        rounds = int(request.args.get('rounds', 5) or 5)
+        # reuse existing service helper price_moneylines
+        from services.pricing_service import price_moneylines  # type: ignore
+        res = price_moneylines(simulations=5000, margin_bps=800)
+        return jsonify(res), 200
+    except Exception as e:
+        logging.exception('pricing_moneyline error')
+        return jsonify({'error': str(e), 'classic': [], 'firstRound': [], 'lastRound': []}), 500
+
+
+@api_bp.route('/pricing/specials', methods=['GET', 'OPTIONS'])
+def pricing_specials():
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    try:
+        # read specials table and return rows
+        client = _get_admin_client()
+        markets = []
+        if client:
+            try:
+                rc = client.table('specials').select('betid,outcome,odds').order('betid').execute()
+                rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+                markets = rows or []
+            except Exception:
+                app.logger.exception('pricing_specials: failed to read specials table')
+                markets = []
+        return jsonify({'markets': markets}), 200
+    except Exception as e:
+        logging.exception('pricing_specials error')
+        return jsonify({'error': str(e), 'markets': []}), 500
 
 
 @api_bp.route('/markets/continents', methods=['GET', 'OPTIONS'])
@@ -1826,4 +1883,55 @@ def moneylines_prices():
         return jsonify(res), 200
     except Exception as e:
         logging.exception('moneylines_prices error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/specials/prices', methods=['GET', 'OPTIONS'])
+def specials_prices():
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    try:
+        from services.specials_pricing import get_specials_prices  # type: ignore
+        app.logger.info('[BOOKIE-HUB] specials pricing: starting')
+
+        # Compute and log combined freq/p for canonical World Cup winners so maintainers can eyeball-check
+        try:
+            from database.geo_repo import get_geo_countries  # type: ignore
+            countries = get_geo_countries() or []
+            winners = {'germany', 'france', 'italy', 'united kingdom', 'spain', 'argentina', 'uruguay', 'brazil'}
+            combined_pct = 0.0
+            for c in countries:
+                name = (c.get('country') or '').strip().lower()
+                freq = c.get('freq')
+                try:
+                    f = float(freq) if freq is not None else 0.0
+                except Exception:
+                    f = 0.0
+                if name in winners:
+                    combined_pct += max(0.0, f)
+            # combined_pct is percent (e.g. 2.4 + ...). Convert to per-round p
+            per_round_p = max(0.0, min(1.0, combined_pct / 100.0))
+            app.logger.info(f"[BOOKIE-HUB] specials debug: world-cup-winners combined freq_pct={combined_pct} -> per_round_p={per_round_p}")
+        except Exception:
+            combined_pct = None
+            per_round_p = None
+
+        # Instead of running simulations, read the `specials` table (betid, outcome, odds)
+        client = _get_admin_client()
+        if client:
+            try:
+                rc = client.table('specials').select('betid,outcome,odds').order('betid').execute()
+                rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+                markets = rows or []
+            except Exception:
+                app.logger.exception('failed to read specials table, falling back to computed markets')
+                markets = []
+        else:
+            markets = []
+
+        app.logger.info('[BOOKIE-HUB] specials pricing: finished (db-backed)')
+        resp = {'markets': markets, 'debug': {'worldcup_combined_freq_pct': combined_pct, 'worldcup_per_round_p': per_round_p, 'source': 'db'}}
+        return jsonify(resp), 200
+    except Exception as e:
+        logging.exception('specials_prices error')
         return jsonify({'error': str(e)}), 500
