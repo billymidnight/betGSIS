@@ -4,20 +4,20 @@ import Navbar from '../components/Layout/Navbar';
 import Footer from '../components/Layout/Footer';
 // ThresholdSelector and OddsTable replaced by new Totals UI
 import BetSlip from '../components/GeoGuessr/BetSlip';
+import ContinentPropsList from '../components/GeoGuessr/ContinentPropsList';
 import ToastContainer from '../components/Shared/ToastContainer';
-import { fetchGeoTotals, fetchPricingLines, fetchPricingFirstGuess, fetchPricingCountryProps, fetchMoneylinesPrices } from '../lib/api/api';
+import { fetchGeoTotals, fetchPricingLines, fetchPricingFirstGuess, fetchPricingCountryProps, fetchMoneylinesPrices, fetchSpecialsPrices } from '../lib/api/api';
+import { americanToDecimal } from '../lib/format';
 import './GeoGuessr.css';
 import { useBetsStore } from '../lib/state/betsStore';
 
 export default function GeoGuessr() {
   const [geoPlayers, setGeoPlayers] = useState<any[]>([]);
   const [thresholdList, setThresholdList] = useState<number[]>([]);
-  const [market, setMarket] = useState<'totals' | 'first-guess' | 'country-props' | 'moneylines'>('totals');
+  const [market, setMarket] = useState<'totals' | 'first-guess' | 'country-props' | 'moneyline' | 'specials'>('totals');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingOdds, setIsUpdatingOdds] = useState<Record<number, boolean>>({});
-  const [moneylines, setMoneylines] = useState<any | null>(null);
-  const [loadingMoneylines, setLoadingMoneylines] = useState(false);
   const addSelection = useBetsStore((s) => s.addSelection);
 
   // Load players on mount
@@ -220,25 +220,155 @@ export default function GeoGuessr() {
     );
   }
 
-  const handleMarketChange = (m: 'totals' | 'first-guess' | 'country-props' | 'moneylines') => {
-    if (m === market) return;
-    setMarket(m);
+  function MoneylineList() {
+    const [data, setData] = useState<any | null>(null);
+    const [loading, setLoading] = useState(false);
+    const addSelection = useBetsStore((s) => s.addSelection);
 
-    // If switching to moneylines, fetch server-side prices
-    if (m === 'moneylines') {
-      setLoadingMoneylines(true);
-      (async () => {
+    useEffect(() => {
+      let mounted = true;
+      const load = async () => {
+        setLoading(true);
         try {
           const res = await fetchMoneylinesPrices();
-          setMoneylines(res || null);
-        } catch (err) {
-          console.error('Failed to fetch moneylines prices', err);
-          setMoneylines(null);
+          if (mounted) setData(res || null);
+        } catch (e) {
+          console.error('Failed to load moneylines', e);
+          if (mounted) setData(null);
         } finally {
-          setLoadingMoneylines(false);
+          if (mounted) setLoading(false);
         }
-      })();
-    }
+      };
+      load();
+      return () => { mounted = false; };
+    }, []);
+
+    if (loading) return <div style={{padding:8,color:'#999'}}>Loading moneylines...</div>;
+    if (!data) return <div style={{padding:8,color:'#999'}}>Moneylines unavailable</div>;
+
+    const sections = [
+      { key: 'classic', label: 'Overall Winner', prefix: 'Overall Winner: ' },
+      { key: 'firstRound', label: 'First Round Winner', prefix: 'First Round Winner: ' },
+      { key: 'lastRound', label: 'Last Round Winner', prefix: 'Last Round Winner: ' },
+    ];
+
+    return (
+      <div className="moneyline-list">
+        {sections.map((sec) => {
+          const list = data[sec.key] || [];
+          return (
+            <div key={sec.key} style={{marginBottom:12}}>
+              <div style={{fontWeight:800, marginBottom:6, fontSize: '1.08rem', color: '#2b6cb0'}}>{sec.label}</div>
+              <div style={{display:'grid', gridTemplateColumns: '1fr 1fr', gap:8}}>
+                {list.map((entry: any) => (
+                  <div key={`${sec.key}-${entry.player_id}`} className="player-card" style={{padding:'0.5rem', borderRadius:8}}>
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <div style={{fontWeight:700}}>{entry.player}</div>
+                      <button className="price-btn over" onClick={() => {
+                        // For display in the betslip we set outcome to include the player name
+                        // followed by the human-readable moneyline label (this is what the
+                        // BetslipItem renders beneath the player name). The DB outcome is
+                        // generated when placing the bet and uses the short "ML" suffix
+                        // for first/last round (see BetSlip.tsx).
+                        let displayOutcome = '';
+                        // Build market string per user preference
+                        let marketStr = 'Moneyline';
+                        if (sec.key === 'classic') {
+                          marketStr = `${entry.player} - Moneyline`;
+                          displayOutcome = `${entry.player}: Moneyline`;
+                        } else if (sec.key === 'firstRound') {
+                          marketStr = `${entry.player}: First Round Moneyline`;
+                          displayOutcome = `${entry.player}: First Round Moneyline`;
+                        } else if (sec.key === 'lastRound') {
+                          marketStr = `${entry.player}: Last Round Moneyline`;
+                          displayOutcome = `${entry.player}: Last Round Moneyline`;
+                        }
+                        const sel = { playerId: entry.player_id, playerName: entry.player, threshold: null, side: 'win' as const, decimalOdds: Number(entry.decimal) || 1.0, stake: 0, market: marketStr, outcome: displayOutcome, odds_american: entry.american };
+                        addSelection(sel as any);
+                      }} style={{display:'flex', alignItems:'center', justifyContent:'center', padding:'0.35rem'}}>
+                        <div className="odds-box">
+                          <div className="price-large">{entry.american}</div>
+                          <div className="price-small">{(Number(entry.decimal) || 1.0).toFixed(2)}</div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function SpecialsList() {
+    const [rows, setRows] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const addSelection = useBetsStore((s) => s.addSelection);
+
+    useEffect(() => {
+      let mounted = true;
+      const load = async () => {
+        setLoading(true);
+        try {
+          const res = await fetchSpecialsPrices();
+          const markets = (res && res.markets) || [];
+          if (mounted) setRows(markets);
+        } catch (e) {
+          console.error('Failed to load specials', e);
+          if (mounted) setRows([]);
+        } finally {
+          if (mounted) setLoading(false);
+        }
+      };
+      load();
+      return () => { mounted = false; };
+    }, []);
+
+    if (loading) return <div style={{padding:8,color:'#999'}}>Loading specials...</div>;
+    if (!rows || rows.length === 0) return <div style={{padding:8,color:'#999'}}>No specials available</div>;
+
+    return (
+      <div style={{display:'grid', gap:8}}>
+        {rows.map((r: any) => {
+          // parse American odds string to decimal for betslip
+          let amerRaw = r.odds;
+          let amerInt: number | null = null;
+          let dec = 1.0;
+          try {
+            const s = String(amerRaw || '').replace('+', '').trim();
+            amerInt = s === '' ? null : parseInt(s, 10);
+            if (amerInt !== null && !isNaN(amerInt)) dec = americanToDecimal(amerInt);
+          } catch (e) {
+            dec = 1.0;
+          }
+
+          return (
+            <div key={`spec-${r.betid || r.betId || r.id || r.outcome}`} className="player-card" style={{padding: '0.5rem', borderRadius:8}}>
+              <div style={{display:'grid', gridTemplateColumns: '1fr 140px', alignItems: 'center', gap: 8}}>
+                <div style={{fontSize: '1.05rem', fontWeight: 900}}>{r.outcome}</div>
+                <div style={{display:'flex', justifyContent:'flex-end'}}>
+                      <button className="price-btn over" onClick={() => {
+                        const sel = { playerId: null, playerName: null, threshold: null, side: 'special' as const, decimalOdds: dec, stake: 0, market: 'Specials', outcome: r.outcome, odds_american: (r.odds || '').toString() };
+                        addSelection(sel as any);
+                      }} style={{minWidth:140, display:'flex', alignItems:'center', justifyContent:'center'}}>
+                    <div className="odds-box">
+                      <div className="price-large">{r.odds}</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const handleMarketChange = (m: 'totals' | 'first-guess' | 'country-props') => {
+    if (m === market) return;
+    setMarket(m);
 
     // when switching to first-guess, compute default per-player threshold (nearest 300 to mean/5)
     if (m === 'first-guess') {
@@ -284,7 +414,8 @@ export default function GeoGuessr() {
             <button className="market-tab" disabled>Spreads (coming)</button>
             <button className={`market-tab ${market === 'first-guess' ? 'active' : ''}`} onClick={() => handleMarketChange('first-guess')}>First Guess Points</button>
             <button className={`market-tab ${market === 'country-props' ? 'active' : ''}`} onClick={() => handleMarketChange('country-props')}>Country Props</button>
-            <button className={`market-tab ${market === 'moneylines' ? 'active' : ''}`} onClick={() => handleMarketChange('moneylines')}>Moneylines</button>
+            <button className={`market-tab ${market === 'moneyline' ? 'active' : ''}`} onClick={() => setMarket('moneyline')}>Moneyline</button>
+            <button className={`market-tab ${market === 'specials' ? 'active' : ''}`} onClick={() => setMarket('specials')}>Specials</button>
           </div>
 
           {/* Main Content Area - Scrollable Player Cards */}
@@ -306,69 +437,17 @@ export default function GeoGuessr() {
                       <CountryPropsList />
                     </div>
 
-                    <h3 className="country-props-heading">Continent Totals <span className="coming-soon">Coming soon</span></h3>
+                    <div style={{marginTop:12}}>
+                      <ContinentPropsList />
+                    </div>
                   </div>
-                ) : market === 'moneylines' ? (
-                  <div className="moneylines-market">
-                    <h3>Classic Moneyline</h3>
-                    {loadingMoneylines ? <div>Simulating moneylines...</div> : (
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-                        {((moneylines && moneylines.classic) || []).map((entry:any, idx:number) => (
-                          <div key={`ml-c-${entry.player_id}-${idx}`} style={{display:'flex',gap:8,flexDirection:'column',alignItems:'stretch'}}>
-                            <div style={{textAlign: 'center', fontWeight: 800, marginBottom: 6}}>{entry.player}</div>
-                            <button className="price-btn over" style={{flex:1}} onClick={() => {
-                              const sel = { playerId: entry.player_id, playerName: entry.player, threshold: null, side: 'moneyline' as const, decimalOdds: entry.decimal, stake: 0, market: 'Moneyline', outcome: `${entry.player}: Moneyline` };
-                              addSelection(sel as any);
-                            }}>
-                              <div className="odds-box">
-                                <div className="price-large">{entry.american}</div>
-                                <div className="price-small">{(entry.decimal || 0).toFixed(2)}</div>
-                              </div>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <h3 style={{marginTop:16}}>First Round Moneyline</h3>
-                    {loadingMoneylines ? null : (
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-                        {((moneylines && moneylines.firstRound) || []).map((entry:any, idx:number) => (
-                          <div key={`ml-f-${entry.player_id}-${idx}`} style={{display:'flex',gap:8,flexDirection:'column',alignItems:'stretch'}}>
-                            <div style={{textAlign: 'center', fontWeight: 800, marginBottom: 6}}>{entry.player}</div>
-                            <button className="price-btn over" style={{flex:1}} onClick={() => {
-                              const sel = { playerId: entry.player_id, playerName: entry.player, threshold: null, side: 'moneyline' as const, decimalOdds: entry.decimal, stake: 0, market: 'Moneyline', outcome: `${entry.player}: Moneyline - First Round` };
-                              addSelection(sel as any);
-                            }}>
-                              <div className="odds-box">
-                                <div className="price-large">{entry.american}</div>
-                                <div className="price-small">{(entry.decimal || 0).toFixed(2)}</div>
-                              </div>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <h3 style={{marginTop:16}}>Last Round Moneyline</h3>
-                    {loadingMoneylines ? null : (
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-                        {((moneylines && moneylines.lastRound) || []).map((entry:any, idx:number) => (
-                          <div key={`ml-l-${entry.player_id}-${idx}`} style={{display:'flex',gap:8,flexDirection:'column',alignItems:'stretch'}}>
-                            <div style={{textAlign: 'center', fontWeight: 800, marginBottom: 6}}>{entry.player}</div>
-                            <button className="price-btn over" style={{flex:1}} onClick={() => {
-                              const sel = { playerId: entry.player_id, playerName: entry.player, threshold: null, side: 'moneyline' as const, decimalOdds: entry.decimal, stake: 0, market: 'Moneyline', outcome: `${entry.player}: Moneyline - Last Round` };
-                              addSelection(sel as any);
-                            }}>
-                              <div className="odds-box">
-                                <div className="price-large">{entry.american}</div>
-                                <div className="price-small">{(entry.decimal || 0).toFixed(2)}</div>
-                              </div>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                ) : market === 'moneyline' ? (
+                  <div className="moneyline-panel">
+                    <MoneylineList />
+                  </div>
+                ) : market === 'specials' ? (
+                  <div className="specials-panel">
+                    <SpecialsList />
                   </div>
                 ) : (
                 <div className="players-list">

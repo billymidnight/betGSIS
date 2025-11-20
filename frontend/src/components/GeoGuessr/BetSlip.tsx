@@ -62,20 +62,57 @@ export default function BetSlip() {
           bet_name = `${sel.playerName}: ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold} Points`;
         }
 
-  const oddsAmerican = decimalToAmerican(Number(sel.decimalOdds || 1));
+        const oddsAmerican = decimalToAmerican(Number(sel.decimalOdds || 1));
         // Build payload matching backend 'bets' schema. Include playerName/playerId so backend
         // can construct a strict outcome string per market rules.
+        // Default payload values
+        let payloadMarket = (sel.playerId === -1 && sel.market === 'country-props') ? bet_name : (sel.market || bet_name);
+        let payloadOutcome: any = null;
+
+        // Specials: store exact outcome string
+        if (sel.market === 'Specials') {
+          payloadOutcome = sel.outcome || sel.playerName || null;
+        } else if (typeof (sel.market || '') === 'string' && (sel.market || '').toLowerCase().includes('moneyline')) {
+          // Moneyline selections: normalize market to generic 'Moneyline'.
+          // DB outcome naming rules (short forms for DB):
+          //  - Overall -> "<PlayerName>: Moneyline"
+          //  - First Round -> "<PlayerName>: First Round ML"
+          //  - Last Round -> "<PlayerName>: Last Round ML"
+          // The user-facing selection.outcome contains longer, human-readable labels
+          // (e.g. "Pam: First Round Moneyline") which BetslipItem displays under
+          // the player name. Here we only set the DB outcome string to the exact
+          // canonical values required.
+          payloadMarket = 'Moneyline';
+          const m = String(sel.market || '');
+          if (m.toLowerCase().includes('first')) {
+            payloadOutcome = `${sel.playerName}: First Round ML`;
+          } else if (m.toLowerCase().includes('last')) {
+            payloadOutcome = `${sel.playerName}: Last Round ML`;
+          } else {
+            payloadOutcome = `${sel.playerName}: Moneyline`;
+          }
+        } else if (sel.market === 'first-guess') {
+          payloadOutcome = `${sel.playerName}: First Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
+        } else if (sel.market === 'country-props') {
+          // continent markets: if playerId === -1 use human-readable bet_name
+          if (sel.playerId === -1 || (sel.threshold && Number(sel.threshold) > 0)) {
+            payloadOutcome = bet_name;
+          } else {
+            payloadOutcome = `${sel.playerName}: To Appear - ${sel.side === 'over' ? 'Yes' : 'No'}`;
+          }
+        } else {
+          // default totals-like naming
+          payloadOutcome = `${sel.playerName}: ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold} Points`;
+        }
+
         const payload = {
-          // For continent markets we prefer sending the human-readable bet_name so backend
-          // stores the outcome like "Europe: Under 2.5 Appearances". For normal markets
-          // send the market code to let backend construct its canonical name.
-          market: (sel.playerId === -1 && sel.market === 'country-props') ? bet_name : (sel.market || bet_name),
+          market: payloadMarket,
           point: sel.threshold || null,
-          outcome: sel.side || null,
+          outcome: payloadOutcome,
           bet_size: Number(sel.stake || 0),
           odds_american: oddsAmerican,
-          playerName: sel.playerName || sel.playerName || null,
-          playerId: sel.playerId || sel.playerId || null,
+          playerName: sel.playerName || null,
+          playerId: sel.playerId || null,
         };
         try {
           const resp = await placeBetServer(payload);
