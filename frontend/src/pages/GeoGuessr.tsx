@@ -6,7 +6,7 @@ import Footer from '../components/Layout/Footer';
 import BetSlip from '../components/GeoGuessr/BetSlip';
 import ContinentPropsList from '../components/GeoGuessr/ContinentPropsList';
 import ToastContainer from '../components/Shared/ToastContainer';
-import { fetchGeoTotals, fetchPricingLines, fetchPricingFirstGuess, fetchPricingCountryProps, fetchMoneylinesPrices, fetchSpecialsPrices } from '../lib/api/api';
+import { fetchGeoTotals, fetchPricingLines, fetchPricingFirstGuess, fetchPricingCountryProps, fetchMoneylinesPrices, fetchSpecialsPrices, fetchFirstContinentRows } from '../lib/api/api';
 import { americanToDecimal } from '../lib/format';
 import './GeoGuessr.css';
 import { useBetsStore } from '../lib/state/betsStore';
@@ -14,7 +14,7 @@ import { useBetsStore } from '../lib/state/betsStore';
 export default function GeoGuessr() {
   const [geoPlayers, setGeoPlayers] = useState<any[]>([]);
   const [thresholdList, setThresholdList] = useState<number[]>([]);
-  const [market, setMarket] = useState<'totals' | 'first-guess' | 'last-guess' | 'country-props' | 'moneyline' | 'specials'>('totals');
+  const [market, setMarket] = useState<'totals' | 'first-guess' | 'last-guess' | 'country-props' | 'moneyline' | 'frc' | 'specials'>('totals');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingOdds, setIsUpdatingOdds] = useState<Record<number, boolean>>({});
@@ -370,6 +370,74 @@ export default function GeoGuessr() {
     );
   }
 
+  function FirstContinentList() {
+    const [rows, setRows] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const addSelection = useBetsStore((s) => s.addSelection);
+
+    useEffect(() => {
+      let mounted = true;
+      const load = async () => {
+        setLoading(true);
+        try {
+          const res = await fetchFirstContinentRows();
+          const list = (res && res.rows) || res || [];
+          if (mounted) setRows(list || []);
+        } catch (e) {
+          console.error('Failed to load first-continent rows', e);
+          if (mounted) setRows([]);
+        } finally {
+          if (mounted) setLoading(false);
+        }
+      };
+      load();
+      return () => { mounted = false; };
+    }, []);
+
+    if (loading) return <div style={{padding:8,color:'#999'}}>Loading continents...</div>;
+    if (!rows || rows.length === 0) return <div style={{padding:8,color:'#999'}}>No continents available</div>;
+
+    return (
+      <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8}}>
+        {rows.map((r: any) => {
+          const p = Number(r.probability_first_round) || 0;
+          let p_adj = p * 1.05;
+          if (!isFinite(p_adj) || p_adj <= 0) p_adj = 0.0001;
+          if (p_adj >= 1.0) p_adj = 0.9999;
+          const dec = 1 / p_adj;
+          let amer = '';
+          try {
+            let v: number;
+            if (dec >= 2.0) v = Math.round((dec - 1.0) * 100);
+            else v = Math.round(-100 / (dec - 1.0));
+            const rounded = Math.floor(v / 10) * 10;
+            amer = (rounded >= 0 ? `+${rounded}` : `${rounded}`);
+          } catch (e) {
+            amer = '';
+          }
+
+          return (
+            <div key={`frc-${r.continent_id}`} className="player-card" style={{padding: '0.5rem', borderRadius: 8}}>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                <div style={{fontWeight:700}}>{r.continent_name}</div>
+                <button className="price-btn over" onClick={() => {
+                  const outcome = `${r.continent_name}: First Round Appearance`;
+                  const sel = { playerId: Number(r.continent_id), playerName: r.continent_name, threshold: null, side: 'over' as const, decimalOdds: Number(dec) || 1.0, stake: 0, market: 'frc', outcome, odds_american: amer };
+                  addSelection(sel as any);
+                }} style={{display:'flex', alignItems:'center', justifyContent:'center', padding:'0.35rem'}}>
+                  <div className="odds-box">
+                    <div className="price-large">{amer}</div>
+                    <div className="price-small" style={{opacity:0.7}}>{(Number(dec) || 0).toFixed(2)}</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   const handleMarketChange = (m: 'totals' | 'first-guess' | 'last-guess' | 'country-props') => {
     if (m === market) return;
     setMarket(m);
@@ -420,6 +488,7 @@ export default function GeoGuessr() {
             <button className={`market-tab ${market === 'last-guess' ? 'active' : ''}`} onClick={() => handleMarketChange('last-guess')}>Last Guess Points</button>
             <button className={`market-tab ${market === 'country-props' ? 'active' : ''}`} onClick={() => handleMarketChange('country-props')}>Country Props</button>
             <button className={`market-tab ${market === 'moneyline' ? 'active' : ''}`} onClick={() => setMarket('moneyline')}>Moneyline</button>
+            <button className={`market-tab ${market === 'frc' ? 'active' : ''}`} onClick={() => setMarket('frc')}>First Continent</button>
             <button className={`market-tab ${market === 'specials' ? 'active' : ''}`} onClick={() => setMarket('specials')}>Specials</button>
           </div>
 
@@ -452,6 +521,10 @@ export default function GeoGuessr() {
                 ) : market === 'moneyline' ? (
                   <div className="moneyline-panel">
                     <MoneylineList />
+                  </div>
+                ) : market === 'frc' ? (
+                  <div className="frc-panel">
+                    <FirstContinentList />
                   </div>
                 ) : market === 'specials' ? (
                   <div className="specials-panel">

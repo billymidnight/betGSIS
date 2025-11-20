@@ -76,25 +76,34 @@ export default function ContinentPropsList() {
 
               if (!shouldRender) return null;
 
+              // Normalize hook value: if hook is an integer (e.g., 2) append .5 (-> 2.5)
+              const rawHook = h.hook;
+              let hookNum = typeof rawHook === 'string' ? parseFloat(rawHook) : Number(rawHook);
+              if (isNaN(hookNum)) hookNum = rawHook as any;
+              const processedHook = typeof hookNum === 'number' ? (hookNum % 1 === 0 ? hookNum + 0.5 : hookNum) : hookNum;
+              const formattedHook = (typeof processedHook === 'number') ? String(processedHook) : String(processedHook);
+
               return (
                 <div key={`${c.name}-hook-${h.hook}`} style={{display: 'flex', flexDirection: 'column', gap: 6}}>
-                  <div style={{fontSize: '0.9rem', color: '#bbb', fontWeight: 700, marginBottom: 4}}>{`Over ${h.hook} / Under ${h.hook}`}</div>
+                  <div style={{fontSize: '0.9rem', color: '#bbb', fontWeight: 700, marginBottom: 4}}>{`Over ${formattedHook} / Under ${formattedHook}`}</div>
                   <div className="hook-row" style={{display: 'flex', gap: 8}}>
                   <button className="price-btn over" onClick={() => {
-                    const sel = { playerId: null, playerName: c.name, point: h.hook, threshold: null, side: 'over' as const, decimalOdds: overDec, stake: 0, market: 'Continent Totals', outcome: `Over ${h.hook} ${c.name}`, odds_american: overA };
+                    const sel = { playerId: -1, playerName: c.name, point: processedHook, threshold: processedHook, side: 'over' as const, decimalOdds: overDec, stake: 0, market: 'Continent Totals', outcome: `${c.name}: Over ${formattedHook}`, odds_american: overA };
                     addSelection(sel as any);
                   }} style={{flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-                    <div className="odds-box">
-                      <div className="price-large">{h.overOddsAmerican || overA}</div>
-                      <div className="price-small">{(overDec || 1.0).toFixed(2)}</div>
-                    </div>
+                      <div className="odds-box">
+                        <div className="hook-label" style={{fontSize: '0.95rem', fontWeight: 800, color: '#6a0dad', marginBottom: 6}}>{`Over ${formattedHook}`}</div>
+                        <div className="price-large">{h.overOddsAmerican || overA}</div>
+                        <div className="price-small">{(overDec || 1.0).toFixed(2)}</div>
+                      </div>
                   </button>
 
                   <button className="price-btn under" onClick={() => {
-                    const sel = { playerId: null, playerName: c.name, point: h.hook, threshold: null, side: 'under' as const, decimalOdds: underDec, stake: 0, market: 'Continent Totals', outcome: `Under ${h.hook} ${c.name}`, odds_american: underA };
+                    const sel = { playerId: -1, playerName: c.name, point: processedHook, threshold: processedHook, side: 'under' as const, decimalOdds: underDec, stake: 0, market: 'Continent Totals', outcome: `${c.name}: Under ${formattedHook}`, odds_american: underA };
                     addSelection(sel as any);
                   }} style={{flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                     <div className="odds-box">
+                      <div className="hook-label" style={{fontSize: '0.95rem', fontWeight: 800, color: '#6a0dad', marginBottom: 6}}>{`Under ${formattedHook}`}</div>
                       <div className="price-large">{h.underOddsAmerican || underA}</div>
                       <div className="price-small">{(underDec || 1.0).toFixed(2)}</div>
                     </div>

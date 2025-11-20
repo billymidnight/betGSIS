@@ -39,15 +39,18 @@ export default function BetslipItem({ selection }: Props) {
               <div style={{fontWeight:700}}>{String(selection.outcome).split(':').slice(1).join(':').trim() || 'Moneyline'}</div>
             ) : selection.market === 'first-guess' ? (
               <>{selection.side.toUpperCase()} {`${selection.threshold} - First Round`}</>
-            ) : selection.market === 'first-guess' ? (
-              <>{selection.side.toUpperCase()} {`${selection.threshold} - First Round`}</>
-            ) : selection.market === 'country-props' ? (
-            // Distinguish continent-style props (also support Continent Totals and selections with a `point` field)
-            (selection.market === 'Continent Totals' || selection.playerId === -1 || (selection.threshold && Number(selection.threshold) > 0) || (selection as any).point != null) ? (
+                ) : selection.market === 'country-props' ? (
+            // Distinguish continent-style props (playerId === -1 and threshold > 0)
+            (selection.playerId === -1 || (selection.threshold && Number(selection.threshold) > 0)) ? (
               <>
-                <span style={{color: selection.side === 'over' ? '#28a745' : '#d97706', fontWeight: 700}}>
-                  {selection.side === 'over' ? 'Over' : 'Under'} {(selection.threshold ?? (selection as any).point) ?? ''}
-                </span>
+                {(() => {
+                  const hook = selection.threshold ?? (selection as any).point ?? '';
+                  return (
+                    <span style={{color: selection.side === 'over' ? '#28a745' : '#d97706', fontWeight: 800, fontSize: '0.95rem'}}>
+                      {selection.side === 'over' ? 'Over' : 'Under'} {hook}
+                    </span>
+                  );
+                })()}
               </>
             ) : (
               <>
@@ -58,6 +61,8 @@ export default function BetslipItem({ selection }: Props) {
                 </span>
               </>
             )
+          ) : selection.market === 'frc' ? (
+            <div style={{fontWeight:700}}>First Round Appearance</div>
           ) : (
             <>{selection.side.toUpperCase()} @ {selection.threshold}</>
           )}
@@ -66,7 +71,17 @@ export default function BetslipItem({ selection }: Props) {
         <div className="betslip-odds">
           <div className="betslip-odds-american" aria-hidden>
             {typeof selection.decimalOdds === 'number'
-              ? (selection.decimalOdds >= 2 ? `+${Math.round((selection.decimalOdds - 1) * 100)}` : `${Math.round(-100 / (selection.decimalOdds - 1))}`)
+              ? (() => {
+                  // compute american then round down to nearest 10 favoring the bookie
+                  let a = 0;
+                  try {
+                    a = selection.decimalOdds >= 2 ? Math.round((selection.decimalOdds - 1) * 100) : Math.round(-100 / (selection.decimalOdds - 1));
+                    const rounded = Math.floor(a / 10) * 10;
+                    return (rounded >= 0 ? `+${rounded}` : `${rounded}`);
+                  } catch (e) {
+                    return '—';
+                  }
+                })()
               : '—'}
           </div>
           <div className="betslip-odds-dec" aria-hidden>{(selection.decimalOdds || 1).toFixed(2)}</div>

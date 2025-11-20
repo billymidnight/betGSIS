@@ -98,6 +98,13 @@ export async function fetchContinentMarkets(rounds = 5) {
   return r.data;
 }
 
+export async function fetchFirstContinentRows() {
+  // Fetch FRC table rows ordered by continent_id
+  const headers = { 'Content-Type': 'application/json' } as Record<string, string>;
+  const r = await api.get('/frc/continents', { headers });
+  return r.data || [];
+}
+
 export async function fetchPricingContinentProps(rounds = 5) {
   const headers = { 'Content-Type': 'application/json', 'x-user-role': 'book' } as Record<string, string>;
   const r = await api.get(`/pricing/continent-props?rounds=${rounds}`, { headers });

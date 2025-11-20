@@ -313,6 +313,16 @@ def bets_place():
         # This ensures the DB `outcome` column matches the betslip label exactly.
         elif 'moneyline' in str(mnorm):
             outcome_str = payload.get('outcome') or None
+        # If this is our new First Round Continent market, accept the client-provided
+        # outcome verbatim and log it so we don't normalize away the exact string.
+        elif str((payload.get('market') or '').strip()).lower() == 'first round continent' or str(mnorm).strip() == 'first round continent':
+            outcome_str = payload.get('outcome') or None
+            try:
+                app.logger.info(f"[bets_place] FRC payload received: {payload}")
+                app.logger.info(f"[bets_place] FRC final outcome used: {outcome_str}")
+            except Exception:
+                print(f"[bets_place] FRC payload received: {payload}")
+                print(f"[bets_place] FRC final outcome used: {outcome_str}")
         else:
             def fmt_totals(name, side, pt):
                 # "<Player_name>: Over (Under) X Points"
@@ -402,6 +412,16 @@ def bets_place():
             rounded_amer_str = None
 
         try:
+            # For Continent Totals ensure integer hooks like '2' become '2.5' in the final outcome string
+            try:
+                normalized_market = str(payload.get('market') or market or '').lower()
+                if outcome_str and (('continent' in (mnorm or '')) or ('continent' in normalized_market) or normalized_market.strip() == 'continent totals'):
+                    import re
+                    # Replace 'Over 2' -> 'Over 2.5' and 'Under 0' -> 'Under 0.5' only when the hook is an integer
+                    outcome_str = re.sub(r"\b(Over|Under)\s+(\d+)(?!\.)", lambda m: f"{m.group(1)} {m.group(2)}.5", str(outcome_str))
+            except Exception:
+                # swallow any normalization errors to avoid breaking bet placement
+                pass
             app.logger.info(f"[bets_place] final outcome_str: {outcome_str}")
         except Exception:
             try:
@@ -732,6 +752,24 @@ def markets_continents():
     except Exception as e:
         logging.exception('markets_continents error')
         return jsonify({'error': str(e), 'config': {'rounds': 5}, 'continents': []}), 500
+
+
+@api_bp.route('/frc/continents', methods=['GET', 'OPTIONS'])
+def frc_continents():
+    """Return rows from FRC table (first-round-continent probabilities) ordered by continent_id."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing', 'rows': []}), 500
+    try:
+        rc = client.table('frc').select('continent_id,continent_name,probability_first_round').order('continent_id').execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        rows = rows or []
+        return jsonify({'rows': rows}), 200
+    except Exception as e:
+        logging.exception('frc_continents error')
+        return jsonify({'error': str(e), 'rows': []}), 500
 
 
 @api_bp.route('/locks', methods=['GET', 'OPTIONS'])

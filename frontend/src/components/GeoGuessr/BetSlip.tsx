@@ -49,18 +49,27 @@ export default function BetSlip() {
       // Use server endpoint with Supabase JWT; compose bet_name per market
     for (const sel of selections) {
         let bet_name = '';
-        if (sel.market === 'country-props') {
-          // continent markets are represented with playerId === -1 and a non-zero threshold
-          if (sel.playerId === -1 || (sel.threshold && Number(sel.threshold) > 0)) {
-            // Continent totals: include the numeric threshold in the label
-            bet_name = `${sel.playerName}: ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
+        if (sel.market === 'country-props' || String(sel.market) === 'Continent Totals') {
+          // continent markets may be represented as `country-props` with playerId === -1
+          // or as a separate 'Continent Totals' market (see ContinentPropsList).
+          // Use `threshold` or `point` when available to build a concise Over/Under label.
+          const pointVal = sel.threshold ?? (sel as any).point ?? null;
+          if (sel.playerId === -1 || (pointVal && Number(pointVal) > 0) || String(sel.market) === 'Continent Totals') {
+            // Continent totals / continent-style props
+            bet_name = `${sel.playerName}: ${sel.side === 'over' ? 'Over' : 'Under'} ${pointVal ?? ''}`;
           } else {
+            // Country To Appear
             bet_name = `${sel.playerName}: To Appear - ${sel.side === 'over' ? 'Yes' : 'No'}`;
           }
         } else if (sel.market === 'first-guess') {
           bet_name = `${sel.playerName}: First Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
         } else if (String(sel.market) === 'last-guess') {
           bet_name = `${sel.playerName}: Last Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
+        } else if (sel.market === 'frc' || String(sel.market) === 'frc') {
+          // First Continent (FRC) selections: these should be sent to the server
+          // with market = 'First Round Continent' and the outcome verbatim
+          // matching the betslip (e.g. "Europe: First Round Appearance").
+          bet_name = `${sel.playerName}: First Round Appearance`;
         } else {
           bet_name = `${sel.playerName}: ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold} Points`;
         }
@@ -101,10 +110,22 @@ export default function BetSlip() {
           payloadOutcome = `${sel.playerName}: First Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
         } else if (String(sel.market) === 'last-guess') {
           payloadOutcome = `${sel.playerName}: Last Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
-        } else if (sel.market === 'country-props') {
+        } else if (sel.market === 'frc' || String(sel.market) === 'frc') {
+          // For First Round Continent, keep the canonical market name but
+          // store the outcome including the continent name so DB outcome
+          // becomes e.g. "Europe: First Round Appearance".
+          payloadMarket = 'First Round Continent';
+          // Prefer the selection's playerName to include the continent; fall
+          // back to the literal if missing.
+          payloadOutcome = sel.playerName && String(sel.playerName).trim() !== ''
+            ? `${sel.playerName}: First Round Appearance`
+            : (sel.outcome && typeof sel.outcome === 'string' ? sel.outcome : 'First Round Continent');
+        } else if (sel.market === 'country-props' || String(sel.market) === 'Continent Totals') {
           // continent markets: if playerId === -1 use human-readable bet_name
-          if (sel.playerId === -1 || (sel.threshold && Number(sel.threshold) > 0)) {
-            payloadOutcome = bet_name;
+          const pt = sel.threshold ?? (sel as any).point ?? null;
+          if (sel.playerId === -1 || (pt && Number(pt) > 0) || String(sel.market) === 'Continent Totals') {
+            // For continent totals, include the numeric threshold/point value
+            payloadOutcome = `${sel.playerName}: ${sel.side === 'over' ? 'Over' : 'Under'} ${pt ?? ''}`;
           } else {
             // For To Appear bets prefer the human-readable outcome provided
             // on the selection (sel.outcome) so DB matches the betslip exactly.
