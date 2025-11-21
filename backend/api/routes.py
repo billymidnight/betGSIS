@@ -361,6 +361,9 @@ def bets_place():
         # Specials: still respect verbatim outcome
         elif pm == 'specials' or mnorm == 'specials':
             outcome_str = payload.get('outcome') or None
+        # Ante markets: respect verbatim outcome and use canonical market 'Ante'
+        elif pm == 'ante' or mnorm == 'ante':
+            outcome_str = payload.get('outcome') or None
         else:
             # Fallback: keep previous behavior but constructed safely. This covers other markets.
             try:
@@ -2011,3 +2014,27 @@ def specials_prices():
     except Exception as e:
         logging.exception('specials_prices error')
         return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/antes', methods=['GET', 'OPTIONS'])
+def antes_list():
+    """Return rows from Geo_Antes table ordered by ante_id.
+
+    Shape: { rows: [ { ante_id, outcome, odds } ] }
+    """
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    try:
+        client = _get_admin_client()
+        rows = []
+        if client:
+            try:
+                rc = client.table('geo_antes').select('ante_id,outcome,odds').order('ante_id').execute()
+                rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None) or []
+            except Exception:
+                app.logger.exception('antes_list: failed to read Geo_Antes')
+                rows = []
+        return jsonify({'rows': rows}), 200
+    except Exception as e:
+        logging.exception('antes_list error')
+        return jsonify({'rows': [], 'error': str(e)}), 500

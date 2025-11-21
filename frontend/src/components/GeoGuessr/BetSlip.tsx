@@ -139,6 +139,12 @@ export default function BetSlip() {
           payloadOutcome = `${sel.playerName}: ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold} Points`;
         }
 
+        // Ante market: prefer verbatim outcome and canonical market name 'Ante'
+        if (sel.market === 'ante' || String(sel.market).toLowerCase() === 'ante') {
+          payloadMarket = 'Ante';
+          payloadOutcome = sel.outcome || sel.playerName || null;
+        }
+
         const payload = {
           market: payloadMarket,
           point: sel.threshold || null,

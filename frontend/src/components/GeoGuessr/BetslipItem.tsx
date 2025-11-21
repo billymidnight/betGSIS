@@ -63,6 +63,8 @@ export default function BetslipItem({ selection }: Props) {
             )
           ) : selection.market === 'frc' ? (
             <div style={{fontWeight:700}}>First Round Appearance</div>
+          ) : selection.market === 'ante' ? (
+            <div style={{fontWeight:700}}>{selection.outcome || selection.playerName}</div>
           ) : (
             <>{selection.side.toUpperCase()} @ {selection.threshold}</>
           )}

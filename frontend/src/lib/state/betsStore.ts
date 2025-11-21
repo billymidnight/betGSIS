@@ -8,7 +8,7 @@ export interface BetSelection {
   threshold: number;
   side: 'over' | 'under' | 'special';
   decimalOdds: number;
-  market?: 'totals' | 'first-guess' | 'country-props' | 'Specials' | 'moneylines' | 'frc';
+  market?: 'totals' | 'first-guess' | 'country-props' | 'Specials' | 'moneylines' | 'frc' | 'ante';
   outcome?: string | null;
   stake: number;
   estimatedPayout: number;
@@ -17,7 +17,7 @@ export interface BetSelection {
 interface BetsStore {
   selections: BetSelection[];
   recentBets: BetSelection[];
-  addSelection: (selection: Omit<BetSelection, 'id' | 'estimatedPayout'> & { market?: 'totals' | 'first-guess' | 'country-props' | 'Specials' | 'moneylines' | 'frc' }) => void;
+  addSelection: (selection: Omit<BetSelection, 'id' | 'estimatedPayout'> & { market?: 'totals' | 'first-guess' | 'country-props' | 'Specials' | 'moneylines' | 'frc' | 'ante' }) => void;
   removeSelection: (id: string) => void;
   updateStake: (id: string, stake: number) => void;
   clearSelections: () => void;

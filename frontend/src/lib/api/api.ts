@@ -105,6 +105,12 @@ export async function fetchFirstContinentRows() {
   return r.data || [];
 }
 
+export async function fetchAntes() {
+  const headers = { 'Content-Type': 'application/json' } as Record<string, string>;
+  const r = await api.get('/antes', { headers });
+  return r.data || { rows: [] };
+}
+
 export async function fetchPricingContinentProps(rounds = 5) {
   const headers = { 'Content-Type': 'application/json', 'x-user-role': 'book' } as Record<string, string>;
   const r = await api.get(`/pricing/continent-props?rounds=${rounds}`, { headers });
