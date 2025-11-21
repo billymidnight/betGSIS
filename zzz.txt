@@ -1,27 +1,4 @@
 
-ok you need to ask it to make a critical modification change to the pricing
-
-currently if probs ever go below 0.01 then on the other side it just stays static at -10000
-i think it's doing this as soe kind of guardrail globally to never have to deal with decimals that are exactly 1 when rounded and stuff
-but make it only apply that guardrail to when it's like less than 0.0005 so 0.05% prob, until -200000 it can keep going and show.
-
-so have it do that. i'm sic of it cutting it off at -10000 right now
-
-i dont know its exact method if implementation, but this needs to be applied globally to all the markets.
-
-so come on now , i need this beautiful fix asap as fuck
-
-A-FUCKINGGGG-SAP COME ONNNN
-
-so if there's like a 0.005 market and a 0.995 market it can jsust show -19900 and 19900
-
-this is just an example, such a market wont actually exist because of vig obv
-
-ok come on now, lets have this cooking, write it up for me, cook it fully over here now come on then come on
-
-######################
-
-
 next i want you yourself to first give me a py simulation fo something before i go to copilot about it.
 
 it's the new markets for everythign related to moneylines and want notits for monte carlos
@@ -52,7 +29,8 @@ another very important thing is that the max for all of these is actually 5000. 
 code it up now the py wscript and print clearly on py terminal wheni run it so i can all stats
 
 #######
-market pricing
+market pricing for SPECIALS
+it has to create a specials_pricing.py file in the relevant folder and borrow the utils funcs like conversions, vig adding and all coz there's gonna be lot of speicfic pricing in here particulr to some people and groups
 
 No Europe and Oceania > 1.5:
 for this can be priced via simulation only. ask it to make a func called europelessoceania() where it just smis. given each continent's probabilities:
@@ -73,4 +51,33 @@ next market is:
 3 Europe, 1 Asia, 1 Africa:
 again exact same idea where it sims the 5 round game and counts as true when there are 3 europes, 1 asia and 1 africa in any order
 
-next ask it to 
+next ask it to write the sim and probs and vig addition and pricing for the "Naresh First Guess > 3000" and "Naresh Last Guess > 3000"
+
+this jsut needs to use the OG ml simulator skeleton and count the times naresh gets > 3000 on both those. or it can just literally use math, coz we know mean and std dev. ask it to find his stats, or his playerid, by checking the name column in geo_players
+and then once it finds the times he had more than 3000 on both those rounds in a game, it can divide by trials, get prob apply vig the wwhole shaboom
+
+next market: 
+No World Cup Winners:
+the world cup winners are: {Germany, France, Italy, United Kingdom, Spain, Argentina, Uruguay, Brazil}
+ask it to find all these countries in geo_countries via the column name country and then find the freq
+ask it to sum all those freqs up.
+this is the probability of one of these coming on any given round
+we need (1-p)^5 for probability that worldcupteams never appears in a game and we apply 7 percent vig and present it to frontend and everything as usual
+
+next SPECIALS is:
+France and Germany Both to appears
+can be done with math or simulation either way is fine here for this
+
+moving on:
+
+
+############### REVIGGING #################################################################
+
+Found a new method to ensure the new vig guardrails are never important when the impleud prob goes  over 1
+
+the issue earlier was let's say there was a prob = 0.98 of some outcome occuring, so when applying like a 5 percent margin it gord up to 1.029 and suddenyl can't convert back to amrerican anymore
+the solution is to do the following, to apply the vig to the decimal form version of the odds, then convert that to prob and/or amercian. using following formula
+
+so lets say fair decimal rice is d and say the margin is m such as m = 0.05
+then v (the vigged priced) is o / (1 + m). simple as fuck. so if fair prob was 40 percent, the fair decimal is 2.5. for five percent vig we do 2.5 / (1+0.05) = 2.5/1.05 = 2.38 and on the other side it'll be 60 percent initial which was -150 whih is 1.6666 so it's 1.66666/1.05 = 1.587
+so vigged line there would be 2.38 and 1.587 which we would then convert to american and so forth. capisce?

@@ -1,5 +1,4 @@
 import random
-import numpy as np
 from scipy.stats import beta
 from dataclasses import dataclass
 
@@ -57,27 +56,27 @@ if __name__ == "__main__":
         PlayerModel.from_mean_std("Pam", 2630, 1000),
         PlayerModel.from_mean_std("Sohan", 3100, 1000),
         PlayerModel.from_mean_std("Pritesh", 3000, 1000),
-        PlayerModel.from_mean_std("Naresh", 2250, 1500),
+        PlayerModel.from_mean_std("Naresh", 2250, 1500)
     ]
 
-    iterations = 100000
+    iterations = 20000
+
+    # Variables you can change:
+    target_name = "Sohan"       # e.g. "Sam" or "Sohan"
+    min_rounds_first = 4      # e.g. 4 or 3
+
     success_count = 0
 
     for _ in range(iterations):
         round_scores = simulate_game(players)
-
-        # Round 1 check
-        r1 = round_scores[0]
-        if not (r1["Naresh"] < r1["Pam"] and r1["Naresh"] < r1["Sohan"]):
-            continue
-
-        # Round 5 check
-        r5 = round_scores[-1]
-        if not (r5["Naresh"] < r5["Pam"] and r5["Naresh"] < r5["Sohan"]):
-            continue
-
-        success_count += 1
+        first_places = 0
+        for r in round_scores:
+            # check if target_name has the highest score in this round
+            if r[target_name] == max(r.values()):
+                first_places += 1
+        if first_places >= min_rounds_first:
+            success_count += 1
 
     print("\n=== Summary ===")
-    print(f"Naresh behind Pam and Sohan in R1 and R5: {success_count}/{iterations} "
-          f"({success_count/iterations:.4%})")
+    print(f"{target_name} finished 1st in at least {min_rounds_first} rounds: "
+          f"{success_count}/{iterations} ({success_count/iterations:.4%})")
