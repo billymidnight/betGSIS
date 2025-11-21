@@ -367,7 +367,15 @@ export default function GeoGuessr() {
         setLoading(true);
         try {
           const res = await fetchSpecialsPrices();
-          const markets = (res && res.markets) || [];
+          let markets = (res && res.markets) || [];
+          // sort by parsed American odds ascending (coerce +/string)
+          markets = (markets || []).slice().sort((a: any, b: any) => {
+            const pa = parseInt(String((a && (a.odds || a.odds_american)) || '').replace('+', ''), 10);
+            const pb = parseInt(String((b && (b.odds || b.odds_american)) || '').replace('+', ''), 10);
+            const na = Number.isNaN(pa) ? 0 : pa;
+            const nb = Number.isNaN(pb) ? 0 : pb;
+            return na - nb;
+          });
           if (mounted) setRows(markets);
         } catch (e) {
           console.error('Failed to load specials', e);
@@ -403,12 +411,12 @@ export default function GeoGuessr() {
 
           return (
             <div key={`spec-${r.betid || r.betId || r.id || r.outcome}`} className="player-card" style={{padding: '0.5rem', borderRadius:8}}>
-              <div style={{display:'grid', gridTemplateColumns: '1fr 140px', alignItems: 'center', gap: 8}}>
+              <div style={{display:'grid', gridTemplateColumns: '1fr 110px', alignItems: 'center', gap: 8}}>
                 <div style={{fontSize: '1.8rem', fontWeight: 900}}>{r.outcome}</div>
                 <div style={{display:'flex', justifyContent:'flex-end'}}>
-                      <button className="price-btn over" onClick={() => { if (locked) return; const sel = { playerId: null, playerName: null, threshold: null, side: 'special' as const, decimalOdds: dec, stake: 0, market: 'Specials', outcome: r.outcome, odds_american: (r.odds || '').toString() }; addSelection(sel as any); }} disabled={locked} style={{minWidth:140, display:'flex', alignItems:'center', justifyContent:'center', cursor: locked ? 'not-allowed' : undefined}}>
-                    <div className="odds-box">
-                      {locked ? <div style={{fontSize:'1.4rem'}}>🔒</div> : <div className="price-large">{r.odds}</div>}
+                      <button className="price-btn over" onClick={() => { if (locked) return; const sel = { playerId: null, playerName: null, threshold: null, side: 'special' as const, decimalOdds: dec, stake: 0, market: 'Specials', outcome: r.outcome, odds_american: (r.odds || '').toString() }; addSelection(sel as any); }} disabled={locked} style={{minWidth:90, display:'flex', alignItems:'center', justifyContent:'center', cursor: locked ? 'not-allowed' : undefined}}>
+                    <div className="odds-box" style={{width: '86px', display:'flex', alignItems:'center', justifyContent:'center'}}>
+                      {locked ? <div style={{fontSize:'1.2rem'}}>🔒</div> : <div className="price-large">{r.odds}</div>}
                     </div>
                   </button>
                 </div>
@@ -458,36 +466,37 @@ export default function GeoGuessr() {
           if (!isFinite(p_adj) || p_adj <= 0) p_adj = 0.0001;
           if (p_adj >= 1.0) p_adj = 0.9999;
           const dec = 1 / p_adj;
-          let amer = '';
-          try {
-            let v: number;
-            if (dec >= 2.0) v = Math.round((dec - 1.0) * 100);
-            else v = Math.round(-100 / (dec - 1.0));
-            const rounded = Math.floor(v / 10) * 10;
-            amer = (rounded >= 0 ? `+${rounded}` : `${rounded}`);
-          } catch (e) {
-            amer = '';
-          }
+            let amer = '';
+            try {
+              let v: number;
+              if (dec >= 2.0) v = Math.round((dec - 1.0) * 100);
+              else v = Math.round(-100 / (dec - 1.0));
+              amer = (v >= 0 ? `+${v}` : `${v}`);
+            } catch (e) {
+              amer = '';
+            }
 
           return (
             <div key={`frc-${r.continent_id}`} className="player-card" style={{padding: '0.5rem', borderRadius: 8}}>
-              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                <div style={{fontWeight:700}}>{r.continent_name}</div>
-                <button className="price-btn over" onClick={() => {
-                  if (locked) return;
-                  const outcome = `${r.continent_name}: First Round Appearance`;
-                  const sel = { playerId: Number(r.continent_id), playerName: r.continent_name, threshold: null, side: 'over' as const, decimalOdds: Number(dec) || 1.0, stake: 0, market: 'frc', outcome, odds_american: amer };
-                  addSelection(sel as any);
-                }} disabled={locked} style={{display:'flex', alignItems:'center', justifyContent:'center', padding:'0.35rem', cursor: locked ? 'not-allowed' : 'pointer'}}>
-                  <div className="odds-box">
-                    {locked ? <div style={{fontSize:'1.4rem'}}>🔒</div> : (
-                      <>
-                        <div className="price-large">{amer}</div>
-                        <div className="price-small" style={{opacity:0.7}}>{(Number(dec) || 0).toFixed(2)}</div>
-                      </>
-                    )}
-                  </div>
-                </button>
+              <div style={{display: 'grid', gridTemplateColumns: '1fr 110px', alignItems: 'center', gap: 8}}>
+                <div style={{fontWeight:700, fontSize: '1.05rem'}}>{r.continent_name}</div>
+                <div style={{display:'flex', justifyContent:'flex-end'}}>
+                  <button className="price-btn over" onClick={() => {
+                    if (locked) return;
+                    const outcome = `${r.continent_name}: First Round Appearance`;
+                    const sel = { playerId: Number(r.continent_id), playerName: r.continent_name, threshold: null, side: 'over' as const, decimalOdds: Number(dec) || 1.0, stake: 0, market: 'frc', outcome, odds_american: amer };
+                    addSelection(sel as any);
+                  }} disabled={locked} style={{minWidth:90, display:'flex', alignItems:'center', justifyContent:'center', padding:'0.35rem', cursor: locked ? 'not-allowed' : 'pointer'}}>
+                    <div className="odds-box" style={{width: '86px', display:'flex', alignItems:'center', justifyContent:'center'}}>
+                      {locked ? <div style={{fontSize:'1.2rem'}}>🔒</div> : (
+                        <>
+                          <div className="price-large">{amer}</div>
+                          <div className="price-small" style={{opacity:0.7}}>{(Number(dec) || 0).toFixed(2)}</div>
+                        </>
+                      )}
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
           );

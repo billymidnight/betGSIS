@@ -72,12 +72,11 @@ export default function BetslipItem({ selection }: Props) {
           <div className="betslip-odds-american" aria-hidden>
             {typeof selection.decimalOdds === 'number'
               ? (() => {
-                  // compute american then round down to nearest 10 favoring the bookie
+                  // compute american from decimal odds (no extra rounding)
                   let a = 0;
                   try {
                     a = selection.decimalOdds >= 2 ? Math.round((selection.decimalOdds - 1) * 100) : Math.round(-100 / (selection.decimalOdds - 1));
-                    const rounded = Math.floor(a / 10) * 10;
-                    return (rounded >= 0 ? `+${rounded}` : `${rounded}`);
+                    return (a >= 0 ? `+${a}` : `${a}`);
                   } catch (e) {
                     return '—';
                   }

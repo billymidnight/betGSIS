@@ -3,7 +3,7 @@ import { useBetsStore } from '../../lib/state/betsStore';
 import { useUIStore } from '../../lib/state/uiStore';
 import { Button } from '../Shared/Button';
 import BetslipItem from './BetslipItem';
-import { placeBet as apiPlaceBet, placeBetServer, fetchMyBets } from '../../lib/api/api';
+import { placeBet as apiPlaceBet, placeBetServer } from '../../lib/api/api';
 import { decimalToAmerican } from '../../lib/format';
 import { useAuthStore } from '../../lib/state/authStore';
 import './BetSlip.css';
@@ -15,21 +15,6 @@ export default function BetSlip() {
   const addToast = useUIStore((state) => state.addToast);
 
   const [isPlacing, setIsPlacing] = useState(false);
-  const [myBets, setMyBets] = useState<any[]>([]);
-  const initAuth = useAuthStore((s) => s.init);
-
-  React.useEffect(() => {
-    // load my bets on mount if authenticated
-    (async () => {
-      try {
-        await initAuth();
-        const bets = await fetchMyBets();
-        setMyBets(bets || []);
-      } catch (e) {
-        // ignore
-      }
-    })();
-  }, []);
 
   // No parlaying: render each selection as its own betslip card
   const handlePlaceAll = async () => {
@@ -109,7 +94,7 @@ export default function BetSlip() {
         } else if (sel.market === 'first-guess') {
           payloadOutcome = `${sel.playerName}: First Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
         } else if (String(sel.market) === 'last-guess') {
-          payloadOutcome = `${sel.playerName}: Last Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
+          payloadOutcome = `${sel.playerName}: Last Round - ${String((sel as any).side).toLowerCase() === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
         } else if (sel.market === 'frc' || String(sel.market) === 'frc') {
           // For First Round Continent, keep the canonical market name but
           // store the outcome including the continent name so DB outcome
@@ -177,13 +162,7 @@ export default function BetSlip() {
         }
       }
 
-      // refresh user's bets
-      try {
-        const bets = await fetchMyBets();
-        setMyBets(bets || []);
-      } catch (e) {
-        // ignore
-      }
+      // don't auto-refresh or display historical bets here (UI simplified)
 
       addToast({ message: `Placed ${selections.length} bet(s)`, type: 'success' });
       clearSelections();
@@ -225,22 +204,7 @@ export default function BetSlip() {
             </Button>
           </div>
 
-          {/* User's placed bets from server */}
-          <div style={{marginTop: 18}}>
-            <h4 style={{margin: '8px 0'}}>My Bets</h4>
-            {myBets.length === 0 ? (
-              <div style={{color: '#999'}}>No placed bets yet</div>
-            ) : (
-              <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
-                {myBets.map((b) => (
-                  <div key={b.bet_id} style={{padding: 8, border: '1px solid var(--color-border)', borderRadius: 6, background: 'var(--color-bg)'}}>
-                    <div style={{fontWeight: 700}}>{b.market ?? `${b.outcome} ${b.point ?? ''}`}</div>
-                    <div style={{fontSize: '0.9rem', color: '#777'}}>${b.bet_size} • {b.odds_american} • {new Date(b.placed_at || b.created_at || b.bet_placed_time).toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* historical bets hidden per user request */}
         </>
       )}
     </div>

@@ -177,11 +177,6 @@ def bets_place():
         return ('', 200)
     # New secure endpoint: expects Authorization: Bearer <access_token>
     payload = request.get_json(force=True) or {}
-    # Log incoming payload for debugging country-props outcome mismatches
-    try:
-        app.logger.debug(f"bets_place incoming payload: {payload}")
-    except Exception:
-        print('bets_place incoming payload:', payload)
     explicit_game_id = payload.get('game_id')
 
     # Log incoming auth header for debugging
@@ -294,77 +289,89 @@ def bets_place():
         player_name = payload.get('playerName') or payload.get('player_name') or payload.get('player') or None
         # Normalize market string for matching
         mnorm = (market or '').lower()
-        # Expose the raw outcome the client supplied (if any) and log payload for debugging
-        payload_outcome = payload.get('outcome') if isinstance(payload, dict) else None
+
+        # Log incoming payload outcome for debugging
         try:
-            app.logger.info(f"[bets_place] raw payload: {payload}")
+            app.logger.debug(f"[bets_place] incoming payload.market={market!r} mnorm={mnorm!r} payload.outcome={payload.get('outcome')!r} playerName={player_name!r} point={point!r} outcome_field={outcome!r}")
         except Exception:
+            pass
+
+        # Strict handling: prefer the frontend-provided `payload['outcome']` only for
+        # the markets explicitly listed below. This prevents broad substring matches
+        # from altering other markets while fixing Last Round/First Round/totals behavior.
+        outcome_str = None
+
+        # Helper formatters (used as safe fallbacks when payload['outcome'] missing)
+        def fmt_totals(name, side, pt):
+            side_word = 'Over' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'Under'
+            return f"{name}: {side_word} {int(pt) if pt is not None else ''} Points"
+
+        def fmt_first_last(name, side, pt, round_label='First Round'):
+            side_word = 'Over' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'Under'
+            return f"{name}: {round_label} - {side_word} {int(pt) if pt is not None else ''} Points"
+
+        def fmt_country(name, side):
+            yesno = 'YES' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'NO'
+            return f"{name}: To Appear - {yesno}"
+
+        # Normalize payload market token for exact matching
+        pm = (str(payload_market or '').strip().lower())
+        # Strict: First Round guesses
+        if pm == 'first-guess' or mnorm == 'first-guess':
+            if payload.get('outcome') and isinstance(payload.get('outcome'), str) and payload.get('outcome').strip() != '':
+                outcome_str = payload.get('outcome')
+            else:
+                outcome_str = fmt_first_last(player_name or 'Unknown', outcome, point, round_label='First Round')
+
+        # Strict: Last Round guesses
+        elif pm == 'last-guess' or mnorm == 'last-guess':
+            if payload.get('outcome') and isinstance(payload.get('outcome'), str) and payload.get('outcome').strip() != '':
+                outcome_str = payload.get('outcome')
+            else:
+                outcome_str = fmt_first_last(player_name or 'Unknown', outcome, point, round_label='Last Round')
+
+        # Strict: Totals market (exact match)
+        elif pm == 'totals' or mnorm == 'totals':
+            if payload.get('outcome') and isinstance(payload.get('outcome'), str) and payload.get('outcome').strip() != '':
+                outcome_str = payload.get('outcome')
+            else:
+                outcome_str = fmt_totals(player_name or 'Unknown', outcome, point)
+
+        # Strict: Country props / Continent totals
+        elif pm == 'country-props' or mnorm == 'country-props' or pm in ('continent totals', 'continent-totals', 'continent totals'):
+            # If playerId indicates continent-style (-1) treat as continent totals; else treat as country to appear
+            p_id = payload.get('playerId') if 'playerId' in payload else payload.get('player_id') if 'player_id' in payload else payload.get('playerId')
             try:
-                print(f"[bets_place] raw payload: {payload}")
+                p_id_int = int(p_id) if p_id is not None else None
             except Exception:
-                pass
-
-        # If this is a Specials market, respect the exact outcome string provided by the client.
-        # The frontend stores the exact DB `outcome` text in payload.outcome; use it verbatim.
-        if str(mnorm).strip() == 'specials':
-            outcome_str = payload.get('outcome') or None
-        # If this is a Moneyline market, also respect the exact human-readable
-        # outcome string sent by the frontend (e.g. "Pam: First Round Moneyline").
-        # This ensures the DB `outcome` column matches the betslip label exactly.
-        elif 'moneyline' in str(mnorm):
-            outcome_str = payload.get('outcome') or None
-        # If this is our new First Round Continent market, accept the client-provided
-        # outcome verbatim and log it so we don't normalize away the exact string.
-        elif str((payload.get('market') or '').strip()).lower() == 'first round continent' or str(mnorm).strip() == 'first round continent':
-            outcome_str = payload.get('outcome') or None
-            try:
-                app.logger.info(f"[bets_place] FRC payload received: {payload}")
-                app.logger.info(f"[bets_place] FRC final outcome used: {outcome_str}")
-            except Exception:
-                print(f"[bets_place] FRC payload received: {payload}")
-                print(f"[bets_place] FRC final outcome used: {outcome_str}")
-        else:
-            def fmt_totals(name, side, pt):
-                # "<Player_name>: Over (Under) X Points"
-                side_word = 'Over' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'Under'
-                return f"{name}: {side_word} {int(pt) if pt is not None else ''} Points"
-
-            def fmt_first_last(name, side, pt, round_label='First Round'):
-                # "<Player_name>: First Round (Last Round) - Over (Under) X Points"
-                side_word = 'Over' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'Under'
-                return f"{name}: {round_label} - {side_word} {int(pt) if pt is not None else ''} Points"
-
-            def fmt_country(name, side):
-                # "<Country_name>: To Appear - YES/NO"
-                yesno = 'YES' if (side and str(side).lower() in ['over', 'yes', 'true']) else 'NO'
-                return f"{name}: To Appear - {yesno}"
-
-            # Fallback player/country name
-            pname = player_name or payload.get('playerName') or payload.get('player_name') or None
-            if not pname:
-                # try to pull from payload.market if it includes a name (e.g., when frontend used bet_name as market)
-                # attempt naive split before ':'
-                try:
-                    if isinstance(market, str) and ':' in market:
-                        pname = market.split(':', 1)[0].strip()
-                except Exception:
-                    pname = None
-
-            outcome_str = None
-            try:
-                # If the frontend explicitly provided an outcome string that includes
-                # 'To Appear', prefer it verbatim rather than reformatting here.
-                if payload_outcome and isinstance(payload_outcome, str) and 'to appear' in payload_outcome.lower():
-                    outcome_str = payload_outcome
-                elif 'country' in mnorm or 'appear' in mnorm or 'country-props' in mnorm:
-                    outcome_str = fmt_country(pname or 'Unknown', outcome)
-                elif 'first' in mnorm or 'first-guess' in mnorm:
-                    outcome_str = fmt_first_last(pname or 'Unknown', outcome, point, round_label='First Round')
-                elif 'last' in mnorm or 'last-guess' in mnorm:
-                    outcome_str = fmt_first_last(pname or 'Unknown', outcome, point, round_label='Last Round')
+                p_id_int = None
+            # Continent totals (playerId === -1)
+            if p_id_int == -1:
+                if payload.get('outcome') and isinstance(payload.get('outcome'), str) and payload.get('outcome').strip() != '':
+                    outcome_str = payload.get('outcome')
                 else:
-                    # default to totals naming
-                    outcome_str = fmt_totals(pname or 'Unknown', outcome, point)
+                    outcome_str = f"{player_name or 'Unknown'}: {('Over' if (outcome and str(outcome).lower() == 'over') else 'Under')} {int(point) if point is not None else ''}"
+            else:
+                # Country to appear -> prefer verbatim
+                if payload.get('outcome') and isinstance(payload.get('outcome'), str) and payload.get('outcome').strip() != '':
+                    outcome_str = payload.get('outcome')
+                else:
+                    outcome_str = fmt_country(player_name or 'Unknown', outcome)
+
+        # Specials: still respect verbatim outcome
+        elif pm == 'specials' or mnorm == 'specials':
+            outcome_str = payload.get('outcome') or None
+        else:
+            # Fallback: keep previous behavior but constructed safely. This covers other markets.
+            try:
+                if 'country' in mnorm or 'appear' in mnorm or 'country-props' in mnorm:
+                    outcome_str = fmt_country(player_name or 'Unknown', outcome)
+                elif 'first' in mnorm or 'first-guess' in mnorm:
+                    outcome_str = fmt_first_last(player_name or 'Unknown', outcome, point, round_label='First Round')
+                elif 'last' in mnorm or 'last-guess' in mnorm:
+                    outcome_str = fmt_first_last(player_name or 'Unknown', outcome, point, round_label='Last Round')
+                else:
+                    outcome_str = fmt_totals(player_name or 'Unknown', outcome, point)
             except Exception:
                 outcome_str = str(outcome) if outcome is not None else None
 
@@ -410,24 +417,6 @@ def bets_place():
         except Exception:
             rounded_amer_int = None
             rounded_amer_str = None
-
-        try:
-            # For Continent Totals ensure integer hooks like '2' become '2.5' in the final outcome string
-            try:
-                normalized_market = str(payload.get('market') or market or '').lower()
-                if outcome_str and (('continent' in (mnorm or '')) or ('continent' in normalized_market) or normalized_market.strip() == 'continent totals'):
-                    import re
-                    # Replace 'Over 2' -> 'Over 2.5' and 'Under 0' -> 'Under 0.5' only when the hook is an integer
-                    outcome_str = re.sub(r"\b(Over|Under)\s+(\d+)(?!\.)", lambda m: f"{m.group(1)} {m.group(2)}.5", str(outcome_str))
-            except Exception:
-                # swallow any normalization errors to avoid breaking bet placement
-                pass
-            app.logger.info(f"[bets_place] final outcome_str: {outcome_str}")
-        except Exception:
-            try:
-                print(f"[bets_place] final outcome_str: {outcome_str}")
-            except Exception:
-                pass
 
         insert_payload = {
             'user_id': str(user_id),
@@ -756,20 +745,38 @@ def markets_continents():
 
 @api_bp.route('/frc/continents', methods=['GET', 'OPTIONS'])
 def frc_continents():
-    """Return rows from FRC table (first-round-continent probabilities) ordered by continent_id."""
+    """Endpoint used by frontend First Continent (FRC) list.
+
+    Returns JSON with `rows`: an array of objects containing minimal fields
+    the frontend expects: `continent_id`, `continent_name`,
+    `probability_first_round` (per-round probability of appearance).
+    """
     if request.method == 'OPTIONS':
         return ('', 200)
-    client = _get_admin_client()
-    if not client:
-        return jsonify({'error': 'supabase client missing', 'rows': []}), 500
     try:
-        rc = client.table('frc').select('continent_id,continent_name,probability_first_round').order('continent_id').execute()
-        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
-        rows = rows or []
+        rounds = int(request.args.get('rounds', 5) or 5)
+        from services.pricing_service import continent_markets  # type: ignore
+        res = continent_markets(rounds=rounds)
+        conts = res.get('continents') or []
+        rows = []
+        # produce stable ids for frontend consumption
+        for idx, c in enumerate(conts, start=1):
+            try:
+                rows.append({
+                    'continent_id': int(idx),
+                    'continent_name': c.get('name') or c.get('continent') or 'Unknown',
+                    # the per-round probability (used by frontend to derive display odds)
+                    'probability_first_round': float(c.get('p') if c.get('p') is not None else 0.0),
+                    'hooks': c.get('hooks') or [],
+                })
+            except Exception:
+                # skip malformed continent entry
+                continue
+
         return jsonify({'rows': rows}), 200
     except Exception as e:
         logging.exception('frc_continents error')
-        return jsonify({'error': str(e), 'rows': []}), 500
+        return jsonify({'rows': [], 'error': str(e)}), 500
 
 
 @api_bp.route('/locks', methods=['GET', 'OPTIONS'])
