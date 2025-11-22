@@ -215,7 +215,7 @@ def decimal_to_american(d: float, prob: float = None) -> str:
         return decimal_to_american_rounded(d)
 
 
-def apply_margin(prob_over: float, prob_under: float, margin_bps: int = 300):
+def apply_margin(prob_over: float, prob_under: float, margin_bps: int = 400):
     """Apply margin (vigorish) by bumping true probabilities proportionally.
 
     For a 2-way market (over/under) where prob_over + prob_under == 1.0, this
@@ -231,7 +231,7 @@ def apply_margin(prob_over: float, prob_under: float, margin_bps: int = 300):
         return prob_over, prob_under
 
     if prob_over < 0.05 or prob_under < 0.05:
-        margin_bps = margin_bps + 250
+        margin_bps = margin_bps + 125
     margin = margin_bps / 10000.0
     # bump each true probability by (1 + margin)
     p_over_adj = prob_over * (1.0 + margin)
@@ -245,7 +245,7 @@ def apply_margin(prob_over: float, prob_under: float, margin_bps: int = 300):
     return p_over_adj, p_under_adj
 
 
-def price_for_thresholds(player_ids: List[int], thresholds: List[int], model: str = 'normal', margin_bps: int = 300) -> Dict:
+def price_for_thresholds(player_ids: List[int], thresholds: List[int], model: str = 'normal', margin_bps: int = 440) -> Dict:
     """
     Compute pricing for given player IDs and thresholds using Supabase geo_players table.
     
@@ -264,6 +264,7 @@ def price_for_thresholds(player_ids: List[int], thresholds: List[int], model: st
       }
     """
     from database.geo_repo import get_geo_players
+    margin_bps = margin_bps + 200
     
     results = {}
     all_players = get_geo_players()

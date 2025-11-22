@@ -572,8 +572,9 @@ def pricing_lines():
         return jsonify({"results": {}})
 
     try:
-        from services.pricing_service import price_for_thresholds  # type: ignore
-        results = price_for_thresholds(player_ids, thresholds, model=model, margin_bps=margin_bps)
+        from services.pricing_service import price_for_thresholds  # type: ignorp
+        print(f"The margin bps here is: {margin_bps}")
+        results = price_for_thresholds(player_ids, thresholds, model=model, margin_bps=margin_bps+200)
         print(f"✓ pricing_lines: computed prices for {len(player_ids)} players x {len(thresholds)} thresholds")
         
         # normalize keys to strings for frontend
@@ -1133,7 +1134,8 @@ def bookkeeping_all_bets():
     if not client:
         return jsonify({'error': 'supabase client missing'}), 500
     try:
-        rc = client.table('bets').select('bet_id,user_id,placed_at,game_id,outcome,bet_size,odds_american,result').order('placed_at', desc=False).execute()
+        # Order by bet_id descending so newest bets appear first for the bookie view
+        rc = client.table('bets').select('bet_id,user_id,placed_at,game_id,outcome,bet_size,odds_american,result').order('bet_id', desc=True).execute()
         rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
         rows = rows or []
 
@@ -1624,7 +1626,8 @@ def portfolio():
         net_pnl = sum(p.get('pnl', 0.0) for p in settled)
         total_wagered = sum(p.get('stake', 0.0) for p in settled)
         total_winnings = sum(p.get('payout', 0.0) for p in settled)
-        roi = (total_winnings / total_wagered) if total_wagered > 0 else None
+        # ROI should be net P&L divided by total settled wager volume
+        roi = (net_pnl / total_wagered) if total_wagered > 0 else None
 
         # active wager risk (sum of stakes for active bets)
         active_wager_risk = sum(p.get('stake', 0.0) for p in active)
@@ -1858,7 +1861,7 @@ def geoguessr_totals():
             cdf = normal_cdf(default_thresh, mu, sigma)
             p_over = max(0.0, 1.0 - cdf)
         p_under = 1.0 - p_over
-        p_over_adj, p_under_adj = apply_margin(p_over, p_under, margin_bps=300)
+        p_over_adj, p_under_adj = apply_margin(p_over, p_under, margin_bps=500)
         d_over = prob_to_decimal(p_over_adj)
         d_under = prob_to_decimal(p_under_adj)
         a_over = decimal_to_american(d_over, prob=p_over_adj)
@@ -1957,7 +1960,7 @@ def moneylines_prices():
     try:
         from services.pricing_service import price_moneylines  # type: ignore
         app.logger.info('[BOOKIE-HUB] moneylines pricing: starting simulation')
-        res = price_moneylines(simulations=5000, margin_bps=800)
+        res = price_moneylines(simulations=5000, margin_bps=850)
         app.logger.info('[BOOKIE-HUB] moneylines pricing: finished simulation')
         return jsonify(res), 200
     except Exception as e:

@@ -11,7 +11,7 @@ class Line(Base):
     line_type = Column(String, default='OU')
     threshold = Column(Integer, nullable=False)
     price_model = Column(String, default='normal')
-    margin_bps = Column(Integer, default=300)
+    margin_bps = Column(Integer, default=500)
     prob_over = Column(Numeric)
     prob_under = Column(Numeric)
     odds_over_decimal = Column(Numeric)

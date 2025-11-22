@@ -15,6 +15,7 @@ import BookControl from './pages/BookControl'
 import BetGSISPortfolio from './pages/BetGSISPortfolio'
 import MarketLocker from './pages/MarketLocker'
 import BookieMasterLocker from './pages/BookieMasterLocker'
+import Help from './pages/Help'
 import ChessTemplate from './pages/templates/Chess'
 import ZetamacTemplate from './pages/templates/Zetamac'
 import MonopolyTemplate from './pages/templates/Monopoly'
@@ -143,6 +144,17 @@ export default function App() {
                 <BetGSISPortfolio />
               </AppShell>
             </BookRoute>
+          }
+        />
+
+        <Route
+          path="/help"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <Help />
+              </AppShell>
+            </ProtectedRoute>
           }
         />
 

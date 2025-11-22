@@ -71,7 +71,7 @@ export async function fetchOddsLinesForThreshold(threshold: number): Promise<any
   return lines;
 }
 
-export async function fetchPricingLines(playerIds: number[], thresholds: number[], model = 'normal', marginBps = 300) {
+export async function fetchPricingLines(playerIds: number[], thresholds: number[], model = 'normal', marginBps = 500) {
   // Include a book role header for pricing requests (dev-only header used by backend mock auth)
   const headers = { 'Content-Type': 'application/json', 'x-user-role': 'book' } as Record<string, string>;
   const r = await api.post('/pricing/lines', { playerIds, thresholds, model, marginBps }, { headers });

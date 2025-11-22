@@ -93,9 +93,7 @@
 .bet-card--active .bet-stake-val,
 .bet-card--active .bet-payout-val,
 .bet-card--active .bet-stake-label,
-.bet-card--active .bet-payout-label,
-.bet-card--active .bet-player,
-.bet-card--active .bet-outcome {
+.bet-card--active .bet-payout-label {
   color: #f6c85f; /* yellow */
 }
 
@@ -105,9 +103,7 @@
 .bet-card--win .bet-stake-val,
 .bet-card--win .bet-payout-val,
 .bet-card--win .bet-stake-label,
-.bet-card--win .bet-payout-label,
-.bet-card--win .bet-player,
-.bet-card--win .bet-outcome {
+.bet-card--win .bet-payout-label {
   color: #2ed573; /* green */
 }
 
@@ -115,11 +111,13 @@
 .bet-card--loss .bet-odds-dec,
 .bet-card--loss .bet-card-time,
 .bet-card--loss .bet-stake-val,
-.bet-card--loss .bet-stake-label,
-.bet-card--loss .bet-player,
-.bet-card--loss .bet-outcome {
+.bet-card--loss .bet-stake-label {
   color: #ff6b6b; /* red */
 }
+
+/* Override: keep player name and outcome white across all statuses */
+.bet-card .bet-player,
+.bet-card .bet-outcome { color: #ffffff !important; }
 
 /* For losses hide payout label/value if still present */
 .bet-card--loss .bet-payout-label,

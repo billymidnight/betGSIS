@@ -88,11 +88,11 @@ export default function BetGSISPortfolio() {
 
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginTop:12}}>
         <div style={{background:'#071025',color:'#fff',padding:12,borderRadius:8}}>
-          <h3>All P&L related stats</h3>
-          <div><strong>Net Book Profit:</strong> <span style={{color: net_book_profit>=0? '#28a745':'#e55353'}}>{net_book_profit.toLocaleString(undefined,{style:'currency',currency:'USD'})}</span></div>
-          <div><strong>Active Risk:</strong> {Number(active_risk).toLocaleString(undefined,{style:'currency',currency:'USD'})}</div>
-          <div><strong>Total wagers accepted:</strong> {total_wagers_accepted}</div>
-          <div><strong>Total wagers active:</strong> {total_wagers_active}</div>
+          <h3 style={{fontSize: '1.25rem', marginBottom: 8}}>All P&L related stats</h3>
+          <div style={{marginBottom:6}}><strong style={{fontSize:'1rem'}}>Net Book Profit:</strong> <span style={{color: net_book_profit>=0? '#28a745':'#e55353', fontSize: '1.15rem', fontWeight:700}}>{net_book_profit.toLocaleString(undefined,{style:'currency',currency:'USD'})}</span></div>
+          <div style={{marginBottom:6}}><strong style={{fontSize:'1rem'}}>Active Risk:</strong> <span style={{fontSize:'1.05rem'}}>{Number(active_risk).toLocaleString(undefined,{style:'currency',currency:'USD'})}</span></div>
+          <div style={{marginBottom:6}}><strong style={{fontSize:'1rem'}}>Total wagers accepted:</strong> <span style={{fontSize:'1.05rem'}}>{total_wagers_accepted}</span></div>
+          <div style={{marginBottom:6}}><strong style={{fontSize:'1rem'}}>Total wagers active:</strong> <span style={{fontSize:'1.05rem'}}>{total_wagers_active}</span></div>
         </div>
 
         <div style={{background:'#071025',color:'#fff',padding:12,borderRadius:8}}>
@@ -213,12 +213,13 @@ export default function BetGSISPortfolio() {
 
       <div style={{height:16}} />
 
-      <div style={{background:'#071025',color:'#fff',padding:12,borderRadius:8,overflow:'auto'}}>
+        <div style={{background:'#071025',color:'#fff',padding:16,borderRadius:8,overflow:'auto'}}>
         <h3>All Bets</h3>
-        <table style={{width:'100%',borderCollapse:'collapse'}}>
+        <table style={{width:'100%',borderCollapse:'collapse', fontSize: '1rem'}}>
           <thead>
             <tr style={{textAlign:'left',borderBottom:'1px solid #24303f'}}>
               <th>BetID</th>
+              <th>Bettor</th>
               <th>Time Placed (EDT)</th>
               <th>Game No</th>
               <th>Outcome</th>
@@ -233,6 +234,7 @@ export default function BetGSISPortfolio() {
             {bets.map((r) => (
               <tr key={r.bet_id} style={{borderBottom:'1px solid rgba(255,255,255,0.04)'}}>
                 <td>{r.bet_id}</td>
+                <td>{r.screenname || r.user_id || '—'}</td>
                 <td>{r.placed_at_edt || r.placed_at_utc}</td>
                 <td>{r.game_id}</td>
                 <td>{r.outcome}</td>

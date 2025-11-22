@@ -39,6 +39,13 @@
   font-size: var(--font-size-lg);
 }
 
+.navbar-logo-img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
 .navbar-menu {
   display: flex;
   gap: var(--space-xl);

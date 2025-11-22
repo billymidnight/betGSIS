@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS lines (
   line_type TEXT DEFAULT 'OU',
   threshold INTEGER NOT NULL,
   price_model TEXT DEFAULT 'normal',
-  margin_bps INTEGER DEFAULT 300,
+  margin_bps INTEGER DEFAULT 500,
   prob_over NUMERIC,
   prob_under NUMERIC,
   odds_over_decimal NUMERIC,

@@ -141,9 +141,9 @@ export default function GeoGuessr() {
       setIsUpdatingOdds((s) => ({ ...(s || {}), [playerId]: true }));
       try {
         let res: any = null;
-        if (market === 'totals') {
-          // totals: use existing pricing lines endpoint
-          res = await fetchPricingLines([playerId], [threshold], 'normal', 300);
+          if (market === 'totals') {
+          // totals: use existing pricing lines endpoint (use 500 bps vig on landing and slider fetches)
+          res = await fetchPricingLines([playerId], [threshold], 'normal', 500);
           const results = res.results || res || {};
           const pidKey = String(playerId);
           const byPlayer = results[pidKey] || {};
@@ -608,7 +608,7 @@ export default function GeoGuessr() {
 
   return (
     <div className="geoguessr-page">
-      <Navbar />
+
 
       <main className="geoguessr-main">
         <div className="geoguessr-header">
@@ -765,7 +765,7 @@ export default function GeoGuessr() {
       </main>
 
       <ToastContainer />
-      <Footer />
+
     </div>
   );
 }

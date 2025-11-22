@@ -14,7 +14,8 @@ def pricing_lines():
     player_ids = payload.get('playerIds', [])
     thresholds = payload.get('thresholds', [])
     model = payload.get('model', 'normal')
-    margin = payload.get('marginBps', 300)
+    margin = payload.get('marginBps', 500)
+    margin = 500
 
     results = price_for_thresholds(player_ids, thresholds, model=model, margin_bps=margin)
     return jsonify({'results': results})
