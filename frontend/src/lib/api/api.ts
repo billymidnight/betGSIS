@@ -12,14 +12,16 @@ const api = axios.create({
 // Attach headers for user context (if authenticated)
 api.interceptors.request.use((config) => {
   try {
+    const headers = (config.headers as Record<string, any>) || {};
+    // Bypass ngrok browser warning
+    headers['ngrok-skip-browser-warning'] = 'true';
     const user = useAuthStore.getState().user;
     if (user && user.role) {
-      const headers = (config.headers as Record<string, any>) || {};
       if (user.email) headers['X-User-Email'] = user.email;
       if (user.username) headers['X-User-Name'] = user.username;
       if (user.role) headers['X-User-Role'] = user.role;
-      config.headers = headers as any;
     }
+    config.headers = headers as any;
   } catch (e) {
     // ignore
   }
