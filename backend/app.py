@@ -15,7 +15,8 @@ def create_app():
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
                 "https://betgsis2.vercel.app",
-                "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app"
+                "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app",
+                "https://betgsis-backend.onrender.com"
             ],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Name", "X-User-Role", "ngrok-skip-browser-warning"],

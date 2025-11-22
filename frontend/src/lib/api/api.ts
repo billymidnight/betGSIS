@@ -3,7 +3,6 @@ import { useAuthStore } from '../state/authStore';
 import supabase from '../supabaseClient';
 
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
-// import.meta.env.VITE_API_URL ||
 const api = axios.create({
   baseURL,
   timeout: 10000,
