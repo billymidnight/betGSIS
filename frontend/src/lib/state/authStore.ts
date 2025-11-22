@@ -32,46 +32,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   login: async (email: string, password: string) => {
     try {
       const res = await supabase.auth.signInWithPassword({ email, password } as any);
-        const session = (res as any)?.data?.session;
-        if (session) {
+      const session = (res as any)?.data?.session;
+      if (session) {
         const token = session.access_token;
         set({ accessToken: token });
-        // Extreme debug logs for inaugural login detection
-        try {
-          console.log('>>> LOGIN SUCCESS, token:', token);
-          console.log('>>> LOGIN SUCCESS, uid:', (res as any)?.data?.user?.id);
-        } catch (e) {
-          // ignore logging errors
-        }
-        // After successful sign-in, notify backend to ensure our custom users row exists.
-        try {
-          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-          const uid = (res as any)?.data?.user?.id;
-          console.log('>>> Calling backend /api/auth/create_user with UID:', uid, 'Email:', email);
-          if (token) {
-            const respCreate = await fetch(`${apiBase}/api/auth/create_user`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ email }),
-            });
-            let responseJson: any = null;
-            try {
-              responseJson = await respCreate.json();
-            } catch (jsonErr) {
-              // non-json response
-              try {
-                const text = await respCreate.text();
-                responseJson = { status: respCreate.status, text };
-              } catch (_) {
-                responseJson = { status: respCreate.status };
-              }
-            }
-            console.log('>>> Backend /api/auth/create_user response:', responseJson);
-            console.log('>>> Was inaugural login:', responseJson?.was_inaugural_login);
-          }
-        } catch (err) {
-          if (import.meta.env.DEV) console.warn('create_user call failed (login)', err);
-        }
         // trigger init to populate full user info
         try {
           // call init via the store's getter (typed)
@@ -98,7 +62,19 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         set({ accessToken: token });
       }
 
-      // Signup should only call Supabase signUp and return; we perform the custom users upsert on login.
+      // Notify backend to create custom users row (idempotent). Use admin path that reads Authorization bearer token.
+      try {
+        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+        if (token) {
+          await fetch(`${apiBase}/api/auth/create_user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ email }),
+          });
+        }
+      } catch (err) {
+        if (import.meta.env.DEV) console.warn('create_user call failed', err);
+      }
 
       // After signup, call init() to refresh user state
       try {
@@ -144,7 +120,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
                   const d2 = JSON.parse(raw2);
                   const userObj2 = d2?.user ?? d2;
                   if (userObj2 && (userObj2.user_id || userObj2.id)) {
-                    set({ user: { user_id: userObj2.user_id ?? userObj2.id, screen_name: userObj2.screen_name, email: (s as any)?.user?.email, role: userObj2.role }, isAuthenticated: true });
+                    set({ user: { user_id: userObj2.user_id ?? userObj2.id, screen_name: userObj2.screen_name, email: (s as any)?.user?.email }, isAuthenticated: true });
                   }
                 } catch (err) {
                   if (import.meta.env.DEV) console.warn('onAuthStateChange /api/auth/me returned non-json');
@@ -174,7 +150,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         const data = JSON.parse(raw);
         const userObj = data?.user ?? data;
         if (userObj && (userObj.user_id || userObj.id)) {
-          set({ user: { user_id: userObj.user_id ?? userObj.id, screen_name: userObj.screen_name, email: session.user?.email, role: userObj.role }, isAuthenticated: true });
+          set({ user: { user_id: userObj.user_id ?? userObj.id, screen_name: userObj.screen_name, email: session.user?.email }, isAuthenticated: true });
         } else {
           console.warn('/api/auth/me returned JSON but no user information found:', data);
           set({ user: { user_id: session.user?.id, email: session.user?.email }, isAuthenticated: true });
