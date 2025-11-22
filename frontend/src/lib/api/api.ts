@@ -9,7 +9,7 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// yaya pam
+// yaya pam naresh
 
 // Attach headers for user context (if authenticated)
 api.interceptors.request.use((config) => {
@@ -240,3 +240,4 @@ export async function settleBet(betId: number, result: 'win' | 'loss' | 'push') 
 }
 
 export default api;
+
