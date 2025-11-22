@@ -1,5 +1,5 @@
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -7,8 +7,6 @@ load_dotenv()
 
 def create_app():
     app = Flask(__name__)
-    # Enable CORS for frontend (React dev server on port 3000 and Vite on 5173)
-    # Enable CORS for API routes (allow React dev server origins). Also allow credentials if needed.
     CORS(app, resources={
         r"/api/*": {
             "origins": [
@@ -21,12 +19,11 @@ def create_app():
             ],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Name", "X-User-Role"],
-            # allow credentials and expose headers to the browser if needed
             "supports_credentials": True
         }
     })
 
-    # Register API blueprint (it already includes its own /api prefix)
+    # Register API blueprint
     from api.routes import api_bp
     app.register_blueprint(api_bp)
 
@@ -34,7 +31,28 @@ def create_app():
     def health():
         return jsonify({"status": "ok"})
 
+    # <-- ADD THIS BLOCK HERE
+    @app.after_request
+    def add_cors_headers(response):
+        origin = request.headers.get("Origin")
+        if origin:
+            # allow local dev, exact prod domain, or any vercel preview domains
+            allowlist = {
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://betgsis2.vercel.app",
+            }
+            if origin in allowlist or origin.endswith(".vercel.app"):
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-User-Email, X-User-Name, X-User-Role"
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
+
     return app
+
 
 if __name__ == '__main__':
     app = create_app()
