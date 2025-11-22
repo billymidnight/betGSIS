@@ -31,14 +31,6 @@ def create_app():
     def health():
         return jsonify({"status": "ok"})
 
-    # <-- ADD THIS BLOCK HERE
-    @app.after_request
-    def add_cors_headers(response):
-        response.headers["Access-Control-Allow-Origin"] = "https://betgsis2.vercel.app"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-User-Email, X-User-Name, X-User-Role"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        return response
-
     return app
 
 

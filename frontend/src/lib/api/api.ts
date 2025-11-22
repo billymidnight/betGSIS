@@ -2,26 +2,26 @@ import axios from 'axios';
 import { useAuthStore } from '../state/authStore';
 import supabase from '../supabaseClient';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
-
+const baseURL = 'http://localhost:4000/api';
+// import.meta.env.VITE_API_URL ||
 const api = axios.create({
   baseURL,
   timeout: 10000,
 });
 
+// yaya pam
+
 // Attach headers for user context (if authenticated)
 api.interceptors.request.use((config) => {
   try {
-    const headers = (config.headers as Record<string, any>) || {};
-    // Bypass ngrok browser warning
-    headers['ngrok-skip-browser-warning'] = 'true';
     const user = useAuthStore.getState().user;
     if (user && user.role) {
+      const headers = (config.headers as Record<string, any>) || {};
       if (user.email) headers['X-User-Email'] = user.email;
       if (user.username) headers['X-User-Name'] = user.username;
       if (user.role) headers['X-User-Role'] = user.role;
+      config.headers = headers as any;
     }
-    config.headers = headers as any;
   } catch (e) {
     // ignore
   }

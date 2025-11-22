@@ -150,7 +150,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         const data = JSON.parse(raw);
         const userObj = data?.user ?? data;
         if (userObj && (userObj.user_id || userObj.id)) {
-          set({ user: { user_id: userObj.user_id ?? userObj.id, screen_name: userObj.screen_name, email: session.user?.email }, isAuthenticated: true });
+          set({ user: { user_id: userObj.user_id ?? userObj.id, screen_name: userObj.screen_name, email: session.user?.email, username: userObj.screenname, role: userObj.role }, isAuthenticated: true });
         } else {
           console.warn('/api/auth/me returned JSON but no user information found:', data);
           set({ user: { user_id: session.user?.id, email: session.user?.email }, isAuthenticated: true });
