@@ -50,8 +50,8 @@ export default function Portfolio() {
     setLoading(true)
     setError(null)
     try {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000'
-      const resp = await fetch(`${apiBase}/api/portfolio?range=${range}`, {
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000/api'
+      const resp = await fetch(`${apiBase}/portfolio?range=${range}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!resp.ok) {
