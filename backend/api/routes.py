@@ -367,6 +367,9 @@ def bets_place():
         # Moneyline markets: use verbatim outcome from frontend
         elif pm == 'moneyline' or mnorm == 'moneyline':
             outcome_str = payload.get('outcome') or None
+        # First Round Continent: use verbatim outcome from frontend
+        elif pm == 'first round continent' or mnorm == 'frc' or pm == 'frc':
+            outcome_str = payload.get('outcome') or None
         else:
             # Fallback: keep previous behavior but constructed safely. This covers other markets.
             try:
