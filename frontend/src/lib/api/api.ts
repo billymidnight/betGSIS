@@ -8,7 +8,7 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// yaya pam naresh
+// yaya pam naresh, machadam palladam
 
 // Attach headers for user context (if authenticated)
 api.interceptors.request.use((config) => {

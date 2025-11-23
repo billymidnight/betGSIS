@@ -120,7 +120,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
                   const d2 = JSON.parse(raw2);
                   const userObj2 = d2?.user ?? d2;
                   if (userObj2 && (userObj2.user_id || userObj2.id)) {
-                    set({ user: { user_id: userObj2.user_id ?? userObj2.id, screen_name: userObj2.screen_name, email: (s as any)?.user?.email }, isAuthenticated: true });
+                    set({ user: { user_id: userObj2.user_id ?? userObj2.id, screen_name: userObj2.screen_name, email: (s as any)?.user?.email, username: userObj2.screenname, role: userObj2.role }, isAuthenticated: true });
                   }
                 } catch (err) {
                   if (import.meta.env.DEV) console.warn('onAuthStateChange /api/auth/me returned non-json');
