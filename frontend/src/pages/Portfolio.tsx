@@ -195,7 +195,9 @@ export default function Portfolio() {
           </Card>
 
           <Card className="stat-card" variant="elevated">
-            <div className="stat-value">{summary && summary.roi != null ? (summary.roi * 100).toFixed(2) + '%' : '—'}</div>
+            <div className="stat-value" style={{ color: summary && summary.roi != null ? trendColor(summary.roi) : '#9aa6ad' }}>
+              {summary && summary.roi != null ? (summary.roi >= 0 ? '+' : '') + (summary.roi * 100).toFixed(2) + '%' : '—'}
+            </div>
             <div className="stat-label">ROI</div>
           </Card>
         </div>
