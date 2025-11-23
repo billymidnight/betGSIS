@@ -64,9 +64,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
       // Notify backend to create custom users row (idempotent). Use admin path that reads Authorization bearer token.
       try {
-        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+        // const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
         if (token) {
-          await fetch(`${apiBase}/api/auth/create_user`, {
+          await fetch(`${apiBase}/auth/create_user`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ email }),
@@ -113,8 +114,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
           if (newToken && (s as any)?.user) {
             (async () => {
               try {
-                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-                const res2 = await fetch(`${apiBase}/api/auth/me`, { headers: { Authorization: `Bearer ${newToken}` } });
+                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+                const res2 = await fetch(`${apiBase}/auth/me`, { headers: { Authorization: `Bearer ${newToken}` } });
                 const raw2 = await res2.text();
                 try {
                   const d2 = JSON.parse(raw2);
@@ -138,8 +139,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
       
       // Call backend to fetch user's screen_name
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-    const reqUrl = `${apiBase}/api/auth/me`;
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+    const reqUrl = `${apiBase}/auth/me`;
     if (import.meta.env.DEV) console.log('authStore: fetching', reqUrl);
     const res = await fetch(reqUrl, { headers: { Authorization: `Bearer ${token}` } });
       // Read as text first in case the server returns HTML (e.g., a redirect to an HTML page)

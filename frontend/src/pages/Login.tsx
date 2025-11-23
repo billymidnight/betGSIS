@@ -52,11 +52,11 @@ export default function Login() {
         } catch (e) {}
 
         try {
-          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
           // If Bookmaker selected, validate role in our custom users table first
           if (selectedRole === 'BOOKIE') {
             try {
-              const respRole = await fetch(`${apiBase}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+              const respRole = await fetch(`${apiBase}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
               const txt = await respRole.text();
               let parsed: any = null;
               try {
@@ -85,7 +85,7 @@ export default function Login() {
           }
 
           console.log('>>> Calling backend /api/auth/create_user with UID:', data?.user?.id, 'Email:', email);
-          const resp = await fetch(`${apiBase}/api/auth/create_user`, {
+          const resp = await fetch(`${apiBase}/auth/create_user`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ email }),
@@ -306,4 +306,3 @@ export default function Login() {
     </div>
   );
 }
-
