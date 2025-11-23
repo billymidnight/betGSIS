@@ -70,27 +70,9 @@ export default function BetSlip() {
         if (sel.market === 'Specials') {
           payloadOutcome = sel.outcome || sel.playerName || null;
         } else if (typeof (sel.market || '') === 'string' && (sel.market || '').toLowerCase().includes('moneyline')) {
-          // Moneyline selections: normalize market to generic 'Moneyline'.
-          // REQUIREMENT: Store the DB `outcome` exactly as shown on the betslip
-          // beneath the player name in the form: "<PlayerName>: <OutcomeText>".
-          // The selection object already carries a human-readable `outcome`
-          // (e.g. "Pam: First Round Moneyline") which BetslipItem renders.
-          // Use that verbatim for DB insertion. Only fall back to constructing
-          // the string if sel.outcome is missing.
+          // Moneyline selections: always use sel.outcome (guaranteed to be set in GeoGuessr.tsx)
           payloadMarket = 'Moneyline';
-          if (sel.outcome && typeof sel.outcome === 'string' && sel.outcome.trim() !== '') {
-            payloadOutcome = sel.outcome;
-          } else {
-            // fallback: build the full human-readable label
-            const m = String(sel.market || '');
-            if (m.toLowerCase().includes('first')) {
-              payloadOutcome = `${sel.playerName}: First Round Moneyline`;
-            } else if (m.toLowerCase().includes('last')) {
-              payloadOutcome = `${sel.playerName}: Last Round Moneyline`;
-            } else {
-              payloadOutcome = `${sel.playerName}: Moneyline`;
-            }
-          }
+          payloadOutcome = sel.outcome || `${sel.playerName}: Moneyline`;
         } else if (sel.market === 'first-guess') {
           payloadOutcome = `${sel.playerName}: First Round - ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
         } else if (String(sel.market) === 'last-guess') {
@@ -160,6 +142,8 @@ export default function BetSlip() {
             // eslint-disable-next-line no-console
             console.debug('[BetSlip] placing country-props payload:', payload);
           }
+          // Log ALL bets to debug moneyline issue
+          console.log('[BetSlip] Placing bet with payload:', JSON.stringify(payload, null, 2));
           const resp = await placeBetServer(payload);
           placeBetAction(sel);
         } catch (e: any) {

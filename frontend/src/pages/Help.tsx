@@ -40,7 +40,7 @@ export default function Help() {
             <ul>
               <li>You may never bet your own unders.</li>
               <li>You may never bet anyone’s Moneyline except your own, unless it is a game you are not participating in and the lines have been repriced accordingly.</li>
-              <li>You may never bet on another player’s Specials that require strong performance (i.e., you cannot wager on someone doing exceptionally well, since you could intentionally play poorly to distort their odds).</li>
+              <li>You may never bet on another player’s Specials that require strong relative performance (i.e., you cannot wager on someone doing exceptionally well, since you could intentionally play poorly to distort their odds).</li>
               <li>Parlays are not currently supported.</li>
               <li>You may not place bets for any game other than the current global game counter shown on the navigation bar.</li>
             </ul>
@@ -54,6 +54,7 @@ export default function Help() {
               <li>The Faroe Islands and Greenland both being part of the Kingdom of Denmark will count as Denmark and Europe.</li>
               <li>All US overseas territories and minor outlying islands count as the US and North America.</li>
               <li>All Caribbean islands count as North America except European overseas colonies.</li>
+              <li>World Cup Winners are: Brazil, Germany, Italy, Argentina, France, Uruguay, Spain, and England (United Kingdom).</li>
               <li>Antarctica loses on all continents.</li>
             </ul>
 

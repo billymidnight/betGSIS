@@ -364,6 +364,9 @@ def bets_place():
         # Ante markets: respect verbatim outcome and use canonical market 'Ante'
         elif pm == 'ante' or mnorm == 'ante':
             outcome_str = payload.get('outcome') or None
+        # Moneyline markets: use verbatim outcome from frontend
+        elif pm == 'moneyline' or mnorm == 'moneyline':
+            outcome_str = payload.get('outcome') or None
         else:
             # Fallback: keep previous behavior but constructed safely. This covers other markets.
             try:
