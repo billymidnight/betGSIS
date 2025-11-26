@@ -11,8 +11,8 @@ export default function Sidebar() {
         <div style={{height:12}} />
         <div className="sidebar-section-title">Odds Screens</div>
         <Link to="/geoguessr">GeoGuessr Odds</Link>
+        <Link to="/zetamac">Zetamac Odds</Link>
         <Link to="/templates/chess">Chess Odds</Link>
-        <Link to="/templates/zetamac">Zetamac Odds</Link>
         <Link to="/templates/monopoly">Monopoly Odds</Link>
         <Link to="/templates/poker">Poker Odds</Link>
         <Link to="/templates/birthday-paradox">Birthday Paradox Odds</Link>

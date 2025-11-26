@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Home from './pages/Home'
 import Portfolio from './pages/Portfolio'
 import GeoGuessr from './pages/GeoGuessr'
+import Zetamac from './pages/Zetamac'
 // Legacy static Bets page kept for reference; prefer `MyBets` for dynamic per-user bets
 import Bets from './pages/Bets'
 import MyBets from './pages/MyBets'
@@ -76,6 +77,17 @@ export default function App() {
             <ProtectedRoute>
               <AppShell>
                 <GeoGuessr />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/zetamac"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <Zetamac />
               </AppShell>
             </ProtectedRoute>
           }

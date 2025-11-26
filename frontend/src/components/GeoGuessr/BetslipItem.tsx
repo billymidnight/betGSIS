@@ -65,6 +65,14 @@ export default function BetslipItem({ selection }: Props) {
             <div style={{fontWeight:700}}>First Round Appearance</div>
           ) : selection.market === 'ante' ? (
             <div style={{fontWeight:700}}>{selection.outcome || selection.playerName}</div>
+          ) : selection.market === 'zetamac-totals' ? (
+            <>
+              <span style={{color: selection.side === 'over' ? '#28a745' : '#d97706', fontWeight: 800, fontSize: '0.95rem'}}>
+                {selection.side === 'over' ? 'Over' : 'Under'}
+              </span>
+              {' '}
+              <span style={{fontWeight: 700}}>{selection.threshold}</span>
+            </>
           ) : (
             <>{selection.side.toUpperCase()} @ {selection.threshold}</>
           )}

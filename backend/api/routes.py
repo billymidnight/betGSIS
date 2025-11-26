@@ -667,17 +667,23 @@ def pricing_country_props():
         for cid, entry in results.items():
             try:
                 out_list.append({
+                    'country_id': cid,
                     'country': entry.get('country') or entry.get('name') or None,
+                    'freq_pct': float(entry.get('freq_pct') or 0.0),
                     'prob_yes': float(entry.get('prob_yes') or 0.0),
                     'prob_no': float(entry.get('prob_no') or 0.0),
                     'odds_yes_decimal': float(entry.get('odds_yes_decimal') or 0.0),
                     'odds_no_decimal': float(entry.get('odds_no_decimal') or 0.0),
                     'odds_yes_american': str(entry.get('odds_yes_american') or ''),
                     'odds_no_american': str(entry.get('odds_no_american') or ''),
+                    'lock': entry.get('lock') or False,
                 })
             except Exception:
                 # skip malformed entries
                 continue
+        
+        # Sort by freq descending
+        out_list.sort(key=lambda x: x.get('freq_pct', 0.0), reverse=True)
 
         return jsonify({'results': out_list}), 200
     except Exception as e:
@@ -764,29 +770,62 @@ def frc_continents():
     if request.method == 'OPTIONS':
         return ('', 200)
     try:
-        rounds = int(request.args.get('rounds', 5) or 5)
-        from services.pricing_service import continent_markets  # type: ignore
-        res = continent_markets(rounds=rounds)
-        conts = res.get('continents') or []
-        rows = []
-        # produce stable ids for frontend consumption
-        for idx, c in enumerate(conts, start=1):
-            try:
-                rows.append({
-                    'continent_id': int(idx),
-                    'continent_name': c.get('name') or c.get('continent') or 'Unknown',
-                    # the per-round probability (used by frontend to derive display odds)
-                    'probability_first_round': float(c.get('p') if c.get('p') is not None else 0.0),
-                    'hooks': c.get('hooks') or [],
-                })
-            except Exception:
-                # skip malformed continent entry
-                continue
-
-        return jsonify({'rows': rows}), 200
+        # Query frc table directly from Supabase
+        client = _get_admin_client()
+        if not client:
+            return jsonify({'rows': [], 'error': 'supabase client not available'}), 500
+        
+        res = client.table('frc').select('continent_id,continent_name,probability_first_round').order('continent_id').execute()
+        rows = res.data if hasattr(res, 'data') else (res.get('data') if isinstance(res, dict) else [])
+        
+        # Return rows directly from DB
+        return jsonify({'rows': rows or []}), 200
     except Exception as e:
         logging.exception('frc_continents error')
         return jsonify({'rows': [], 'error': str(e)}), 500
+
+
+@api_bp.route('/zetamac/totals', methods=['GET', 'OPTIONS'])
+def zetamac_totals():
+    """Price Zetamac totals using normal CDF from zetamac_players table.
+    
+    Query params:
+    - player_ids: comma-separated list of player IDs (optional)
+    - hooks: comma-separated list of hook values (optional)
+    - margin_bps: margin in basis points (default 700)
+    
+    Returns: { players: [ { player_id, name, mean, std_dev, lock, center_hook, default_hook, hooks: [...] } ] }
+    """
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    try:
+        # Parse query params
+        player_ids_str = request.args.get('player_ids')
+        hooks_str = request.args.get('hooks')
+        margin_bps = int(request.args.get('margin_bps', 700))
+        
+        player_ids = None
+        if player_ids_str:
+            try:
+                player_ids = [int(x.strip()) for x in player_ids_str.split(',') if x.strip()]
+            except Exception:
+                player_ids = None
+        
+        hooks = None
+        if hooks_str:
+            try:
+                hooks = [int(x.strip()) for x in hooks_str.split(',') if x.strip()]
+            except Exception:
+                hooks = None
+        
+        # Call pricing service
+        from services.pricing_service import price_zetamac_totals  # type: ignore
+        result = price_zetamac_totals(player_ids=player_ids, hooks=hooks, margin_bps=margin_bps)
+        
+        return jsonify(result), 200
+    except Exception as e:
+        logging.exception('zetamac_totals error')
+        return jsonify({'players': [], 'error': str(e)}), 500
 
 
 @api_bp.route('/locks', methods=['GET', 'OPTIONS'])

@@ -463,6 +463,9 @@ def price_country_props(threshold_rounds: int = 5, margin_bps: int = 700) -> Dic
                 no_a_int = None
             odds_no_decimal = american_to_decimal(no_a_int) if no_a_int is not None else d_no_raw
 
+            # Lock countries with freq < 0.72
+            is_locked = freq_pct is not None and float(freq_pct) < 0.72
+            
             results[cid] = {
                 'country_id': cid,
                 'country': name,
@@ -473,6 +476,7 @@ def price_country_props(threshold_rounds: int = 5, margin_bps: int = 700) -> Dic
                 'odds_no_decimal': odds_no_decimal,
                 'odds_yes_american': odds_yes_american_str,
                 'odds_no_american': odds_no_american_str,
+                'lock': is_locked,
             }
         except Exception:
             # skip problematic country row but continue processing others
@@ -697,3 +701,94 @@ def continent_markets(rounds: int = 5, hooks: List[float] = None, margin_bps: in
         continents_out.append({'name': name, 'p': p, 'freq': entry.get('freq'), 'hooks': hooks_out})
 
     return {'config': {'rounds': rounds}, 'continents': continents_out}
+
+
+def price_zetamac_totals(player_ids: List[int] = None, hooks: List[float] = None, margin_bps: int = 700) -> Dict:
+    """Price Zetamac totals using normal CDF.
+    
+    For each player, generate hooks from mean-2σ to mean+2σ (0.5 steps).
+    Center hook is rounded mean to nearest 0.5. Apply 700 bps vig.
+    
+    Returns: { 'players': [ { player_id, name, mean, std_dev, lock, center_hook, hooks: [ {hook, over_prob, under_prob, over_decimal, under_decimal, over_american, under_american} ] } ] }
+    """
+    from database.geo_repo import get_supabase_client
+    
+    client = get_supabase_client()
+    
+    # Query zetamac_players table
+    query = client.table('zetamac_players').select('player_id,name,mean,std_dev,lock')
+    if player_ids:
+        query = query.in_('player_id', player_ids)
+    
+    res = query.execute()
+    players = res.data or []
+    
+    if not players:
+        return {'players': []}
+    
+    players_out = []
+    for p in players:
+        player_id = p.get('player_id')
+        name = p.get('name') or f'Player {player_id}'
+        mean = float(p.get('mean') or 0.0)
+        std_dev = float(p.get('std_dev') or 1.0)
+        lock = bool(p.get('lock') or False)
+        
+        # Center hook: round mean to nearest 0.5
+        center_hook = round(mean * 2) / 2.0
+        
+        # Generate hooks: mean-2σ to mean+2σ, 0.5 steps
+        min_hook = max(0.0, math.floor((mean - 2 * std_dev) * 2) / 2.0)
+        max_hook = math.ceil((mean + 2 * std_dev) * 2) / 2.0
+        
+        # If specific hooks requested, filter to that range
+        if hooks:
+            hook_list = [h for h in hooks if min_hook <= h <= max_hook]
+        else:
+            # Generate all 0.5 steps from min to max
+            hook_list = []
+            current = min_hook
+            while current <= max_hook:
+                hook_list.append(current)
+                current += 0.5
+        
+        hooks_out = []
+        for hook in hook_list:
+            # P(X > hook) using normal CDF
+            over_prob = 1.0 - normal_cdf(hook, mean, std_dev)
+            under_prob = normal_cdf(hook, mean, std_dev)
+            
+            # Apply margin (700 bps)
+            over_adj, under_adj = apply_margin(over_prob, under_prob, margin_bps)
+            
+            # Convert to decimal odds
+            over_decimal = prob_to_decimal(over_adj)
+            under_decimal = prob_to_decimal(under_adj)
+            
+            # Convert to American odds
+            over_american = decimal_to_american_rounded(over_decimal, prob=over_adj)
+            under_american = decimal_to_american_rounded(under_decimal, prob=under_adj)
+            
+            hooks_out.append({
+                'hook': hook,
+                'over_prob': over_adj,
+                'under_prob': under_adj,
+                'over_decimal': round(over_decimal, 4),
+                'under_decimal': round(under_decimal, 4),
+                'over_american': over_american,
+                'under_american': under_american,
+            })
+        
+        players_out.append({
+            'player_id': player_id,
+            'name': name,
+            'mean': mean,
+            'std_dev': std_dev,
+            'lock': lock,
+            'center_hook': center_hook,
+            'default_hook': center_hook,
+            'hooks': hooks_out,
+        })
+    
+    return {'players': players_out}
+

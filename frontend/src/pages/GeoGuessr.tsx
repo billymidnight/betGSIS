@@ -192,9 +192,9 @@ export default function GeoGuessr() {
             odds_no_american: r.odds_no_american ?? r.odds_no_american ?? '',
             prob_yes: r.prob_yes ?? 0,
             prob_no: r.prob_no ?? 0,
+            lock: r.lock ?? false,
           }));
-          // sort by freq descending
-          list.sort((a: any, b: any) => (b.freq_pct || 0) - (a.freq_pct || 0));
+          // Already sorted by freq descending from backend
           if (mounted) setCountries(list);
         } catch (err) {
           console.error('Failed to load country props', err);
@@ -228,24 +228,24 @@ export default function GeoGuessr() {
                 <div className="player-prices" style={{display: 'flex', gap: '0.5rem'}}>
                   <button
                     className="price-btn over"
-                    onClick={() => { if (locked) return; const sel = { playerId: c.country_id, playerName: c.country, threshold: 0, side: 'over' as const, decimalOdds: Number(c.odds_yes_decimal) || 1.0, stake: 0, market: 'country-props' }; addSelection(sel as any); }}
-                    disabled={locked}
-                    style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.35rem', cursor: locked ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '2px solid #28a745', backgroundColor: 'rgba(40, 167, 69, 0.03)'}}
+                    onClick={() => { if (locked || c.lock) return; const sel = { playerId: c.country_id, playerName: c.country, threshold: 0, side: 'over' as const, decimalOdds: Number(c.odds_yes_decimal) || 1.0, stake: 0, market: 'country-props' }; addSelection(sel as any); }}
+                    disabled={locked || c.lock}
+                    style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.35rem', cursor: (locked || c.lock) ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '2px solid #28a745', backgroundColor: 'rgba(40, 167, 69, 0.03)'}}
                   >
                     <div style={{fontSize: '1.15rem', color: '#0ff', fontWeight: 800, textTransform: 'uppercase'}}>YES</div>
-                    {locked ? <div style={{fontSize:'1.4rem'}}>🔒</div> : <div style={{fontSize: '1.25rem', fontWeight: 900, color: '#fff'}}>{c.odds_yes_american}</div>}
-                    {!locked && <div style={{fontSize: '0.75rem', color: '#999', marginTop: '0.15rem'}}>{(c.odds_yes_decimal || 0).toFixed(2)}</div>}
+                    {(locked || c.lock) ? <div style={{fontSize:'1.4rem'}}>🔒</div> : <div style={{fontSize: '1.25rem', fontWeight: 900, color: '#fff'}}>{c.odds_yes_american}</div>}
+                    {!(locked || c.lock) && <div style={{fontSize: '0.75rem', color: '#999', marginTop: '0.15rem'}}>{(c.odds_yes_decimal || 0).toFixed(2)}</div>}
                   </button>
 
                   <button
                     className="price-btn under"
-                    onClick={() => { if (locked) return; const sel = { playerId: c.country_id, playerName: c.country, threshold: 0, side: 'under' as const, decimalOdds: Number(c.odds_no_decimal) || 1.0, stake: 0, market: 'country-props' }; addSelection(sel as any); }}
-                    disabled={locked}
-                    style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.35rem', cursor: locked ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '2px solid #d97706', backgroundColor: 'rgba(217, 119, 6, 0.03)'}}
+                    onClick={() => { if (locked || c.lock) return; const sel = { playerId: c.country_id, playerName: c.country, threshold: 0, side: 'under' as const, decimalOdds: Number(c.odds_no_decimal) || 1.0, stake: 0, market: 'country-props' }; addSelection(sel as any); }}
+                    disabled={locked || c.lock}
+                    style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.35rem', cursor: (locked || c.lock) ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '2px solid #d97706', backgroundColor: 'rgba(217, 119, 6, 0.03)'}}
                   >
                     <div style={{fontSize: '1.15rem', color: '#d97706', fontWeight: 800, textTransform: 'uppercase'}}>NO</div>
-                    {locked ? <div style={{fontSize:'1.4rem'}}>🔒</div> : <div style={{fontSize: '1.25rem', fontWeight: 900, color: '#fff'}}>{c.odds_no_american}</div>}
-                    {!locked && <div style={{fontSize: '0.75rem', color: '#999', marginTop: '0.15rem'}}>{(c.odds_no_decimal || 0).toFixed(2)}</div>}
+                    {(locked || c.lock) ? <div style={{fontSize:'1.4rem'}}>🔒</div> : <div style={{fontSize: '1.25rem', fontWeight: 900, color: '#fff'}}>{c.odds_no_american}</div>}
+                    {!(locked || c.lock) && <div style={{fontSize: '0.75rem', color: '#999', marginTop: '0.15rem'}}>{(c.odds_no_decimal || 0).toFixed(2)}</div>}
                   </button>
                 </div>
               </div>

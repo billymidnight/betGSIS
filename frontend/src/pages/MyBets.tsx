@@ -72,8 +72,21 @@ export default function MyBets() {
           <div className="my-bets-grid">
             {filtered.map((b) => {
               const parsed = parseOutcome(b.outcome || b.market || '');
-              const player = parsed.playerName || parsed.countryName || '';
-              const market = parsed.marketDisplay || b.market || '';
+              let player = parsed.playerName || parsed.countryName || '';
+              let market = parsed.marketDisplay || b.market || '';
+              
+              // Special handling for zetamac_totals: append ' Zetamac' and use point column
+              if (b.market === 'zetamac_totals') {
+                // Extract player name from outcome (format: "Name Zetamac Totals Over/Under X.X")
+                const zetamacMatch = (b.outcome || '').match(/^(.+?)\s+Zetamac\s+Totals\s+(Over|Under)\s+([\d.]+)$/i);
+                if (zetamacMatch) {
+                  player = zetamacMatch[1].trim() + ' Zetamac';
+                  market = `${zetamacMatch[2]} ${b.point || zetamacMatch[3]}`;
+                } else {
+                  // Fallback: append Zetamac to player
+                  player = player ? player + ' Zetamac' : 'Zetamac';
+                }
+              }
               const placed = formatPlacedUTC(b.placed_at || b.created_at || b.bet_placed_time || null);
 
               // odds: backend stores odds_american as string

@@ -81,3 +81,73 @@ the solution is to do the following, to apply the vig to the decimal form versio
 so lets say fair decimal rice is d and say the margin is m such as m = 0.05
 then v (the vigged priced) is o / (1 + m). simple as fuck. so if fair prob was 40 percent, the fair decimal is 2.5. for five percent vig we do 2.5 / (1+0.05) = 2.5/1.05 = 2.38 and on the other side it'll be 60 percent initial which was -150 whih is 1.6666 so it's 1.66666/1.05 = 1.587
 so vigged line there would be 2.38 and 1.587 which we would then convert to american and so forth. capisce?
+
+
+
+IMPORTANT:
+- Do not introduce any TypeScript errors or type mismatches. The code must compile cleanly.
+- Do not touch any other markets, payload logic, or unrelated code. Scope this change strictly to the new Help page.
+- Keep styling, formatting, and layout consistent with the global ecosystem (same tab styling, same left bar navigation).
+
+Task:
+Add a new Help page to the app. Place it on the left navigation bar, below all odds screens. Clicking "Help" should redirect to this new page.
+
+Structure:
+The Help page has two tabs: **Basic** and **Terms**.
+
+Tab 1: BASIC
+Content (in professional English):
+- All users must have betGSIS accounts to place bets on the platform.
+- Currently only the GeoGuessr Odds Screen is active, with the rest of the platform under development.
+- Users can select any offered market except those designated as ILLEGAL (see Terms tab), choose stake size, and place wagers.
+- All bets can be viewed under "My Bets" or Profile → Bet Logger.
+- Active bets can be settled and viewed on the "Bet Settler" page.
+- Bets must be settled with integrity at the conclusion of each game, as the global GeoGuessr game counter is incremented. This counter is used to identify each game and its associated bets.
+- Statistics such as PnL, bet history, and edge can be viewed on the Portfolio page.
+- Kottayam prices will be released soon.
+
+Tab 2: TERMS
+Sections and content:
+
+**ANTE**
+- An Ante must always be placed on each game. This is non‑negotiable.
+- Please note that Antes are the only vig‑free market offered.
+
+**ILLEGAL BETS**
+- You may never bet your own unders.
+- You may never bet anyone’s Moneyline except your own, unless it is a game you are not participating in and the lines have been repriced accordingly.
+- You may never bet on another player’s Specials that require strong performance (i.e., you cannot wager on someone doing exceptionally well, since you could intentionally play poorly to distort their odds).
+- Parlays are not currently supported.
+- You may not place bets for any game other than the current global game counter shown on the navigation bar.
+
+**COUNTRIES AND CONTINENTS**
+- All of Russia and all of Turkey count as Europe.
+- European overseas colonies that are non‑sovereign count as their European parent nation and Europe as a continent. Examples include: British Virgin Islands (UK), Curaçao (Netherlands), Bermuda (UK), Martinique (France). This list is not exhaustive.
+- The Island of Jersey counts as the UK.
+- Monaco does not count as France, as it is a sovereign city‑state.
+- The Faroe Islands and Greenland both being part of the Kingdom of Denmark will count as Denmark and Europe.
+- All US overseas territories and minor outlying islands count as the US and North America.
+- All Caribbean islands count as North America except European overseas colonies.
+- Antarctica loses on all continents.
+
+**LOCKING**
+- Any market or specific bet may be locked at any time at the discretion of betGSIS traders.
+
+Acceptance criteria:
+- A new Help section appears in the left navigation bar, below odds screens.
+- Clicking Help opens the Help page with two tabs: Basic and Terms.
+- Content is displayed exactly as above, in professional English.
+- Styling and formatting match global tab/page consistency.
+- No TypeScript errors or warnings introduced.
+- No unrelated code is modified.
+
+
+
+i want to insert 4 more rows into the country table, but in a way that the countryid serially matches with dewscending order of freq
+currently it's like that so if i simply insert, it's merely gonna append to the end which is undesribal
+
+right now last 3 rows are like kyrgyzstan: 0.34, mongolia, 0.34 and cambodia 0.34
+but i want to add like United States: 2.1 and i want to go in the right placeso find a smart sql script,t aht can keep everything as is now and insert these in the right place:
+
+United States: 2.1
+China: 0.44

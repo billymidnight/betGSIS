@@ -15,6 +15,15 @@ export function parseOutcome(outcome: string) {
     return { playerName: null, countryName: toAppearMatch[1].trim(), marketType: 'country-props', marketDisplay: `To Appear - ${toAppearMatch[2].toUpperCase()}` };
   }
 
+  // Zetamac totals
+  const zetamacMatch = outcome.match(/^(.+)\s+Zetamac\s+Totals\s+(Over|Under)\s+([\d.]+)$/i);
+  if (zetamacMatch) {
+    const name = zetamacMatch[1].trim();
+    const side = zetamacMatch[2];
+    const pts = zetamacMatch[3] || '';
+    return { playerName: name + ' Zetamac', countryName: null, marketType: 'zetamac-totals', marketDisplay: `${side} ${pts}` };
+  }
+
   // First/Last round
   const firstLastMatch = outcome.match(/^(.+):\s*(First Round|Last Round)\s*-\s*(Over|Under)\s*(\d+)?\s*Points$/i);
   if (firstLastMatch) {

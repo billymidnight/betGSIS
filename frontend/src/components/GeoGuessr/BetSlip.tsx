@@ -55,6 +55,8 @@ export default function BetSlip() {
           // with market = 'First Round Continent' and the outcome verbatim
           // matching the betslip (e.g. "Europe: First Round Appearance").
           bet_name = `${sel.playerName}: First Round Appearance`;
+        } else if (sel.market === 'zetamac-totals') {
+          bet_name = `${sel.playerName} Zetamac: ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
         } else {
           bet_name = `${sel.playerName}: ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold} Points`;
         }
@@ -87,6 +89,9 @@ export default function BetSlip() {
           payloadOutcome = sel.playerName && String(sel.playerName).trim() !== ''
             ? `${sel.playerName}: First Round Appearance`
             : (sel.outcome && typeof sel.outcome === 'string' ? sel.outcome : 'First Round Continent');
+        } else if (sel.market === 'zetamac-totals') {
+          payloadMarket = 'zetamac_totals';
+          payloadOutcome = `${sel.playerName} Zetamac Totals ${sel.side === 'over' ? 'Over' : 'Under'} ${sel.threshold}`;
         } else if (sel.market === 'country-props' || String(sel.market) === 'Continent Totals') {
           // continent markets: if playerId === -1 use human-readable bet_name
           const pt = sel.threshold ?? (sel as any).point ?? null;
