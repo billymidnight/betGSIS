@@ -370,6 +370,9 @@ def bets_place():
         # First Round Continent: use verbatim outcome from frontend
         elif pm == 'first round continent' or mnorm == 'frc' or pm == 'frc':
             outcome_str = payload.get('outcome') or None
+        # Zetamac Totals: use verbatim outcome from frontend (includes 0.5 increments)
+        elif pm == 'zetamac_totals' or mnorm == 'zetamac_totals' or pm == 'zetamac-totals' or mnorm == 'zetamac-totals':
+            outcome_str = payload.get('outcome') or None
         else:
             # Fallback: keep previous behavior but constructed safely. This covers other markets.
             try:
