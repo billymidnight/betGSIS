@@ -3,13 +3,12 @@ import Navbar from '../components/Layout/Navbar';
 import Footer from '../components/Layout/Footer';
 import BetSlip from '../components/GeoGuessr/BetSlip';
 import ToastContainer from '../components/Shared/ToastContainer';
-import { fetchZetamacTotals, fetchZetamacMoneylines } from '../lib/api/api';
+import { fetchZetamacTotals } from '../lib/api/api';
 import './GeoGuessr.css';
 import { useBetsStore } from '../lib/state/betsStore';
 
 export default function Zetamac() {
   const [zetamacPlayers, setZetamacPlayers] = useState<any[]>([]);
-  const [moneylineMatchups, setMoneylineMatchups] = useState<any[]>([]);
   const [market, setMarket] = useState<'totals' | 'spreads' | 'time-handicaps' | 'moneyline'>('totals');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,21 +35,6 @@ export default function Zetamac() {
     };
     loadPlayers();
   }, []);
-
-  // Load moneylines when market switches to moneyline
-  useEffect(() => {
-    if (market === 'moneyline') {
-      const loadMoneylines = async () => {
-        try {
-          const res = await fetchZetamacMoneylines();
-          setMoneylineMatchups(res.matchups || []);
-        } catch (err) {
-          console.error('Failed to load moneylines:', err);
-        }
-      };
-      loadMoneylines();
-    }
-  }, [market]);
 
   // Helper to update a single player's price (debounced per player)
   const debounceTimers = React.useRef<Record<number, ReturnType<typeof setTimeout>>>({});
@@ -100,7 +84,7 @@ export default function Zetamac() {
             <button className={`market-tab ${market === 'totals' ? 'active' : ''}`} onClick={() => setMarket('totals')}>Totals</button>
             <button className="market-tab" disabled>Spreads (coming)</button>
             <button className="market-tab" disabled>Time Handicaps (coming)</button>
-            <button className={`market-tab ${market === 'moneyline' ? 'active' : ''}`} onClick={() => setMarket('moneyline')}>Moneyline</button>
+            <button className="market-tab" disabled>Moneyline (coming)</button>
           </div>
 
           {/* Main Content Area - Scrollable Player Cards */}
@@ -111,62 +95,6 @@ export default function Zetamac() {
               <div className="geoguessr-loading">
                 <div className="spinner" />
                 <p>Loading odds...</p>
-              </div>
-            ) : market === 'moneyline' ? (
-              <div className="moneyline-market">
-                <div className="matchups-list">
-                  {moneylineMatchups.map((matchup: any, idx: number) => (
-                    <div key={idx} className="matchup-card">
-                      <div className="matchup-title">{matchup.player1_name} vs. {matchup.player2_name}</div>
-                      <div className="matchup-odds">
-                        <button
-                          className="price-btn player1"
-                          onClick={() => {
-                            const sel = {
-                              playerId: matchup.player1_id,
-                              playerName: matchup.player1_name,
-                              side: 'player1' as const,
-                              decimalOdds: Number(matchup.player1_decimal) || 1.0,
-                              stake: 0,
-                              market: 'zetamac-moneyline' as const,
-                              odds_american: matchup.player1_american || '',
-                              opponent: matchup.player2_name
-                            };
-                            addSelection(sel as any);
-                          }}
-                        >
-                          <div className="odds-box">
-                            <div className="player-name-odds">{matchup.player1_name}</div>
-                            <div className="price-large">{matchup.player1_american || '—'}</div>
-                            <div className="price-small">{(Number(matchup.player1_decimal) || 1.0).toFixed(2)}</div>
-                          </div>
-                        </button>
-                        <button
-                          className="price-btn player2"
-                          onClick={() => {
-                            const sel = {
-                              playerId: matchup.player2_id,
-                              playerName: matchup.player2_name,
-                              side: 'player2' as const,
-                              decimalOdds: Number(matchup.player2_decimal) || 1.0,
-                              stake: 0,
-                              market: 'zetamac-moneyline' as const,
-                              odds_american: matchup.player2_american || '',
-                              opponent: matchup.player1_name
-                            };
-                            addSelection(sel as any);
-                          }}
-                        >
-                          <div className="odds-box">
-                            <div className="player-name-odds">{matchup.player2_name}</div>
-                            <div className="price-large">{matchup.player2_american || '—'}</div>
-                            <div className="price-small">{(Number(matchup.player2_decimal) || 1.0).toFixed(2)}</div>
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
             ) : (
               <div className="totals-market">

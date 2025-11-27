@@ -122,6 +122,14 @@ export async function fetchZetamacTotals(playerIds?: number[], hooks?: number[],
   return r.data || { players: [] };
 }
 
+export async function fetchZetamacMoneylines(marginBps = 700) {
+  const headers = { 'Content-Type': 'application/json' } as Record<string, string>;
+  const params: Record<string, string> = {};
+  if (marginBps) params.margin_bps = String(marginBps);
+  const r = await api.get('/zetamac/moneylines', { headers, params });
+  return r.data || { matchups: [] };
+}
+
 export async function fetchPricingContinentProps(rounds = 5) {
   const headers = { 'Content-Type': 'application/json', 'x-user-role': 'book' } as Record<string, string>;
   const r = await api.get(`/pricing/continent-props?rounds=${rounds}`, { headers });

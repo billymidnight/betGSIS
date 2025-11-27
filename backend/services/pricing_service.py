@@ -464,7 +464,15 @@ def price_country_props(threshold_rounds: int = 5, margin_bps: int = 700) -> Dic
             odds_no_decimal = american_to_decimal(no_a_int) if no_a_int is not None else d_no_raw
 
             # Lock countries with freq < 0.72
-            is_locked = freq_pct is not None and float(freq_pct) < 0.72
+            is_locked = False
+            
+            # Floor odds greater than +3000 to +3000 (decimal 31.0)
+            if yes_a_int is not None and yes_a_int > 3500:
+                odds_yes_american_str = '+3500'
+                odds_yes_decimal = 36.0
+            if no_a_int is not None and no_a_int > 3500:
+                odds_no_american_str = '+3500'
+                odds_no_decimal = 36.0
             
             results[cid] = {
                 'country_id': cid,
@@ -791,4 +799,86 @@ def price_zetamac_totals(player_ids: List[int] = None, hooks: List[float] = None
         })
     
     return {'players': players_out}
+
+
+def price_zetamac_moneylines(margin_bps: int = 700) -> Dict:
+    """Price Zetamac moneylines (head-to-head matchups).
+    
+    Generates N-choose-2 matchups using normal distribution superiority formula:
+    P(X > Y) = Φ((μ_X - μ_Y) / √(σ_X² + σ_Y²))
+    
+    Applies 7% vig (700 bps default) and converts to American odds.
+    
+    Returns: { 'matchups': [ { player1_id, player1_name, player2_id, player2_name, 
+                                player1_prob, player2_prob, player1_decimal, player2_decimal,
+                                player1_american, player2_american } ] }
+    """
+    from database.geo_repo import get_supabase_client
+    from itertools import combinations
+    
+    client = get_supabase_client()
+    
+    # Query all zetamac players
+    res = client.table('zetamac_players').select('player_id,name,mean,std_dev').execute()
+    players = res.data or []
+    
+    if len(players) < 2:
+        return {'matchups': []}
+    
+    matchups = []
+    
+    # Generate all N-choose-2 combinations
+    for p1, p2 in combinations(players, 2):
+        p1_id = p1.get('player_id')
+        p1_name = p1.get('name') or f'Player {p1_id}'
+        p1_mean = float(p1.get('mean') or 0.0)
+        p1_std = float(p1.get('std_dev') or 1.0)
+        
+        p2_id = p2.get('player_id')
+        p2_name = p2.get('name') or f'Player {p2_id}'
+        p2_mean = float(p2.get('mean') or 0.0)
+        p2_std = float(p2.get('std_dev') or 1.0)
+        
+        # Calculate P(X > Y) using normal distribution superiority formula
+        # P(X > Y) = Φ((μ_X - μ_Y) / √(σ_X² + σ_Y²))
+        mean_diff = p1_mean - p2_mean
+        combined_variance = (p1_std ** 2) + (p2_std ** 2)
+        
+        if combined_variance <= 0:
+            # Degenerate case: use 50/50
+            p1_prob = 0.5
+        else:
+            combined_std = math.sqrt(combined_variance)
+            # P(p1 > p2) = Φ(mean_diff / combined_std)
+            # Using standard normal CDF at z = mean_diff / combined_std
+            z = mean_diff / combined_std
+            p1_prob = normal_cdf(0, -z, 1.0)  # Φ(z) = CDF(0; μ=-z, σ=1)
+        
+        p2_prob = 1.0 - p1_prob
+        
+        # Apply margin (bump probabilities)
+        p1_adj, p2_adj = apply_margin(p1_prob, p2_prob, margin_bps)
+        
+        # Convert to decimal odds
+        p1_decimal = prob_to_decimal(p1_adj)
+        p2_decimal = prob_to_decimal(p2_adj)
+        
+        # Convert to American odds
+        p1_american = decimal_to_american_rounded(p1_decimal, prob=p1_adj)
+        p2_american = decimal_to_american_rounded(p2_decimal, prob=p2_adj)
+        
+        matchups.append({
+            'player1_id': p1_id,
+            'player1_name': p1_name,
+            'player2_id': p2_id,
+            'player2_name': p2_name,
+            'player1_prob': p1_adj,
+            'player2_prob': p2_adj,
+            'player1_decimal': round(p1_decimal, 4),
+            'player2_decimal': round(p2_decimal, 4),
+            'player1_american': p1_american,
+            'player2_american': p2_american,
+        })
+    
+    return {'matchups': matchups}
 

@@ -831,6 +831,32 @@ def zetamac_totals():
         return jsonify({'players': [], 'error': str(e)}), 500
 
 
+@api_bp.route('/zetamac/moneylines', methods=['GET', 'OPTIONS'])
+def zetamac_moneylines():
+    """Price Zetamac moneylines (head-to-head matchups).
+    
+    Query params:
+    - margin_bps: margin in basis points (default 700)
+    
+    Returns: { matchups: [ { player1_id, player1_name, player2_id, player2_name, 
+                             player1_prob, player2_prob, player1_decimal, player2_decimal,
+                             player1_american, player2_american } ] }
+    """
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    try:
+        margin_bps = int(request.args.get('margin_bps', 700))
+        
+        # Call pricing service
+        from services.pricing_service import price_zetamac_moneylines  # type: ignore
+        result = price_zetamac_moneylines(margin_bps=margin_bps)
+        
+        return jsonify(result), 200
+    except Exception as e:
+        logging.exception('zetamac_moneylines error')
+        return jsonify({'matchups': [], 'error': str(e)}), 500
+
+
 @api_bp.route('/locks', methods=['GET', 'OPTIONS'])
 def locks_status():
     """Return current lock status for master and markets.

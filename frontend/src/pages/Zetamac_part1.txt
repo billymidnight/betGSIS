@@ -1,0 +1,10 @@
+﻿import React, { useEffect, useState } from 'react';
+import BetSlip from '../components/GeoGuessr/BetSlip';
+import ToastContainer from '../components/Shared/ToastContainer';
+import { fetchZetamacTotals, fetchZetamacMoneylines } from '../lib/api/api';
+import './GeoGuessr.css';
+import { useBetsStore } from '../lib/state/betsStore';
+
+export default function Zetamac() {
+  const [zetamacPlayers, setZetamacPlayers] = useState<any[]>([]);
+  const [moneylineMatchups, setMoneylineMatchups] = useState<any[]>([]);
