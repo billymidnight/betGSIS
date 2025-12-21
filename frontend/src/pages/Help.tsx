@@ -57,6 +57,7 @@ export default function Help() {
               <li>World Cup Winners are: Brazil, Germany, Italy, Argentina, France, Uruguay, Spain, and England (United Kingdom).</li>
               <li>Countries in the Axis Coalition in World War II were Germany, Italy, Japan, Romania, Hungary and Croatia.</li>
               <li>Crippling College countries are USA, Canada, Singapore, India, AND United Kingdom</li>
+              <li>Exhausted list of visited countries: France, Switzerland, the United Kingdom, Ireland, Turkey, the United Arab Emirates, New Zealand, Austria, Germany, Hungary, the United States, Canada, South Korea, Singapore, Malaysia, India, Indonesia, Japan, Czechia, Norway, Spain, Denmark, Belgium, Thailand, Sri Lanka, Qatar, and Greece.</li>
               <li>Exhaustive list of British Colonies: Nigeria, Botswana, Ghana, Kenya, Lesotho, South Africa, Uganda, India, Israel (under the British Mandate of Palestine), Bangladesh, Pakistan, Singapore, Malaysia, Qatar, Sri Lanka, the United Arab Emirates, Oman, Canada, the United States, Barbados, the Bahamas, Ireland, Malta (Crown Colony of Malta), Australia, and New Zealand. </li>
               <li>Antarctica loses on all continents.</li>
             </ul>
