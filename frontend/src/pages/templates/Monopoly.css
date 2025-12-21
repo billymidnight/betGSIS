@@ -1,0 +1,176 @@
+/* Monopoly Markets Styling */
+
+.monopoly-container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.monopoly-header {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 24px;
+  color: #fff;
+}
+
+/* Tabs */
+.monopoly-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #334155;
+}
+
+.monopoly-tab {
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #94a3b8;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.monopoly-tab:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.monopoly-tab.active {
+  color: #fff;
+  border-bottom-color: #3b82f6;
+}
+
+/* Content */
+.monopoly-content {
+  background: #071025;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.monopoly-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Market */
+.monopoly-market {
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 24px;
+}
+
+.monopoly-market:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.monopoly-market-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 16px;
+}
+
+/* Odds Grid */
+.monopoly-odds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.monopoly-odds-box {
+  background: #0f172a;
+  border: 2px solid #1e293b;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.monopoly-odds-box:hover {
+  border-color: #3b82f6;
+  background: #1e293b;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.monopoly-player-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  text-align: center;
+}
+
+.monopoly-odds {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+/* Loading/Empty States */
+.monopoly-loading,
+.monopoly-empty {
+  text-align: center;
+  padding: 40px;
+  color: #94a3b8;
+  font-size: 1rem;
+}
+
+.monopoly-placeholder {
+  text-align: center;
+  padding: 60px 20px;
+  color: #94a3b8;
+}
+
+.monopoly-placeholder p {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .monopoly-container {
+    padding: 16px;
+  }
+
+  .monopoly-header {
+    font-size: 1.5rem;
+  }
+
+  .monopoly-tabs {
+    gap: 8px;
+  }
+
+  .monopoly-tab {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+  }
+
+  .monopoly-content {
+    padding: 16px;
+  }
+
+  .monopoly-odds-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+  }
+
+  .monopoly-odds-box {
+    padding: 12px;
+  }
+
+  .monopoly-player-name {
+    font-size: 0.85rem;
+  }
+
+  .monopoly-odds {
+    font-size: 1rem;
+  }
+}

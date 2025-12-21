@@ -127,7 +127,8 @@ export async function fetchZetamacMoneylines(marginBps = 700) {
   const params: Record<string, string> = {};
   if (marginBps) params.margin_bps = String(marginBps);
   const r = await api.get('/zetamac/moneylines', { headers, params });
-  return r.data || { matchups: [] };
+  const data = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
+  return data || { matchups: [] };
 }
 
 export async function fetchPricingContinentProps(rounds = 5) {
@@ -254,6 +255,11 @@ export async function settleBet(betId: number, result: 'win' | 'loss' | 'push') 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   const r = await api.post('/bets/settle', { bet_id: betId, result }, { headers });
   return r.data;
+}
+
+export async function fetchMonopolyPlayers() {
+  const r = await api.get('/monopoly/players');
+  return r.data.players || [];
 }
 
 export default api;

@@ -43,9 +43,16 @@ export default function Zetamac() {
       const loadMoneylines = async () => {
         try {
           const res = await fetchZetamacMoneylines();
-          setMoneylineMatchups(res.matchups || []);
+          console.log('🔍 Raw response:', res);
+          console.log('🔍 Response type:', typeof res);
+          console.log('🔍 Response keys:', Object.keys(res || {}));
+          console.log('🔍 res.matchups:', res?.matchups);
+          console.log('🔍 Is matchups array?:', Array.isArray(res?.matchups));
+          const matchups = Array.isArray(res?.matchups) ? res.matchups : [];
+          console.log('✅ Setting moneyline matchups, count:', matchups.length);
+          setMoneylineMatchups(matchups);
         } catch (err) {
-          console.error('Failed to load moneylines:', err);
+          console.error('❌ Failed to load moneylines:', err);
         }
       };
       loadMoneylines();
@@ -114,31 +121,35 @@ export default function Zetamac() {
               </div>
             ) : market === 'moneyline' ? (
               <div className="moneyline-market">
-                <div className="matchups-list">
+                {moneylineMatchups.length === 0 && <div style={{padding: '20px', textAlign: 'center'}}>No matchups available. Check console for errors.</div>}
+                <div className="matchups-list" style={{display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px'}}>
                   {moneylineMatchups.map((matchup: any, idx: number) => (
-                    <div key={idx} className="matchup-card">
-                      <div className="matchup-title">{matchup.player1_name} vs. {matchup.player2_name}</div>
-                      <div className="matchup-odds">
+                    <div key={idx} className="matchup-card" style={{display: 'flex', flexDirection: 'column', gap: '12px', background: '#1a1a1a', borderRadius: '12px', padding: '20px', border: '1px solid #333'}}>
+                      <div className="matchup-title" style={{fontSize: '1.1rem', fontWeight: 600, color: '#999', textAlign: 'center', marginBottom: '8px'}}>{matchup.player1_name} vs. {matchup.player2_name}</div>
+                      <div className="matchup-odds" style={{display: 'flex', gap: '12px', justifyContent: 'space-between'}}>
                         <button
                           className="price-btn player1"
                           onClick={() => {
                             const sel = {
                               playerId: matchup.player1_id,
-                              playerName: matchup.player1_name,
+                              playerName: `${matchup.player1_name} Zetamac ML`,
+                              threshold: `${matchup.player1_name} vs. ${matchup.player2_name}`,
                               side: 'player1' as const,
                               decimalOdds: Number(matchup.player1_decimal) || 1.0,
                               stake: 0,
-                              market: 'zetamac-moneyline' as const,
-                              odds_american: matchup.player1_american || '',
-                              opponent: matchup.player2_name
+                              market: 'zetamac_moneyline' as const,
+                              odds_american: matchup.player1_american || ''
                             };
                             addSelection(sel as any);
                           }}
+                          style={{flex: 1, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '8px', padding: '16px', cursor: 'pointer', transition: 'all 0.2s'}}
+                          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                         >
-                          <div className="odds-box">
-                            <div className="player-name-odds">{matchup.player1_name}</div>
-                            <div className="price-large">{matchup.player1_american || '—'}</div>
-                            <div className="price-small">{(Number(matchup.player1_decimal) || 1.0).toFixed(2)}</div>
+                          <div className="odds-box" style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                            <div className="player-name-odds" style={{fontSize: '1.2rem', fontWeight: 700, color: '#fff'}}>{matchup.player1_name}</div>
+                            <div className="price-large" style={{fontSize: '1.8rem', fontWeight: 800, color: '#fff'}}>{matchup.player1_american || '—'}</div>
+                            <div className="price-small" style={{fontSize: '0.9rem', color: '#e0e0e0'}}>({(Number(matchup.player1_decimal) || 1.0).toFixed(2)})</div>
                           </div>
                         </button>
                         <button
@@ -146,21 +157,24 @@ export default function Zetamac() {
                           onClick={() => {
                             const sel = {
                               playerId: matchup.player2_id,
-                              playerName: matchup.player2_name,
+                              playerName: `${matchup.player2_name} Zetamac ML`,
+                              threshold: `${matchup.player1_name} vs. ${matchup.player2_name}`,
                               side: 'player2' as const,
                               decimalOdds: Number(matchup.player2_decimal) || 1.0,
                               stake: 0,
-                              market: 'zetamac-moneyline' as const,
-                              odds_american: matchup.player2_american || '',
-                              opponent: matchup.player1_name
+                              market: 'zetamac_moneyline' as const,
+                              odds_american: matchup.player2_american || ''
                             };
                             addSelection(sel as any);
                           }}
+                          style={{flex: 1, background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', border: 'none', borderRadius: '8px', padding: '16px', cursor: 'pointer', transition: 'all 0.2s'}}
+                          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                         >
-                          <div className="odds-box">
-                            <div className="player-name-odds">{matchup.player2_name}</div>
-                            <div className="price-large">{matchup.player2_american || '—'}</div>
-                            <div className="price-small">{(Number(matchup.player2_decimal) || 1.0).toFixed(2)}</div>
+                          <div className="odds-box" style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                            <div className="player-name-odds" style={{fontSize: '1.2rem', fontWeight: 700, color: '#fff'}}>{matchup.player2_name}</div>
+                            <div className="price-large" style={{fontSize: '1.8rem', fontWeight: 800, color: '#fff'}}>{matchup.player2_american || '—'}</div>
+                            <div className="price-small" style={{fontSize: '0.9rem', color: '#e0e0e0'}}>({(Number(matchup.player2_decimal) || 1.0).toFixed(2)})</div>
                           </div>
                         </button>
                       </div>

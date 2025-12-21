@@ -132,9 +132,21 @@ export default function BetSlip() {
           payloadOutcome = sel.outcome || sel.playerName || null;
         }
 
+        // Monopoly market: outcome already formatted as "PlayerName - MarketName"
+        if (sel.market === 'Monopoly') {
+          payloadMarket = 'Monopoly';
+          payloadOutcome = sel.outcome; // Already formatted correctly
+        }
+
+        // For moneyline, point should be null (not a number), game info goes in outcome
+        let payloadPoint = sel.threshold || null;
+        if (payloadMarket === 'Moneyline' || sel.market === 'zetamac_moneyline') {
+          payloadPoint = null; // moneyline doesn't have a numeric point
+        }
+        
         const payload = {
           market: payloadMarket,
-          point: sel.threshold || null,
+          point: payloadPoint,
           outcome: payloadOutcome,
           bet_size: Number(sel.stake || 0),
           odds_american: oddsAmerican,

@@ -23,7 +23,17 @@ export default function BetslipItem({ selection }: Props) {
     <div className="betslip-item">
       <div className="betslip-item-header">
         <div className={`betslip-player ${selection.market === 'first-guess' ? 'fg-player' : selection.market === 'country-props' ? 'cp-player' : ''}`}>
-          {selection.market === 'Specials' ? 'Specials' : selection.playerName}
+          {selection.market === 'Monopoly' ? (
+            // For Monopoly, extract player name from outcome (format: "PlayerName - MarketName")
+            (() => {
+              const match = (selection.outcome || '').match(/^(.+?)\s*-\s*(.+)$/);
+              return match ? match[1].trim() : (selection.playerName || 'Monopoly');
+            })()
+          ) : selection.market === 'Specials' ? (
+            'Specials'
+          ) : (
+            selection.playerName
+          )}
         </div>
         <button className="betslip-remove" onClick={() => removeSelection(selection.id)} aria-label="Remove">
           ✕
@@ -32,7 +42,15 @@ export default function BetslipItem({ selection }: Props) {
 
       <div className="betslip-item-body">
         <div className={`betslip-market ${selection.market === 'first-guess' ? 'fg-market' : selection.market === 'country-props' ? 'cp-market' : ''}`}>
-          {selection.market === 'Specials' ? (
+          {selection.market === 'Monopoly' ? (
+            // For Monopoly, extract market name from outcome
+            <div style={{fontWeight:700}}>
+              {(() => {
+                const match = (selection.outcome || '').match(/^(.+?)\s*-\s*(.+)$/);
+                return match ? match[2].trim() : (selection.outcome || 'Monopoly');
+              })()}
+            </div>
+          ) : selection.market === 'Specials' ? (
               <div style={{fontWeight:700}}>{selection.outcome || selection.playerName}</div>
             ) : (selection.outcome && String(selection.outcome).toLowerCase().includes('moneyline')) ? (
               // Show Moneyline label (text after colon) when outcome is like "Name: Moneyline"

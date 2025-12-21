@@ -430,10 +430,19 @@ def bets_place():
             rounded_amer_int = None
             rounded_amer_str = None
 
+        # For point: try to convert to float, but for moneyline markets keep as string
+        point_value = None
+        if point is not None:
+            try:
+                point_value = float(point)
+            except (ValueError, TypeError):
+                # Keep as string for non-numeric points (e.g., "Naresh vs. Sohan")
+                point_value = str(point)
+        
         insert_payload = {
             'user_id': str(user_id),
             'market': str(market) if market is not None else None,
-            'point': float(point) if point is not None else None,
+            'point': point_value,
             'outcome': str(outcome_str) if outcome_str is not None else None,
             'bet_size': float(bet_size_val),
             'odds_american': str(rounded_amer_str if rounded_amer_str is not None else odds_amer),
@@ -1008,6 +1017,8 @@ def bookkeeping_summary():
                     pnl = (dec - 1.0) * stake if dec is not None else 0.0
                 elif rlow == 'loss':
                     pnl = -stake
+                elif rlow == 'push':
+                    pnl = 0.0
                 else:
                     pnl = 0.0
                 total_players_pnl += float(pnl)
@@ -1086,6 +1097,8 @@ def bookkeeping_summary():
                     pnl = (dec - 1.0) * stake if dec is not None else 0.0
                 elif rlow == 'loss':
                     pnl = -stake
+                elif rlow == 'push':
+                    pnl = 0.0
                 else:
                     pnl = 0.0
             except Exception:
@@ -1185,6 +1198,8 @@ def bookkeeping_accounts():
                     pnl = (dec - 1.0) * stake if dec is not None else 0.0
                 elif rlow == 'loss':
                     pnl = -stake
+                elif rlow == 'push':
+                    pnl = 0.0
                 else:
                     pnl = 0.0
                 pnl_map[key] = pnl_map.get(key, 0.0) + float(pnl)
@@ -1248,10 +1263,12 @@ def bookkeeping_all_bets():
             res = r.get('result')
             rlow = str(res).strip().lower() if res is not None else ''
             pnl_calc = 0.0
-            if rlow == 'win' or rlow == 'win':
+            if rlow == 'win':
                 pnl_calc = (dec - 1.0) * stake if dec is not None else 0.0
-            elif rlow == 'loss' or rlow == 'loss':
+            elif rlow == 'loss':
                 pnl_calc = -stake
+            elif rlow == 'push':
+                pnl_calc = 0.0
             else:
                 pnl_calc = 0.0
 
@@ -1641,16 +1658,22 @@ def portfolio():
 
             stake = float(b.get('bet_size') or b.get('stake') or 0)
             result = b.get('result')
-            odds_raw = b.get('odds_american') or b.get('odds') or b.get('odds_american')
-            # normalize odds int
-            amer_int = None
-            try:
+            
+            # Match Navbar logic: try multiple odds field names
+            dec = None
+            if b.get('odds_decimal') or b.get('odds_decimal') == 0:
+                dec = float(b.get('odds_decimal'))
+            elif b.get('decimal_odds') or b.get('decimal_odds') == 0:
+                dec = float(b.get('decimal_odds'))
+            else:
+                # fallback to american odds conversion
+                odds_raw = b.get('odds_american') or b.get('odds') or None
                 if odds_raw is not None:
-                    amer_int = int(str(odds_raw).replace('+', ''))
-            except Exception:
-                amer_int = None
-
-            dec = american_to_decimal(amer_int) if amer_int is not None else None
+                    try:
+                        amer_int = int(str(odds_raw).replace('+', ''))
+                        dec = american_to_decimal(amer_int)
+                    except Exception:
+                        dec = None
 
             pnl = 0.0
             payout = 0.0
@@ -1658,18 +1681,19 @@ def portfolio():
                 pnl = 0.0
                 payout = 0.0
             else:
-                rr = str(result).strip()
-                if rr == 'Loss':
+                # Match Navbar logic: convert to lowercase for comparison
+                status = str(result).strip().lower()
+                if status == 'loss':
                     pnl = -stake
                     payout = 0.0
-                elif rr == 'Win':
+                elif status == 'win':
                     if dec is not None:
                         payout = stake * dec
                         pnl = payout - stake
                     else:
                         payout = 0.0
                         pnl = 0.0
-                elif rr == 'Push':
+                elif status == 'push':
                     pnl = 0.0
                     payout = stake
                 else:
@@ -1677,6 +1701,15 @@ def portfolio():
                     pnl = 0.0
                     payout = 0.0
 
+            # Store original odds for response
+            odds_raw = b.get('odds_american') or b.get('odds') or None
+            amer_int = None
+            if odds_raw is not None:
+                try:
+                    amer_int = int(str(odds_raw).replace('+', ''))
+                except Exception:
+                    amer_int = None
+            
             processed.append({
                 'bet_id': b.get('bet_id') or b.get('id') or None,
                 'placed_at': placed_at.isoformat() if placed_at else None,
@@ -1695,7 +1728,7 @@ def portfolio():
         settled = [p for p in processed if p.get('result') is not None]
         active = [p for p in processed if p.get('result') is None]
 
-        total_won = sum(1 for p in settled if p.get('result') == 'Win')
+        total_won = sum(1 for p in settled if p.get('result') and str(p.get('result')).strip().lower() == 'win')
         # net pnl should reflect settled bets only
         net_pnl = sum(p.get('pnl', 0.0) for p in settled)
         total_wagered = sum(p.get('stake', 0.0) for p in settled)
@@ -1712,7 +1745,8 @@ def portfolio():
             m = p.get('market') or 'unknown'
             entry = markets.get(m) or {'market': m, 'bets': 0, 'wins': 0, 'pnl': 0.0}
             entry['bets'] += 1
-            if p.get('result') == 'Win':
+            # Match lowercase comparison for consistency
+            if p.get('result') and str(p.get('result')).strip().lower() == 'win':
                 entry['wins'] += 1
             entry['pnl'] += p.get('pnl', 0.0)
             markets[m] = entry
@@ -2115,3 +2149,50 @@ def antes_list():
     except Exception as e:
         logging.exception('antes_list error')
         return jsonify({'rows': [], 'error': str(e)}), 500
+
+
+@api_bp.route('/monopoly/players', methods=['GET', 'OPTIONS'])
+def monopoly_players():
+    """Fetch all players from monopoly_players table with computed odds.
+    
+    Returns: { players: [ { player_id, player_name, implied_prob, odds_american } ] }
+    """
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    try:
+        client = _get_admin_client()
+        if not client:
+            return jsonify({'error': 'supabase client missing'}), 500
+        
+        # Fetch all players
+        rc = client.table('monopoly_players').select('player_id,player_name').order('player_id').execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        players = rows or []
+        
+        if not players:
+            return jsonify({'players': []}), 200
+        
+        n = len(players)
+        # Implied prob = 1/n, then multiply by 1.03 to apply 3% vig
+        base_prob = 1.0 / n
+        boosted_prob = base_prob * 1.03
+        
+        # Convert to decimal odds then to american
+        decimal_odds = 1.0 / boosted_prob
+        american_odds = decimal_to_american_rounded(decimal_odds)
+        
+        # Add odds to each player
+        result = []
+        for p in players:
+            result.append({
+                'player_id': p.get('player_id'),
+                'player_name': p.get('player_name'),
+                'implied_prob': round(boosted_prob, 4),
+                'decimal_odds': round(decimal_odds, 2),
+                'odds_american': american_odds
+            })
+        
+        return jsonify({'players': result}), 200
+    except Exception as e:
+        logging.exception('monopoly_players error')
+        return jsonify({'error': str(e)}), 500

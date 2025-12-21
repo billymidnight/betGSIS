@@ -849,12 +849,17 @@ def price_zetamac_moneylines(margin_bps: int = 700) -> Dict:
             p1_prob = 0.5
         else:
             combined_std = math.sqrt(combined_variance)
-            # P(p1 > p2) = Φ(mean_diff / combined_std)
-            # Using standard normal CDF at z = mean_diff / combined_std
+            # P(p1 > p2) = Φ(z) where z = (μ₁ - μ₂) / √(σ₁² + σ₂²)
+            # normal_cdf(x, mu, sigma) computes P(X ≤ x) for X ~ N(mu, sigma)
+            # For standard normal Φ(z), we use normal_cdf(z, 0, 1)
             z = mean_diff / combined_std
-            p1_prob = normal_cdf(0, -z, 1.0)  # Φ(z) = CDF(0; μ=-z, σ=1)
+            p1_prob = normal_cdf(z, 0.0, 1.0)  # Φ(z) = P(Z ≤ z) where Z ~ N(0,1)
         
         p2_prob = 1.0 - p1_prob
+        
+        # Skip matchups where either player has <5 wins out of 10000 sims (prob < 0.0005)
+        if p1_prob < 0.0005 or p2_prob < 0.0005:
+            continue
         
         # Apply margin (bump probabilities)
         p1_adj, p2_adj = apply_margin(p1_prob, p2_prob, margin_bps)
@@ -866,6 +871,31 @@ def price_zetamac_moneylines(margin_bps: int = 700) -> Dict:
         # Convert to American odds
         p1_american = decimal_to_american_rounded(p1_decimal, prob=p1_adj)
         p2_american = decimal_to_american_rounded(p2_decimal, prob=p2_adj)
+        
+        # Cap American odds to reasonable limits
+        try:
+            p1_am_int = int(str(p1_american).replace('+', '').replace('-', ''))
+            if p1_american.startswith('+') and p1_am_int > 10000:
+                p1_american = '+10000'
+            elif p1_american.startswith('-') and p1_am_int > 200000:
+                p1_american = '-200000'
+        except Exception:
+            pass
+        
+        try:
+            p2_am_int = int(str(p2_american).replace('+', '').replace('-', ''))
+            if p2_american.startswith('+') and p2_am_int > 10000:
+                p2_american = '+10000'
+            elif p2_american.startswith('-') and p2_am_int > 200000:
+                p2_american = '-200000'
+        except Exception:
+            pass
+        
+        # Cap infinite decimals to a large number for JSON serialization
+        if not isfinite(p1_decimal):
+            p1_decimal = 999999.0
+        if not isfinite(p2_decimal):
+            p2_decimal = 999999.0
         
         matchups.append({
             'player1_id': p1_id,
