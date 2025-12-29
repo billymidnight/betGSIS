@@ -1,8 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import './Help.css';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+
+interface SopranosReference {
+  characters_by_gender: {
+    Male: Array<{ name: string; married_s3: boolean; age_s3: number }>;
+    Female: Array<{ name: string; married_s3: boolean; age_s3: number }>;
+  };
+  crews: Record<string, Array<{ name: string; s3_position: string | null }>>;
+  bosses: Array<{ name: string; crew: string | null; s3_position: string }>;
+  characters_by_age: Array<{ name: string; age_s3: number; gender: string }>;
+}
+
 export default function Help() {
-  const [tab, setTab] = useState<'basic' | 'terms'>('basic');
+  const [tab, setTab] = useState<'basic' | 'terms' | 'sopranos'>('basic');
+  const [sopranosData, setSopranosData] = useState<SopranosReference | null>(null);
+
+  useEffect(() => {
+    if (tab === 'sopranos' && !sopranosData) {
+      loadSopranosReference();
+    }
+  }, [tab]);
+
+  const loadSopranosReference = async () => {
+    try {
+      const response = await axios.get(`${API_BASE}/api/trading/sopranos/reference`);
+      if (response.data.success) {
+        setSopranosData(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to load Sopranos reference:', error);
+    }
+  };
 
   return (
     <div className="help-page">
@@ -11,6 +42,7 @@ export default function Help() {
         <div className="help-tabs">
           <button className={`help-tab ${tab === 'basic' ? 'active' : ''}`} onClick={() => setTab('basic')}>Basic</button>
           <button className={`help-tab ${tab === 'terms' ? 'active' : ''}`} onClick={() => setTab('terms')}>Terms</button>
+          <button className={`help-tab ${tab === 'sopranos' ? 'active' : ''}`} onClick={() => setTab('sopranos')}>Sopranos</button>
         </div>
       </div>
 
@@ -27,6 +59,109 @@ export default function Help() {
               <li>Statistics such as PnL, bet history, and edge can be viewed on the Portfolio page.</li>
               <li>Kottayam prices will be released soon.</li>
             </ul>
+          </div>
+        ) : tab === 'sopranos' ? (
+          <div className="help-section">
+            <h2 style={{ color: '#fbbf24', marginBottom: '2rem' }}>Sopranos Trading Reference</h2>
+            
+            {!sopranosData ? (
+              <p>Loading...</p>
+            ) : (
+              <>
+                {/* Characters by Gender and Married Status */}
+                <h3 style={{ color: '#f59e0b', marginTop: '2rem', marginBottom: '1rem' }}>All Characters</h3>
+                <table className="sopranos-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Gender</th>
+                      <th>Married (S3)</th>
+                      <th>Age (S3)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(sopranosData.characters_by_gender).map(([gender, chars]) =>
+                      chars.map((char, idx) => (
+                        <tr key={`${gender}-${idx}`}>
+                          <td>{char.name}</td>
+                          <td>{gender}</td>
+                          <td style={{ color: char.married_s3 ? '#10b981' : '#ef4444' }}>
+                            {char.married_s3 ? '✓ Yes' : '✗ No'}
+                          </td>
+                          <td>{char.age_s3}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+
+                {/* Characters by Crew */}
+                <h3 style={{ color: '#f59e0b', marginTop: '2rem', marginBottom: '1rem' }}>Characters by Crew</h3>
+                {Object.entries(sopranosData.crews).map(([crew, members]) => (
+                  <div key={crew} style={{ marginBottom: '2rem' }}>
+                    <h4 style={{ color: '#fbbf24', marginBottom: '0.5rem' }}>{crew}</h4>
+                    <table className="sopranos-table">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Position (S3)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {members.map((member, idx) => (
+                          <tr key={idx}>
+                            <td>{member.name}</td>
+                            <td>{member.s3_position || 'N/A'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+
+                {/* Characters by Age */}
+                <h3 style={{ color: '#f59e0b', marginTop: '2rem', marginBottom: '1rem' }}>Characters by Age</h3>
+                <table className="sopranos-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Age (S3)</th>
+                      <th>Gender</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sopranosData.characters_by_age.map((char, idx) => (
+                      <tr key={idx}>
+                        <td>{char.name}</td>
+                        <td>{char.age_s3}</td>
+                        <td>{char.gender}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Bosses Only */}
+                <h3 style={{ color: '#f59e0b', marginTop: '2rem', marginBottom: '1rem' }}>Bosses Only</h3>
+                <table className="sopranos-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Crew/Family</th>
+                      <th>Position</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sopranosData.bosses.map((boss, idx) => (
+                      <tr key={idx}>
+                        <td>{boss.name}</td>
+                        <td>{boss.crew || 'N/A'}</td>
+                        <td>{boss.s3_position}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
           </div>
         ) : (
           <div className="help-section">

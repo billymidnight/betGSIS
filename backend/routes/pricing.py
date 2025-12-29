@@ -3,7 +3,7 @@ from . import api_bp
 from services.stats_service import stats_for_player
 from services.pricing_service import price_for_thresholds
 from db import get_session
-from services.pricing_service import recompute_all_lines
+from services.pricing_service import recompute_all_lines_supabase
 from .auth_utils import require_book
 
 
@@ -28,13 +28,8 @@ def pricing_recompute_all():
     thresholds = payload.get('thresholds')
     margin = payload.get('marginBps', 0)
 
-    session = get_session()
     try:
-        res = recompute_all_lines(session, thresholds=thresholds, margin_bps=margin)
-        session.commit()
+        res = recompute_all_lines_supabase(thresholds=thresholds, margin_bps=margin)
         return jsonify(res)
     except Exception as e:
-        session.rollback()
         return jsonify({'error': str(e)}), 500
-    finally:
-        session.close()

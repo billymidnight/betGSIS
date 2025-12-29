@@ -160,6 +160,16 @@ export async function updateLock(lockid: number, locked: boolean) {
   return r.data;
 }
 
+export async function fetchTradingLocks() {
+  const r = await api.get('/trading-locks');
+  return r;
+}
+
+export async function updateTradingLock(lock_id: number, locked: boolean) {
+  const r = await api.post('/trading-locks/update', { lock_id, locked });
+  return r.data;
+}
+
 export async function fetchBookkeepingSummary() {
   const r = await api.get('/bookkeeping/summary');
   return r.data;

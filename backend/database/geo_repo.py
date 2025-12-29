@@ -86,3 +86,32 @@ def update_lock_by_id(lockid: int, locked: bool) -> Dict:
         raise Exception('lock not found')
     except Exception:
         raise
+
+
+def fetch_trading_locks_rows() -> List[Dict]:
+    """Return list of trading lock rows with fields: lock_id, lock_name, locked ordered by lock_id."""
+    client = get_supabase_client()
+    try:
+        rc = client.table('trading_locks').select('lock_id,lock_name,locked').order('lock_id').execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        return rows or []
+    except Exception:
+        return []
+
+
+def update_trading_lock_by_id(lock_id: int, locked: bool) -> Dict:
+    """Update a trading lock row by lock_id and return the updated row or raise Exception."""
+    client = get_supabase_client()
+    try:
+        upd = client.table('trading_locks').update({'locked': bool(locked)}).eq('lock_id', int(lock_id)).execute()
+        rows = upd.data if hasattr(upd, 'data') else (upd.get('data') if isinstance(upd, dict) else None)
+        if rows and len(rows) > 0:
+            return rows[0]
+        # If the update succeeded but no representation was returned, fetch the row explicitly.
+        refreshed = client.table('trading_locks').select('lock_id,lock_name,locked').eq('lock_id', int(lock_id)).limit(1).execute()
+        ref_rows = refreshed.data if hasattr(refreshed, 'data') else (refreshed.get('data') if isinstance(refreshed, dict) else None)
+        if ref_rows and len(ref_rows) > 0:
+            return ref_rows[0]
+        raise Exception('trading lock not found')
+    except Exception:
+        raise

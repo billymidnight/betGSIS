@@ -6,6 +6,8 @@ import Home from './pages/Home'
 import Portfolio from './pages/Portfolio'
 import GeoGuessr from './pages/GeoGuessr'
 import Zetamac from './pages/Zetamac'
+import Trading from './pages/Trading'
+import SopranosTrading from './pages/SopranosTrading'
 // Legacy static Bets page kept for reference; prefer `MyBets` for dynamic per-user bets
 import Bets from './pages/Bets'
 import MyBets from './pages/MyBets'
@@ -88,6 +90,28 @@ export default function App() {
             <ProtectedRoute>
               <AppShell>
                 <Zetamac />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/trading"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <Trading />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/trading/sopranos"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <SopranosTrading />
               </AppShell>
             </ProtectedRoute>
           }

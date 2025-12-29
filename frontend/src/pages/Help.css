@@ -15,3 +15,42 @@
 .help-bullets li::marker { font-size:1.15rem; color:var(--color-accent); }
 
 .help-section ul li { margin-bottom:0.7rem }
+/* Sopranos Reference Tables */
+.sopranos-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sopranos-table thead {
+  background: linear-gradient(135deg, #b8860b, #daa520);
+}
+
+.sopranos-table th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 700;
+  color: #000;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sopranos-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e5e5e5;
+  font-size: 0.95rem;
+}
+
+.sopranos-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sopranos-table tbody tr:last-child td {
+  border-bottom: none;
+}

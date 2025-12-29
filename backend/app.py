@@ -1,5 +1,5 @@
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -22,12 +22,37 @@ def create_app():
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Name", "X-User-Role", "ngrok-skip-browser-warning"],
             "supports_credentials": True
+        },
+        r"/sopranos/*": {
+            "origins": [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000" 
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://betgsis2.vercel.app",
+                "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app",
+                "https://betgsis-backend.onrender.com"
+            ],
+            "methods": ["GET"],
+            "allow_headers": ["Content-Type"],
+            "supports_credentials": False
         }
     })
 
     # Register API blueprint
     from api.routes import api_bp
     app.register_blueprint(api_bp)
+    
+    # Register trading blueprint
+    from routes.trading import trading_bp
+    app.register_blueprint(trading_bp)
+    
+    # Serve Sopranos character images
+    @app.route('/sopranos/<path:filename>')
+    def serve_sopranos_image(filename):
+        sopranos_dir = os.path.join(os.path.dirname(__file__), 'sopranos')
+        return send_from_directory(sopranos_dir, filename)
 
     @app.route('/health', methods=['GET'])
     def health():

@@ -965,6 +965,53 @@ def locks_update():
         return jsonify({'error': str(e)}), 500
 
 
+@api_bp.route('/trading-locks', methods=['GET', 'OPTIONS'])
+def trading_locks_status():
+    """Return current lock status for trading games.
+    
+    Returns JSON: { master: bool, locks: [{ lock_id, lock_name, locked }] }
+    """
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    try:
+        from database.geo_repo import fetch_trading_locks_rows  # type: ignore
+        rows = fetch_trading_locks_rows()
+        locks = []
+        master_flag = False
+        for r in rows:
+            lid = r.get('lock_id')
+            lock_name = r.get('lock_name') or ''
+            locked_val = bool(r.get('locked'))
+            locks.append({"lock_id": int(lid) if lid is not None else None, "lock_name": lock_name, "locked": locked_val})
+            if (str(lock_name).strip().lower() == 'master'):
+                master_flag = master_flag or locked_val
+        
+        # Ensure locks are ordered by lock_id (stable)
+        locks_sorted = sorted(locks, key=lambda x: (x.get('lock_id') is None, x.get('lock_id') or 0))
+        return jsonify({"master": bool(master_flag), "locks": locks_sorted}), 200
+    except Exception as e:
+        logging.exception('trading_locks_status error')
+        return jsonify({'master': False, 'locks': [], 'error': str(e)}), 500
+
+
+@api_bp.route('/trading-locks/update', methods=['POST', 'OPTIONS'])
+def trading_locks_update():
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    data = request.get_json(force=True) or {}
+    lock_id = data.get('lock_id')
+    locked = data.get('locked')
+    if lock_id is None or locked is None:
+        return jsonify({'error': 'lock_id and locked required'}), 400
+    try:
+        from database.geo_repo import update_trading_lock_by_id  # type: ignore
+        updated = update_trading_lock_by_id(int(lock_id), bool(locked))
+        return jsonify({'lock': updated}), 200
+    except Exception as e:
+        logging.exception('trading_locks_update error')
+        return jsonify({'error': str(e)}), 500
+
+
 @api_bp.route('/bookkeeping/summary', methods=['GET', 'OPTIONS'])
 def bookkeeping_summary():
     if request.method == 'OPTIONS':
