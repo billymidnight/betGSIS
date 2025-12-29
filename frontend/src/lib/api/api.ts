@@ -161,8 +161,8 @@ export async function updateLock(lockid: number, locked: boolean) {
 }
 
 export async function fetchTradingLocks() {
-  const r = await api.get('/trading-locks');
-  return r;
+  const r = await api.get('/trading/locks');
+  return r.data;
 }
 
 export async function updateTradingLock(lock_id: number, locked: boolean) {
@@ -272,24 +272,9 @@ export async function fetchMonopolyPlayers() {
   return r.data.players || [];
 }
 
-// Trading API functions
-export async function fetchTradingLocks() {
-  const r = await api.get('/trading/locks');
-  return r.data;
-}
-
+// Sopranos Trading API functions
 export async function fetchSopranosReference() {
   const r = await api.get('/trading/sopranos/reference');
-  return r.data;
-}
-
-export async function fetchSopranosCards() {
-  const r = await api.get('/trading/sopranos/cards');
-  return r.data;
-}
-
-export async function fetchSopranosMarkets() {
-  const r = await api.get('/trading/sopranos/markets');
   return r.data;
 }
 
