@@ -15,7 +15,17 @@ import {
 } from '../lib/api/api';
 import './SopranosTrading.css';
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:4000';
+// Get backend base URL for serving images (not the /api endpoint)
+const getBackendBaseUrl = () => {
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (apiUrl) {
+    // Remove /api suffix if present
+    return apiUrl.replace(/\/api$/, '');
+  }
+  return 'http://localhost:4000';
+};
+
+const API_BASE = getBackendBaseUrl();
 
 interface Character {
   character_id: number;
