@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { fetchSopranosReference } from '../lib/api/api';
 import './Help.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
 interface SopranosReference {
   characters_by_gender: {
@@ -26,9 +24,9 @@ export default function Help() {
 
   const loadSopranosReference = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/api/trading/sopranos/reference`);
-      if (response.data.success) {
-        setSopranosData(response.data);
+      const response = await fetchSopranosReference();
+      if (response.success) {
+        setSopranosData(response);
       }
     } catch (error) {
       console.error('Failed to load Sopranos reference:', error);

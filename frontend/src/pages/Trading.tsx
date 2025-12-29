@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { fetchTradingLocks, fetchSopranosReference } from '../lib/api/api';
 import './Trading.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
 export default function Trading() {
   const navigate = useNavigate();
@@ -11,28 +9,28 @@ export default function Trading() {
   const [sopranosCharCount, setSopranosCharCount] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchLocks();
-    fetchSopranosCharCount();
+    loadLocks();
+    loadSopranosCharCount();
   }, []);
 
-  const fetchLocks = async () => {
+  const loadLocks = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/api/trading/locks`);
-      if (response.data.success) {
-        setLocks(response.data.locks);
+      const response = await fetchTradingLocks();
+      if (response.success) {
+        setLocks(response.locks);
       }
     } catch (error) {
       console.error('Failed to fetch locks:', error);
     }
   };
 
-  const fetchSopranosCharCount = async () => {
+  const loadSopranosCharCount = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/api/trading/sopranos/reference`);
-      if (response.data.success) {
+      const response = await fetchSopranosReference();
+      if (response.success) {
         // Count total characters from both Male and Female
-        const males = response.data.characters_by_gender?.Male?.length || 0;
-        const females = response.data.characters_by_gender?.Female?.length || 0;
+        const males = response.characters_by_gender?.Male?.length || 0;
+        const females = response.characters_by_gender?.Female?.length || 0;
         setSopranosCharCount(males + females);
       }
     } catch (error) {

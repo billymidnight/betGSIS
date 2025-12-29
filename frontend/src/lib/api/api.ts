@@ -272,5 +272,71 @@ export async function fetchMonopolyPlayers() {
   return r.data.players || [];
 }
 
+// Trading API functions
+export async function fetchTradingLocks() {
+  const r = await api.get('/trading/locks');
+  return r.data;
+}
+
+export async function fetchSopranosReference() {
+  const r = await api.get('/trading/sopranos/reference');
+  return r.data;
+}
+
+export async function fetchSopranosCards() {
+  const r = await api.get('/trading/sopranos/cards');
+  return r.data;
+}
+
+export async function fetchSopranosMarkets() {
+  const r = await api.get('/trading/sopranos/markets');
+  return r.data;
+}
+
+export async function fetchSopranosCharacters() {
+  const r = await api.get('/trading/sopranos/characters');
+  return r.data;
+}
+
+export async function fetchSopranosStats() {
+  const r = await api.get('/trading/sopranos/stats');
+  return r.data;
+}
+
+export async function drawSopranosCards(numCards: number) {
+  const r = await api.post('/trading/sopranos/draw', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchSopranosGeneralMarkets(numCards: number) {
+  const r = await api.post('/trading/sopranos/markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchSopranosCharacterMarkets(numCards: number) {
+  const r = await api.post('/trading/sopranos/character-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchSopranosCrewMarkets(numCards: number) {
+  const r = await api.post('/trading/sopranos/crew-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchSopranosSpecialMarkets(numCards: number) {
+  const r = await api.post('/trading/sopranos/special-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function settleSopranosBets(drawnCharacters: any[], bets: any[]) {
+  const r = await api.post('/trading/sopranos/settle', { drawn_characters: drawnCharacters, bets });
+  return r.data;
+}
+
+export async function endSopranosSession(sessionData: any) {
+  const r = await api.post('/trading/sopranos/end-session', sessionData);
+  return r.data;
+}
+
 export default api;
 

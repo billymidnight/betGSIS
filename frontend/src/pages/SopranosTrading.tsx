@@ -1,11 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { supabase } from '../lib/supabaseClient';
+import {
+  fetchSopranosCharacters,
+  fetchSopranosStats,
+  fetchTradingLocks,
+  drawSopranosCards,
+  fetchSopranosGeneralMarkets,
+  fetchSopranosCharacterMarkets,
+  fetchSopranosCrewMarkets,
+  fetchSopranosSpecialMarkets,
+  settleSopranosBets,
+  endSopranosSession
+} from '../lib/api/api';
 import './SopranosTrading.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
-console.log('SopranosTrading API_BASE:', API_BASE);
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:4000';
 
 interface Character {
   character_id: number;
@@ -181,8 +191,8 @@ export default function SopranosTrading() {
 
   const loadCharacters = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/api/trading/sopranos/characters`);
-      if (response.data.success) setCharacters(response.data.characters);
+      const response = await fetchSopranosCharacters();
+      if (response.success) setCharacters(response.characters);
     } catch (error) {
       console.error('Failed to load characters:', error);
     }
@@ -190,8 +200,8 @@ export default function SopranosTrading() {
 
   const loadStats = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/api/trading/sopranos/stats`);
-      if (response.data.success) setStats(response.data);
+      const response = await fetchSopranosStats();
+      if (response.success) setStats(response);
     } catch (error) {
       console.error('Failed to load stats:', error);
     }
@@ -199,9 +209,9 @@ export default function SopranosTrading() {
 
   const fetchLocks = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/api/trading/locks`);
-      if (response.data.success) {
-        setLocks(response.data.locks);
+      const response = await fetchTradingLocks();
+      if (response.success) {
+        setLocks(response.locks);
       }
     } catch (error) {
       console.error('Failed to fetch locks:', error);
@@ -225,26 +235,26 @@ export default function SopranosTrading() {
 
   const startNewDraw = async () => {
     try {
-      const drawResponse = await axios.post(`${API_BASE}/api/trading/sopranos/draw`, { num_cards: 3 });
-      if (drawResponse.data.success) {
-        setCards(drawResponse.data.draw);
+      const drawResponse = await drawSopranosCards(3);
+      if (drawResponse.success) {
+        setCards(drawResponse.draw);
         setCardsRevealed(false);
         // Capture num_cards from response
-        const cardsCount = drawResponse.data.num_cards || 3;
+        const cardsCount = drawResponse.num_cards || 3;
         setNumCards(cardsCount);
         
         // Pass num_cards to all market endpoints
-        const marketsResponse = await axios.post(`${API_BASE}/api/trading/sopranos/markets`, { num_cards: cardsCount });
-        if (marketsResponse.data.success) setMarkets(marketsResponse.data.markets);
+        const marketsResponse = await fetchSopranosGeneralMarkets(cardsCount);
+        if (marketsResponse.success) setMarkets(marketsResponse.markets);
 
-        const charMarketsResponse = await axios.post(`${API_BASE}/api/trading/sopranos/character-markets`, { num_cards: cardsCount });
-        if (charMarketsResponse.data.success) setCharacterMarkets(charMarketsResponse.data.character_markets);
+        const charMarketsResponse = await fetchSopranosCharacterMarkets(cardsCount);
+        if (charMarketsResponse.success) setCharacterMarkets(charMarketsResponse.character_markets);
 
-        const crewMarketsResponse = await axios.post(`${API_BASE}/api/trading/sopranos/crew-markets`, { num_cards: cardsCount });
-        if (crewMarketsResponse.data.success) setCrewMarkets(crewMarketsResponse.data.crew_markets);
+        const crewMarketsResponse = await fetchSopranosCrewMarkets(cardsCount);
+        if (crewMarketsResponse.success) setCrewMarkets(crewMarketsResponse.crew_markets);
 
-        const specialMarketsResponse = await axios.post(`${API_BASE}/api/trading/sopranos/special-markets`, { num_cards: cardsCount });
-        if (specialMarketsResponse.data.success) setSpecialMarkets(specialMarketsResponse.data.special_markets);
+        const specialMarketsResponse = await fetchSopranosSpecialMarkets(cardsCount);
+        if (specialMarketsResponse.success) setSpecialMarkets(specialMarketsResponse.special_markets);
       }
 
       setBets([]);
@@ -336,10 +346,10 @@ export default function SopranosTrading() {
     setCardsRevealed(true);
 
     try {
-      const response = await axios.post(`${API_BASE}/api/trading/sopranos/settle`, { drawn_characters: cards, bets: betsToSettle });
+      const response = await settleSopranosBets(cards, betsToSettle);
 
-      if (response.data.success) {
-        const { results, total_pnl } = response.data;
+      if (response.success) {
+        const { results, total_pnl } = response;
         
         // Store bet results for display on each market
         setBetResults(results.map((r: any) => ({
@@ -386,14 +396,10 @@ export default function SopranosTrading() {
         return;
       }
       
-      // Insert bet record into bets table with Authorization header
-      await axios.post(`${API_BASE}/api/trading/sopranos/end-session`, {
+      // Insert bet record into bets table
+      await endSopranosSession({
         num_bets: betsPlaced,
         net_pnl: pnl
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
       });
     } catch (error) {
       console.error('Failed to record session:', error);
