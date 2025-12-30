@@ -160,11 +160,14 @@ export default function SopranosTrading() {
   const [showBankrollPopup, setShowBankrollPopup] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [showNextDrawButton, setShowNextDrawButton] = useState(false);
+  const [showEndSessionModal, setShowEndSessionModal] = useState(false);
   
   const [bankroll, setBankroll] = useState(0);
   const [balance, setBalance] = useState(0);
   const [betsPlaced, setBetsPlaced] = useState(0);
   const [amountWagered, setAmountWagered] = useState(0);
+  const [sessionBetsPlaced, setSessionBetsPlaced] = useState(0);
+  const [sessionAmountWagered, setSessionAmountWagered] = useState(0);
   
   const [cards, setCards] = useState<Character[]>([]);
   const [cardsRevealed, setCardsRevealed] = useState(false);
@@ -238,6 +241,8 @@ export default function SopranosTrading() {
     
     setBankroll(selectedBankroll);
     setBalance(selectedBankroll);
+    setSessionBetsPlaced(0);
+    setSessionAmountWagered(0);
     setShowBankrollPopup(false);
     setView('session');
     await startNewDraw();
@@ -340,6 +345,10 @@ export default function SopranosTrading() {
     setBetsPlaced(newBets.length);
     setAmountWagered(totalWagered);
     
+    // Accumulate session stats
+    setSessionBetsPlaced(prev => prev + newBets.length);
+    setSessionAmountWagered(prev => prev + totalWagered);
+    
     // Auto-submit after placing all bets
     setTimeout(() => handleSubmit(newBets), 100);
   };
@@ -381,9 +390,9 @@ export default function SopranosTrading() {
         if (newBalance > 0) {
           setShowNextDrawButton(true);
         } else {
+          // Busted - pass true flag to endSession
           setTimeout(() => {
-            alert('Bankroll busted!');
-            endSession();
+            endSession(true);
           }, 1500);
         }
       }
@@ -392,30 +401,26 @@ export default function SopranosTrading() {
     }
   };
 
-  const endSession = async () => {
-    const pnl = balance - bankroll;
+  const endSession = async (isBust: boolean = false) => {
+    // If busted, P&L is simply negative bankroll (total loss)
+    const finalPnl = isBust ? -bankroll : (balance - bankroll);
     
     try {
-      // Get JWT token from Supabase session
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      
-      if (!token) {
-        console.error('No authentication token found');
-        alert('Session could not be recorded. Please sign in.');
-        return;
-      }
-      
       // Insert bet record into bets table
       await endSopranosSession({
-        num_bets: betsPlaced,
-        net_pnl: pnl
+        num_bets: sessionBetsPlaced,
+        net_pnl: finalPnl
       });
+      
+      setShowEndSessionModal(true);
     } catch (error) {
       console.error('Failed to record session:', error);
+      alert('Session could not be recorded. Please ensure you are signed in.');
     }
-    
-    alert(`Session ended!\nStarting: $${bankroll}\nEnding: $${balance.toFixed(2)}\nP&L: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`);
+  };
+
+  const closeEndSessionModal = () => {
+    setShowEndSessionModal(false);
     setView('landing');
     loadStats();
   };
@@ -612,6 +617,45 @@ export default function SopranosTrading() {
               </div>
             </div>
           )}
+
+          {showEndSessionModal && (
+            <div className="modal-overlay">
+              <div className="modal-content" style={{ maxWidth: '500px' }}>
+                <h2 className="modal-title" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                  {balance === 0 ? '💸 Bankroll Busted!' : 'Session Ended'}
+                </h2>
+                <div style={{ marginBottom: '2rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', borderBottom: '1px solid #374151' }}>
+                    <span style={{ color: '#9ca3af' }}>Starting Bankroll:</span>
+                    <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>${bankroll.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', borderBottom: '1px solid #374151' }}>
+                    <span style={{ color: '#9ca3af' }}>Ending Balance:</span>
+                    <span style={{ color: balance === 0 ? '#ef4444' : '#fbbf24', fontWeight: 'bold' }}>${balance.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', borderBottom: '1px solid #374151' }}>
+                    <span style={{ color: '#9ca3af' }}>Total Bets:</span>
+                    <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{sessionBetsPlaced}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', borderBottom: '1px solid #374151' }}>
+                    <span style={{ color: '#9ca3af' }}>Total Wagered:</span>
+                    <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>${sessionAmountWagered.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem 0', marginTop: '0.5rem' }}>
+                    <span style={{ fontSize: '1.125rem', fontWeight: 'bold' }}>Net P&L:</span>
+                    <span style={{ 
+                      fontSize: '1.5rem', 
+                      fontWeight: 'bold',
+                      color: (balance - bankroll) >= 0 ? '#10b981' : '#ef4444'
+                    }}>
+                      {(balance - bankroll) >= 0 ? '+' : ''}${(balance - bankroll).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <button onClick={closeEndSessionModal} className="btn-primary" style={{ width: '100%' }}>Back to Menu</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -641,11 +685,11 @@ export default function SopranosTrading() {
             </div>
             <div className="session-stat">
               <div className="session-stat-label">Bets Placed</div>
-              <div className="session-stat-value" style={{ color: '#fbbf24' }}>{betsPlaced}</div>
+              <div className="session-stat-value" style={{ color: '#fbbf24' }}>{sessionBetsPlaced}</div>
             </div>
             <div className="session-stat">
               <div className="session-stat-label">Amount Wagered</div>
-              <div className="session-stat-value" style={{ color: '#fbbf24' }}>${amountWagered.toFixed(2)}</div>
+              <div className="session-stat-value" style={{ color: '#fbbf24' }}>${sessionAmountWagered.toFixed(2)}</div>
             </div>
           </div>
           <div className="session-controls">
@@ -1008,6 +1052,45 @@ export default function SopranosTrading() {
           </div>
         </div>
       </div>
+
+      {showEndSessionModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <h2 className="modal-title" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+              {balance === 0 ? '💸 Bankroll Busted!' : '✅ Session Concluded'}
+            </h2>
+            <div style={{ marginBottom: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', borderBottom: '1px solid #374151' }}>
+                <span style={{ color: '#9ca3af' }}>Starting Bankroll:</span>
+                <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>${bankroll.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', borderBottom: '1px solid #374151' }}>
+                <span style={{ color: '#9ca3af' }}>Ending Balance:</span>
+                <span style={{ color: balance === 0 ? '#ef4444' : '#fbbf24', fontWeight: 'bold' }}>${balance.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', borderBottom: '1px solid #374151' }}>
+                <span style={{ color: '#9ca3af' }}>Total Bets:</span>
+                <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{sessionBetsPlaced}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', borderBottom: '1px solid #374151' }}>
+                <span style={{ color: '#9ca3af' }}>Total Wagered:</span>
+                <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>${sessionAmountWagered.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem 0', marginTop: '0.5rem' }}>
+                <span style={{ fontSize: '1.125rem', fontWeight: 'bold' }}>Net P&L:</span>
+                <span style={{ 
+                  fontSize: '1.5rem', 
+                  fontWeight: 'bold',
+                  color: (balance - bankroll) >= 0 ? '#10b981' : '#ef4444'
+                }}>
+                  {(balance - bankroll) >= 0 ? '+' : ''}${(balance - bankroll).toFixed(2)}
+                </span>
+              </div>
+            </div>
+            <button onClick={closeEndSessionModal} className="btn-primary" style={{ width: '100%' }}>Back to Menu</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
