@@ -37,6 +37,21 @@ def create_app():
             "methods": ["GET"],
             "allow_headers": ["Content-Type"],
             "supports_credentials": False
+        },
+        r"/breakingbad/*": {
+            "origins": [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000" 
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://betgsis2.vercel.app",
+                "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app",
+                "https://betgsis-backend.onrender.com"
+            ],
+            "methods": ["GET"],
+            "allow_headers": ["Content-Type"],
+            "supports_credentials": False
         }
     })
 
@@ -48,11 +63,21 @@ def create_app():
     from routes.trading import trading_bp
     app.register_blueprint(trading_bp)
     
+    # Register breaking bad trading blueprint
+    from routes.breakingbad import breakingbad_bp
+    app.register_blueprint(breakingbad_bp)
+    
     # Serve Sopranos character images
     @app.route('/sopranos/<path:filename>')
     def serve_sopranos_image(filename):
         sopranos_dir = os.path.join(os.path.dirname(__file__), 'sopranos')
         return send_from_directory(sopranos_dir, filename)
+    
+    # Serve Breaking Bad character images
+    @app.route('/breakingbad/<path:filename>')
+    def serve_breakingbad_image(filename):
+        breakingbad_dir = os.path.join(os.path.dirname(__file__), 'breakingbad')
+        return send_from_directory(breakingbad_dir, filename)
 
     @app.route('/health', methods=['GET'])
     def health():
