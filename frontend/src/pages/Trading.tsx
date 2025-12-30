@@ -48,12 +48,12 @@ export default function Trading() {
   };
 
   const handleBreakingBadClick = (e: React.MouseEvent) => {
-    e.preventDefault();
     if (locks.master) {
+      e.preventDefault();
       alert('🔒 betGSIS traders have locked all trading games');
-    } else {
-      alert('Coming soon...');
+      return;
     }
+    // Let Link handle navigation if not locked
   };
 
   return (
@@ -89,29 +89,29 @@ export default function Trading() {
             </div>
           </Link>
 
-          {/* Breaking Bad Trading - Coming Soon */}
-          <div 
-            className={`trading-card breaking-bad-card disabled ${locks.master ? 'locked' : ''}`}
+          {/* Breaking Bad Trading */}
+          <Link 
+            to="/trading/breaking-bad" 
+            className={`trading-card breaking-bad-card ${locks.master ? 'disabled' : ''}`}
             onClick={handleBreakingBadClick}
-            style={{ cursor: 'pointer' }}
           >
             <div className="trading-card-content">
               <div className="trading-card-header">
                 <h2 className="trading-card-title">
                   Breaking Bad {locks.master && '🔒'}
                 </h2>
-                <span className="badge badge-coming-soon">COMING SOON</span>
+                <span className="badge badge-active">ACTIVE</span>
               </div>
               <p className="trading-card-description">
-                Trade character cards from the Albuquerque underworld. Coming soon...
+                Trade character cards from the Emmy-winning series. Bet on families, Emmy winners, and survival odds.
               </p>
               <div className="trading-card-features">
-                <span className="feature-item">• TBD Characters</span>
-                <span className="feature-item">• DEA vs Cartel</span>
-                <span className="feature-item">• Chemistry Markets</span>
+                <span className="feature-item">• 27 Characters</span>
+                <span className="feature-item">• Multiple Markets</span>
+                <span className="feature-item">• Real-time Odds</span>
               </div>
             </div>
-          </div>
+          </Link>
         </div>
       </div>
     </div>

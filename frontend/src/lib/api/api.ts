@@ -319,7 +319,77 @@ export async function settleSopranosBets(drawnCharacters: any[], bets: any[]) {
 }
 
 export async function endSopranosSession(sessionData: any) {
-  const r = await api.post('/trading/sopranos/end-session', sessionData);
+  // Get JWT token from Supabase session
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  
+  if (!token) {
+    throw new Error('No authentication token found');
+  }
+  
+  const r = await api.post('/trading/sopranos/end-session', sessionData, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return r.data;
+}
+
+// Breaking Bad Trading API functions
+export async function fetchBreakingBadCharacters() {
+  const r = await api.get('/trading/breakingbad/characters');
+  return r.data;
+}
+
+export async function fetchBreakingBadStats() {
+  const r = await api.get('/trading/breakingbad/stats');
+  return r.data;
+}
+
+export async function drawBreakingBadCards(numCards: number) {
+  const r = await api.post('/trading/breakingbad/draw', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchBreakingBadGeneralMarkets(numCards: number) {
+  const r = await api.post('/trading/breakingbad/markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchBreakingBadCharacterMarkets(numCards: number) {
+  const r = await api.post('/trading/breakingbad/character-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchBreakingBadCrewMarkets(numCards: number) {
+  const r = await api.post('/trading/breakingbad/crew-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchBreakingBadSpecialMarkets(numCards: number) {
+  const r = await api.post('/trading/breakingbad/special-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function settleBreakingBadBets(drawnCharacters: any[], bets: any[]) {
+  const r = await api.post('/trading/breakingbad/settle', { drawn_characters: drawnCharacters, bets });
+  return r.data;
+}
+
+export async function endBreakingBadSession(sessionData: any) {
+  // Get JWT token from Supabase session
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  
+  if (!token) {
+    throw new Error('No authentication token found');
+  }
+  
+  const r = await api.post('/trading/breakingbad/end-session', sessionData, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
   return r.data;
 }
 

@@ -60,7 +60,7 @@
 }
 
 .stat-value.positive {
-  color: #10b981;
+  color: #fbbf24;
 }
 
 .stat-value.negative {
@@ -455,7 +455,7 @@
 }
 
 .session-stat-value.balance.low {
-  color: #fbbf24;
+  color: #10b981;
 }
 
 .session-stat-value.balance.critical {
@@ -482,7 +482,7 @@
 }
 
 .timer.normal {
-  color: #10b981;
+  color: #fbbf24;
 }
 
 .timer.warning {
@@ -767,7 +767,7 @@
 
 .expected-payout {
   font-size: 0.7rem;
-  color: #10b981;
+  color: #fbbf24;
   margin-top: 0.15rem;
   font-weight: 600;
 }

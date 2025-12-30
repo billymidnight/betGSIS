@@ -2,18 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import {
-  fetchSopranosCharacters,
-  fetchSopranosStats,
+  fetchBreakingBadCharacters,
+  fetchBreakingBadStats,
   fetchTradingLocks,
-  drawSopranosCards,
-  fetchSopranosGeneralMarkets,
-  fetchSopranosCharacterMarkets,
-  fetchSopranosCrewMarkets,
-  fetchSopranosSpecialMarkets,
-  settleSopranosBets,
-  endSopranosSession
+  drawBreakingBadCards,
+  fetchBreakingBadGeneralMarkets,
+  fetchBreakingBadCharacterMarkets,
+  fetchBreakingBadCrewMarkets,
+  fetchBreakingBadSpecialMarkets,
+  settleBreakingBadBets,
+  endBreakingBadSession
 } from '../lib/api/api';
-import './SopranosTrading.css';
+import './BreakingBadTrading.css';
 
 // Get backend base URL for serving images (not the /api endpoint)
 const getBackendBaseUrl = () => {
@@ -31,13 +31,12 @@ interface Character {
   character_id: number;
   name: string;
   img_filename: string;
+  age: number;
   gender: string;
-  season_died: number;
-  crew: string | null;
-  s3_position: string | null;
-  age_s3: number;
-  ever_captain: boolean;
-  married_s1: boolean;
+  was_lawyer: boolean;
+  won_emmy: boolean;
+  family: string | null;
+  survived: boolean;
 }
 
 interface Market {
@@ -81,7 +80,7 @@ interface CrewMarket {
 
 const Card: React.FC<{ character: Character | null; faceDown: boolean }> = ({ character, faceDown }) => {
   if (faceDown) {
-    const faceDownImageUrl = `${API_BASE}/sopranos/facedown.png`;
+    const faceDownImageUrl = `${API_BASE}/breakingbad/facedown.png`;
     return (
       <div className="card card-face-down">
         <img 
@@ -95,7 +94,7 @@ const Card: React.FC<{ character: Character | null; faceDown: boolean }> = ({ ch
 
   if (!character) return null;
 
-  const imageUrl = `${API_BASE}/sopranos/${character.img_filename}`;
+  const imageUrl = `${API_BASE}/breakingbad/${character.img_filename}`;
   console.log('Loading image:', imageUrl);
 
   return (
@@ -123,38 +122,46 @@ const Card: React.FC<{ character: Character | null; faceDown: boolean }> = ({ ch
             <div className="card-stat-value">{character.gender === 'M' ? 'Male' : 'Female'}</div>
           </div>
           <div className="card-stat">
-            <div className="card-stat-label">Age (S3)</div>
-            <div className="card-stat-value">{character.age_s3}</div>
+            <div className="card-stat-label">Age</div>
+            <div className="card-stat-value">{character.age}</div>
           </div>
         </div>
 
         <div className="card-stat-row">
           <div className="card-stat">
-            <div className="card-stat-label">Crew</div>
+            <div className="card-stat-label">Family</div>
             <div className="card-stat-value" style={{ fontSize: '0.75rem' }}>
-              {character.crew || 'Civilian'}
+              {character.family || 'None'}
             </div>
           </div>
           <div className="card-stat">
-            <div className="card-stat-label">Married (S1)</div>
+            <div className="card-stat-label">Won Emmy</div>
             <div className="card-stat-value">
-              {character.married_s1 ? '✓' : '✗'}
+              {character.won_emmy ? '✓' : '✗'}
             </div>
           </div>
         </div>
 
-        {character.s3_position && (
-          <div className="card-position">
-            <div className="card-stat-label">Position</div>
-            <div className="card-stat-value" style={{ fontSize: '0.875rem' }}>{character.s3_position}</div>
+        <div className="card-stat-row">
+          <div className="card-stat">
+            <div className="card-stat-label">Lawyer</div>
+            <div className="card-stat-value">
+              {character.was_lawyer ? '✓' : '✗'}
+            </div>
           </div>
-        )}
+          <div className="card-stat">
+            <div className="card-stat-label">Survived</div>
+            <div className="card-stat-value">
+              {character.survived ? '✓' : '✗'}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-export default function SopranosTrading() {
+export default function BreakingBadTrading() {
   const navigate = useNavigate();
   const [view, setView] = useState<'landing' | 'session'>('landing');
   const [showBankrollPopup, setShowBankrollPopup] = useState(false);
@@ -204,7 +211,7 @@ export default function SopranosTrading() {
 
   const loadCharacters = async () => {
     try {
-      const response = await fetchSopranosCharacters();
+      const response = await fetchBreakingBadCharacters();
       if (response.success) setCharacters(response.characters);
     } catch (error) {
       console.error('Failed to load characters:', error);
@@ -213,7 +220,7 @@ export default function SopranosTrading() {
 
   const loadStats = async () => {
     try {
-      const response = await fetchSopranosStats();
+      const response = await fetchBreakingBadStats();
       if (response.success) setStats(response);
     } catch (error) {
       console.error('Failed to load stats:', error);
@@ -250,7 +257,7 @@ export default function SopranosTrading() {
 
   const startNewDraw = async () => {
     try {
-      const drawResponse = await drawSopranosCards(3);
+      const drawResponse = await drawBreakingBadCards(3);
       if (drawResponse.success) {
         setCards(drawResponse.draw);
         setCardsRevealed(false);
@@ -259,16 +266,16 @@ export default function SopranosTrading() {
         setNumCards(cardsCount);
         
         // Pass num_cards to all market endpoints
-        const marketsResponse = await fetchSopranosGeneralMarkets(cardsCount);
+        const marketsResponse = await fetchBreakingBadGeneralMarkets(cardsCount);
         if (marketsResponse.success) setMarkets(marketsResponse.markets);
 
-        const charMarketsResponse = await fetchSopranosCharacterMarkets(cardsCount);
+        const charMarketsResponse = await fetchBreakingBadCharacterMarkets(cardsCount);
         if (charMarketsResponse.success) setCharacterMarkets(charMarketsResponse.character_markets);
 
-        const crewMarketsResponse = await fetchSopranosCrewMarkets(cardsCount);
+        const crewMarketsResponse = await fetchBreakingBadCrewMarkets(cardsCount);
         if (crewMarketsResponse.success) setCrewMarkets(crewMarketsResponse.crew_markets);
 
-        const specialMarketsResponse = await fetchSopranosSpecialMarkets(cardsCount);
+        const specialMarketsResponse = await fetchBreakingBadSpecialMarkets(cardsCount);
         if (specialMarketsResponse.success) setSpecialMarkets(specialMarketsResponse.special_markets);
       }
 
@@ -365,7 +372,7 @@ export default function SopranosTrading() {
     setCardsRevealed(true);
 
     try {
-      const response = await settleSopranosBets(cards, betsToSettle);
+      const response = await settleBreakingBadBets(cards, betsToSettle);
 
       if (response.success) {
         const { results, total_pnl } = response;
@@ -402,13 +409,12 @@ export default function SopranosTrading() {
   };
 
   const endSession = async (isBust: boolean = false) => {
-    // If busted (balance is 0), P&L is simply negative bankroll (total loss)
-    // Otherwise, calculate normally as balance - bankroll
-    const finalPnl = (isBust || balance === 0) ? -bankroll : (balance - bankroll);
+    // Always use the exact P&L shown in the popup: balance - bankroll
+    const finalPnl = balance - bankroll;
     
     try {
       // Insert bet record into bets table
-      await endSopranosSession({
+      await endBreakingBadSession({
         num_bets: sessionBetsPlaced,
         net_pnl: finalPnl
       });
@@ -432,8 +438,8 @@ export default function SopranosTrading() {
         <div className="sopranos-content">
           <div style={{ marginBottom: '2rem' }}>
             <a onClick={() => navigate('/trading')} className="back-button" style={{ cursor: 'pointer' }}>← Back to Trading</a>
-            <h1 className="sopranos-title">The Sopranos Trading</h1>
-            <p className="sopranos-subtitle">Trade character cards from the iconic HBO series</p>
+            <h1 className="sopranos-title">Breaking Bad Trading</h1>
+            <p className="sopranos-subtitle">Trade character cards from the Emmy-winning series</p>
           </div>
 
           <div className="stats-grid">
@@ -459,9 +465,9 @@ export default function SopranosTrading() {
                 <div className="info-item">Total Characters: <span className="info-value">{characters.length}</span></div>
                 <div className="info-item">Male: <span className="info-value">{characters.filter(c => c.gender === 'M').length}</span></div>
                 <div className="info-item">Female: <span className="info-value">{characters.filter(c => c.gender === 'F').length}</span></div>
-                <div className="info-item">Ever Captain: <span className="info-value">{characters.filter(c => c.ever_captain).length}</span></div>
-                <div className="info-item">Survived Series: <span className="info-value">{characters.filter(c => c.season_died === 0).length}</span></div>
-                <div className="info-item">Married (S3): <span className="info-value">{characters.filter(c => c.married_s3).length}</span></div>
+                <div className="info-item">Lawyers: <span className="info-value">{characters.filter(c => c.was_lawyer).length}</span></div>
+                <div className="info-item">Survivors: <span className="info-value">{characters.filter(c => c.survived).length}</span></div>
+                <div className="info-item">Emmy Winners: <span className="info-value">{characters.filter(c => c.won_emmy).length}</span></div>
               </div>
             </div>
           )}
@@ -496,25 +502,27 @@ export default function SopranosTrading() {
 
                   <h4 style={{ marginTop: '1.5rem', marginBottom: '0.5rem', color: '#fbbf24' }}>All Characters</h4>
                   <div style={{ marginBottom: '1rem', display: 'flex', gap: '2rem', fontSize: '0.95rem', fontWeight: '600' }}>
-                    <div>Survived: {characters.filter(c => c.season_died === 0).length}</div>
-                    <div>Died: {characters.filter(c => c.season_died !== 0).length}</div>
-                    <div>Married: {characters.filter(c => c.married_s1).length}</div>
-                    <div>Not Married: {characters.filter(c => !c.married_s1).length}</div>
+                    <div>Survived: {characters.filter(c => c.survived).length}</div>
+                    <div>Dead: {characters.filter(c => !c.survived).length}</div>
+                    <div>Lawyers: {characters.filter(c => c.was_lawyer).length}</div>
+                    <div>Emmy Winners: {characters.filter(c => c.won_emmy).length}</div>
                   </div>
                   <table className="stats-table">
                     <thead>
                       <tr>
                         <th>Name</th>
-                        <th>Married (S1)</th>
-                        <th>Survived Series</th>
+                        <th>Lawyer</th>
+                        <th>Emmy Winner</th>
+                        <th>Survived</th>
                       </tr>
                     </thead>
                     <tbody>
                       {characters.sort((a, b) => a.name.localeCompare(b.name)).map(char => (
                         <tr key={char.character_id}>
                           <td>{char.name}</td>
-                          <td style={{ textAlign: 'center' }}>{char.married_s1 ? '✓' : '✗'}</td>
-                          <td style={{ textAlign: 'center' }}>{char.season_died === 0 ? '✓' : '✗'}</td>
+                          <td style={{ textAlign: 'center' }}>{char.was_lawyer ? '✓' : '✗'}</td>
+                          <td style={{ textAlign: 'center' }}>{char.won_emmy ? '✓' : '✗'}</td>
+                          <td style={{ textAlign: 'center' }}>{char.survived ? '✓' : '✗'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -719,7 +727,7 @@ export default function SopranosTrading() {
               </div>
               {cardsRevealed && (
                 <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '1.3rem', fontWeight: '700', color: '#fbbf24' }}>
-                  Combined Age: {cards.reduce((sum, card) => sum + (card?.age_s3 || 0), 0)}
+                  Combined Age: {cards.reduce((sum, card) => sum + (card?.age || 0), 0)}
                 </div>
               )}
               {!cardsRevealed && (

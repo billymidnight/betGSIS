@@ -88,7 +88,7 @@
 }
 
 .breaking-bad-card {
-  background-image: url('http://localhost:4000/sopranos/brbabg.jpg');
+  background-image: url('http://localhost:4000/breakingbad/brba.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -102,8 +102,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.75) 100%);
-  filter: grayscale(100%);
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.55) 100%);
   z-index: 1;
 }
 
@@ -121,6 +120,16 @@
 .breaking-bad-card .trading-card-content {
   position: relative;
   z-index: 3;
+}
+
+.breaking-bad-card:hover {
+  border-color: #10b981;
+  transform: scale(1.02);
+  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+}
+
+.breaking-bad-card:hover::before {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.45) 100%);
 }
 
 .disabled {
