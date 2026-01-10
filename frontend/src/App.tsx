@@ -9,6 +9,7 @@ import Zetamac from './pages/Zetamac'
 import Trading from './pages/Trading'
 import SopranosTrading from './pages/SopranosTrading'
 import BreakingBadTrading from './pages/BreakingBadTrading'
+import HarryPotterTrading from './pages/HarryPotterTrading'
 // Legacy static Bets page kept for reference; prefer `MyBets` for dynamic per-user bets
 import Bets from './pages/Bets'
 import MyBets from './pages/MyBets'
@@ -124,6 +125,17 @@ export default function App() {
             <ProtectedRoute>
               <AppShell>
                 <BreakingBadTrading />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/trading/harry-potter"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <HarryPotterTrading />
               </AppShell>
             </ProtectedRoute>
           }

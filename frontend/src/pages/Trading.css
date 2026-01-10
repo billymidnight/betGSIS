@@ -132,6 +132,51 @@
   background: linear-gradient(135deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.45) 100%);
 }
 
+.harry-potter-card {
+  background-image: url('http://localhost:4000/harrypotter/mainbg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+}
+
+.harry-potter-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.55) 100%);
+  z-index: 1;
+}
+
+.harry-potter-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(88, 28, 135, 0.2) 0%, rgba(29, 78, 216, 0.2) 100%);
+  z-index: 2;
+}
+
+.harry-potter-card .trading-card-content {
+  position: relative;
+  z-index: 3;
+}
+
+.harry-potter-card:hover {
+  border-color: #a78bfa;
+  transform: scale(1.02);
+  box-shadow: 0 10px 30px rgba(167, 139, 250, 0.3);
+}
+
+.harry-potter-card:hover::before {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.45) 100%);
+}
+
 .disabled {
   opacity: 0.5;
   pointer-events: none;
@@ -157,6 +202,11 @@
 
 .breaking-bad-card .trading-card-title {
   color: #10b981;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.harry-potter-card .trading-card-title {
+  color: #a78bfa;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
 }
 

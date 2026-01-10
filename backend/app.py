@@ -12,7 +12,7 @@ def create_app():
             "origins": [
                 "http://localhost:3000",
                 "http://localhost:3001",
-                "http://127.0.0.1:3000" 
+                "http://127.0.0.1:3000",
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
                 "https://betgsis2.vercel.app",
@@ -27,7 +27,7 @@ def create_app():
             "origins": [
                 "http://localhost:3000",
                 "http://localhost:3001",
-                "http://127.0.0.1:3000" 
+                "http://127.0.0.1:3000",
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
                 "https://betgsis2.vercel.app",
@@ -38,19 +38,64 @@ def create_app():
             "allow_headers": ["Content-Type"],
             "supports_credentials": False
         },
-        r"/breakingbad/*": {
+        r"/api/trading/breakingbad/*": {
             "origins": [
                 "http://localhost:3000",
                 "http://localhost:3001",
-                "http://127.0.0.1:3000" 
+                "http://127.0.0.1:3000",
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
                 "https://betgsis2.vercel.app",
                 "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app",
                 "https://betgsis-backend.onrender.com"
             ],
-            "methods": ["GET"],
-            "allow_headers": ["Content-Type"],
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Name", "X-User-Role"],
+            "supports_credentials": False
+        },
+        r"/api/trading/harrypotter/*": {
+            "origins": [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://betgsis2.vercel.app",
+                "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app",
+                "https://betgsis-backend.onrender.com"
+            ],
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Name", "X-User-Role"],
+            "supports_credentials": False
+        },
+        r"/breakingbad/*": {
+            "origins": [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://betgsis2.vercel.app",
+                "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app",
+                "https://betgsis-backend.onrender.com"
+            ],
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": False
+        },
+        r"/harrypotter/*": {
+            "origins": [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://betgsis2.vercel.app",
+                "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app",
+                "https://betgsis-backend.onrender.com"
+            ],
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
             "supports_credentials": False
         }
     })
@@ -67,6 +112,10 @@ def create_app():
     from routes.breakingbad import breakingbad_bp
     app.register_blueprint(breakingbad_bp)
     
+    # Register harry potter trading blueprint
+    from routes.harrypotter import harrypotter_bp
+    app.register_blueprint(harrypotter_bp)
+    
     # Serve Sopranos character images
     @app.route('/sopranos/<path:filename>')
     def serve_sopranos_image(filename):
@@ -78,6 +127,12 @@ def create_app():
     def serve_breakingbad_image(filename):
         breakingbad_dir = os.path.join(os.path.dirname(__file__), 'breakingbad')
         return send_from_directory(breakingbad_dir, filename)
+    
+    # Serve Harry Potter character images
+    @app.route('/harrypotter/<path:filename>')
+    def serve_harrypotter_image(filename):
+        harrypotter_dir = os.path.join(os.path.dirname(__file__), 'harrypotter')
+        return send_from_directory(harrypotter_dir, filename)
 
     @app.route('/health', methods=['GET'])
     def health():

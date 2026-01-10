@@ -5,7 +5,7 @@ import './Trading.css';
 
 export default function Trading() {
   const navigate = useNavigate();
-  const [locks, setLocks] = useState({ master: false, sopranos: false, breaking_bad: false });
+  const [locks, setLocks] = useState({ master: false, sopranos: false, breaking_bad: false, harry_potter: false });
   const [sopranosCharCount, setSopranosCharCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -107,6 +107,35 @@ export default function Trading() {
               </p>
               <div className="trading-card-features">
                 <span className="feature-item">• 27 Characters</span>
+                <span className="feature-item">• Multiple Markets</span>
+                <span className="feature-item">• Real-time Odds</span>
+              </div>
+            </div>
+          </Link>
+
+          {/* Harry Potter Trading */}
+          <Link 
+            to="/trading/harry-potter" 
+            className={`trading-card harry-potter-card ${locks.master ? 'disabled' : ''}`}
+            onClick={(e) => {
+              if (locks.master) {
+                e.preventDefault();
+                alert('🔒 betGSIS traders have locked all trading games');
+              }
+            }}
+          >
+            <div className="trading-card-content">
+              <div className="trading-card-header">
+                <h2 className="trading-card-title">
+                  Harry Potter {locks.master && '🔒'}
+                </h2>
+                <span className="badge badge-active">ACTIVE</span>
+              </div>
+              <p className="trading-card-description">
+                Trade character cards from the wizarding world. Bet on Hogwarts houses, teachers, and magical fates.
+              </p>
+              <div className="trading-card-features">
+                <span className="feature-item">• 38 Characters</span>
                 <span className="feature-item">• Multiple Markets</span>
                 <span className="feature-item">• Real-time Odds</span>
               </div>

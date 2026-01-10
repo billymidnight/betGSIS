@@ -362,7 +362,7 @@ export async function fetchBreakingBadCharacterMarkets(numCards: number) {
 }
 
 export async function fetchBreakingBadCrewMarkets(numCards: number) {
-  const r = await api.post('/trading/breakingbad/crew-markets', { num_cards: numCards });
+  const r = await api.post('/trading/breakingbad/house-markets', { num_cards: numCards });
   return r.data;
 }
 
@@ -372,11 +372,14 @@ export async function fetchBreakingBadSpecialMarkets(numCards: number) {
 }
 
 export async function settleBreakingBadBets(drawnCharacters: any[], bets: any[]) {
-  const r = await api.post('/trading/breakingbad/settle', { drawn_characters: drawnCharacters, bets });
+  const r = await api.post('/trading/breakingbad/settle', {
+    drawn_characters: drawnCharacters,
+    bets: bets
+  });
   return r.data;
 }
 
-export async function endBreakingBadSession(sessionData: any) {
+export async function endBreakingBadSession(data: { num_bets: number; net_pnl: number }) {
   // Get JWT token from Supabase session
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -385,7 +388,68 @@ export async function endBreakingBadSession(sessionData: any) {
     throw new Error('No authentication token found');
   }
   
-  const r = await api.post('/trading/breakingbad/end-session', sessionData, {
+  const r = await api.post('/trading/breakingbad/end-session', data, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return r.data;
+}
+
+// ====== Harry Potter Trading API ======
+export async function fetchHarryPotterCharacters() {
+  const r = await api.get('/trading/harrypotter/characters');
+  return r.data;
+}
+
+export async function fetchHarryPotterStats() {
+  const r = await api.get('/trading/harrypotter/stats');
+  return r.data;
+}
+
+export async function drawHarryPotterCards(numCards: number) {
+  const r = await api.post('/trading/harrypotter/draw', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchHarryPotterGeneralMarkets(numCards: number) {
+  const r = await api.post('/trading/harrypotter/markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchHarryPotterCharacterMarkets(numCards: number) {
+  const r = await api.post('/trading/harrypotter/character-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchHarryPotterHouseMarkets(numCards: number) {
+  const r = await api.post('/trading/harrypotter/house-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchHarryPotterSpecialMarkets(numCards: number) {
+  const r = await api.post('/trading/harrypotter/special-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function settleHarryPotterBets(drawnCharacters: any[], bets: any[]) {
+  const r = await api.post('/trading/harrypotter/settle', {
+    drawn_characters: drawnCharacters,
+    bets: bets
+  });
+  return r.data;
+}
+
+export async function endHarryPotterSession(data: { num_bets: number; net_pnl: number }) {
+  // Get JWT token from Supabase session
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  
+  if (!token) {
+    throw new Error('No authentication token found');
+  }
+  
+  const r = await api.post('/trading/harrypotter/end-session', data, {
     headers: {
       'Authorization': `Bearer ${token}`
     }
