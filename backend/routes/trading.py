@@ -61,37 +61,76 @@ def calculate_probability(deck: List[Dict], condition_func, num_cards: int) -> f
 
 
 def decimal_to_american(decimal_odds: float) -> int:
-    """Convert decimal odds to American odds with bookie-favorable rounding"""
+    """Convert decimal odds to American odds with bookie-favorable rounding
+    
+    Rounding rules (always in bookie's favor):
+    - Between ±300 and ±1000: round to nearest 10
+    - Between ±1000 and ±10000: round to nearest 100
+    - Positive odds: floor (round down)
+    - Negative odds: ceiling abs value (round up in absolute value, more negative)
+    """
     if decimal_odds >= 2.0:
         american = int((decimal_odds - 1) * 100)
     else:
         american = int(-100 / (decimal_odds - 1))
     
-    # Round to nearest 10 (in favor of bookie) if magnitude > 300
-    if american >= 300:
-        # Positive odds: round DOWN to nearest 10 (worse for bettor)
-        american = (american // 10) * 10
-    elif american <= -300:
-        # Negative odds: round DOWN (more negative, worse for bettor)
-        american = -((abs(american) + 9) // 10) * 10
+    abs_odds = abs(american)
+    
+    # Apply rounding based on magnitude
+    if 300 <= abs_odds < 1000:
+        # Round to nearest 10
+        if american > 0:
+            # Positive: floor to nearest 10
+            american = (american // 10) * 10
+        else:
+            # Negative: ceiling abs value to nearest 10 (more negative)
+            american = -((abs(american) + 9) // 10) * 10
+    elif 1000 <= abs_odds < 10000:
+        # Round to nearest 100
+        if american > 0:
+            # Positive: floor to nearest 100
+            american = (american // 100) * 100
+        else:
+            # Negative: ceiling abs value to nearest 100 (more negative)
+            american = -((abs(american) + 99) // 100) * 100
     
     return american
 
 
 def apply_vig(probability: float, margin: float = VIG_MARGIN) -> float:
-    """Apply vigorish by scaling implied probability, then return decimal odds
+    """Apply vigorish with asymmetric margin - more vig on underdogs, less on favorites
     
-    This follows the correct vig application:
-    1. Divide true probability by (1 - margin) to get vigged implied probability
-       This scales up probabilities so total across all outcomes > 1 (bookmaker's edge)
-    2. Convert vigged probability to decimal odds: 1 / vigged_prob
+    Traditional symmetric vig creates terrible lines on extreme probabilities.
+    Bookies apply more margin to longshots (underdogs) and keep base margin for favorites.
     
-    Example: With 3% vig (margin=0.03), a 50% true probability becomes:
-    - vigged_prob = 0.50 / (1 - 0.03) = 0.50 / 0.97 = 0.5155 (51.55%)
-    - decimal_odds = 1 / 0.5155 = 1.94
+    Asymmetric adjustment:
+    - For probabilities far from 50%, we increase vig on underdog side
+    - Distance from 0.5 determines how much extra vig to apply
+    - Underdogs (prob < 0.5) get extra margin
+    - Favorites (prob > 0.5) keep base margin (no reduction)
+    
+    Example with 4.5% base margin:
+    - 6% probability: apply ~6% margin → better underdog odds
+    - 94% probability: apply 4.5% margin → reasonable favorite odds
     """
-    # Apply vig by dividing by (1 - margin)
-    vigged_prob = probability / (1.0 - margin)
+    # Calculate distance from 50% (evens)
+    distance_from_evens = abs(probability - 0.5)
+    
+    # Asymmetric vig adjustment
+    if probability < 0.5:
+        # Underdog: add extra margin based on how unlikely it is
+        # The longer the shot, the more margin we take
+        extra_margin = distance_from_evens * 0.4  # Scale factor
+        adjusted_margin = margin + extra_margin
+    else:
+        # Favorite: keep base margin at 4.5%
+        adjusted_margin = margin
+    
+    # Ensure margin stays reasonable (between 1% and 8%)
+    adjusted_margin = max(0.01, min(0.08, adjusted_margin))
+    
+    # Apply vig by dividing by (1 - adjusted_margin)
+    vigged_prob = probability / (1.0 - adjusted_margin)
     
     # Cap at 0.9999 to avoid decimal odds below 1.0
     vigged_prob = min(vigged_prob, 0.9999)

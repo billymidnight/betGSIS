@@ -854,9 +854,9 @@ export default function BreakingBadTrading() {
                   </div>
                 </div>
 
-                {/* CREW DRAWN Column */}
+                {/* FAMILY DRAWN Column */}
                 <div className="character-market-column">
-                  <h3 className="character-column-title">CREW DRAWN</h3>
+                  <h3 className="character-column-title">FAMILY DRAWN</h3>
                   <div className="character-markets-list">
                     {crewMarkets.map(crewMarket => {
                       const market = crewMarket.drawn;
@@ -905,9 +905,9 @@ export default function BreakingBadTrading() {
                   </div>
                 </div>
 
-                {/* CREW NOT DRAWN Column */}
+                {/* FAMILY NOT DRAWN Column */}
                 <div className="character-market-column">
-                  <h3 className="character-column-title">CREW NOT DRAWN</h3>
+                  <h3 className="character-column-title">FAMILY NOT DRAWN</h3>
                   <div className="character-markets-list">
                     {crewMarkets.map(crewMarket => {
                       const market = crewMarket.not_drawn;
