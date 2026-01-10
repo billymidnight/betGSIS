@@ -436,7 +436,7 @@ export default function HarryPotterTrading() {
         <div className="sopranos-content">
           <div style={{ marginBottom: '2rem' }}>
             <a onClick={() => navigate('/trading')} className="back-button" style={{ cursor: 'pointer' }}>← Back to Trading</a>
-            <h1 className="sopranos-title">Breaking Bad Trading</h1>
+            <h1 className="sopranos-title">Harry Potter Trading</h1>
             <p className="sopranos-subtitle">Trade character cards from the Emmy-winning series</p>
           </div>
 
