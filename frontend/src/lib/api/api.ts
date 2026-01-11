@@ -362,7 +362,7 @@ export async function fetchBreakingBadCharacterMarkets(numCards: number) {
 }
 
 export async function fetchBreakingBadCrewMarkets(numCards: number) {
-  const r = await api.post('/trading/breakingbad/house-markets', { num_cards: numCards });
+  const r = await api.post('/trading/breakingbad/crew-markets', { num_cards: numCards });
   return r.data;
 }
 
