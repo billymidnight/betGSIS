@@ -141,6 +141,35 @@ export default function Trading() {
               </div>
             </div>
           </Link>
+
+          {/* Good Shepherd Trading */}
+          <Link 
+            to="/trading/good-shepherd" 
+            className={`trading-card good-shepherd-card ${locks.master ? 'disabled' : ''}`}
+            onClick={(e) => {
+              if (locks.master) {
+                e.preventDefault();
+                alert('🔒 betGSIS traders have locked all trading games');
+              }
+            }}
+          >
+            <div className="trading-card-content">
+              <div className="trading-card-header">
+                <h2 className="trading-card-title">
+                  Good Shepherd {locks.master && '🔒'}
+                </h2>
+                <span className="badge badge-active">ACTIVE</span>
+              </div>
+              <p className="trading-card-description">
+                Trade student cards from the legendary high school. Bet on houses, prefects, and student attributes.
+              </p>
+              <div className="trading-card-features">
+                <span className="feature-item">• Student Cards</span>
+                <span className="feature-item">• Multiple Markets</span>
+                <span className="feature-item">• Real-time Odds</span>
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
     </div>

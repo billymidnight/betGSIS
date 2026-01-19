@@ -68,6 +68,21 @@ def create_app():
             "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Name", "X-User-Role"],
             "supports_credentials": False
         },
+        r"/api/trading/goodshepherd/*": {
+            "origins": [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://betgsis2.vercel.app",
+                "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app",
+                "https://betgsis-backend.onrender.com"
+            ],
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Name", "X-User-Role"],
+            "supports_credentials": False
+        },
         r"/breakingbad/*": {
             "origins": [
                 "http://localhost:3000",
@@ -84,6 +99,21 @@ def create_app():
             "supports_credentials": False
         },
         r"/harrypotter/*": {
+            "origins": [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://betgsis2.vercel.app",
+                "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app",
+                "https://betgsis-backend.onrender.com"
+            ],
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": False
+        },
+        r"/goodshepherd/*": {
             "origins": [
                 "http://localhost:3000",
                 "http://localhost:3001",
@@ -116,6 +146,10 @@ def create_app():
     from routes.harrypotter import harrypotter_bp
     app.register_blueprint(harrypotter_bp)
     
+    # Register good shepherd trading blueprint
+    from routes.goodshepherd import goodshepherd_bp
+    app.register_blueprint(goodshepherd_bp)
+    
     # Serve Sopranos character images
     @app.route('/sopranos/<path:filename>')
     def serve_sopranos_image(filename):
@@ -133,6 +167,12 @@ def create_app():
     def serve_harrypotter_image(filename):
         harrypotter_dir = os.path.join(os.path.dirname(__file__), 'harrypotter')
         return send_from_directory(harrypotter_dir, filename)
+    
+    # Serve Good Shepherd student images
+    @app.route('/goodshepherd/<path:filename>')
+    def serve_goodshepherd_image(filename):
+        goodshepherd_dir = os.path.join(os.path.dirname(__file__), 'goodshepherd')
+        return send_from_directory(goodshepherd_dir, filename)
 
     @app.route('/health', methods=['GET'])
     def health():

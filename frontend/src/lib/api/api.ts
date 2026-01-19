@@ -457,5 +457,56 @@ export async function endHarryPotterSession(data: { num_bets: number; net_pnl: n
   return r.data;
 }
 
+// Good Shepherd Trading API
+export async function fetchGoodShepherdCharacters() {
+  const r = await api.get('/trading/goodshepherd/characters');
+  return r.data;
+}
+
+export async function drawGoodShepherdStudents() {
+  const r = await api.post('/trading/goodshepherd/draw');
+  return r.data;
+}
+
+export async function fetchGoodShepherdCharacterMarkets(numCards: number) {
+  const r = await api.post('/trading/goodshepherd/character-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchGoodShepherdHouseMarkets(numCards: number, drawNumber: number = 1) {
+  const r = await api.post('/trading/goodshepherd/house-markets', { num_cards: numCards, draw_number: drawNumber });
+  return r.data;
+}
+
+export async function fetchGoodShepherdSpecialMarkets(numCards: number) {
+  const r = await api.post('/trading/goodshepherd/special-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function settleGoodShepherdBets(drawnCharacters: any[], bets: any[]) {
+  const r = await api.post('/trading/goodshepherd/settle', {
+    drawn_characters: drawnCharacters,
+    bets: bets
+  });
+  return r.data;
+}
+
+export async function endGoodShepherdSession(data: { num_bets: number; net_pnl: number }) {
+  // Get JWT token from Supabase session
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  
+  if (!token) {
+    throw new Error('No authentication token found');
+  }
+  
+  const r = await api.post('/trading/goodshepherd/end-session', data, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return r.data;
+}
+
 export default api;
 
