@@ -1271,7 +1271,7 @@ def bookkeeping_all_bets():
         return jsonify({'error': 'supabase client missing'}), 500
     try:
         # Order by bet_id descending so newest bets appear first for the bookie view
-        rc = client.table('bets').select('bet_id,user_id,placed_at,game_id,outcome,bet_size,odds_american,result').order('bet_id', desc=True).execute()
+        rc = client.table('bets').select('bet_id,user_id,market,placed_at,game_id,outcome,bet_size,odds_american,result').order('bet_id', desc=True).execute()
         rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
         rows = rows or []
 
@@ -1338,7 +1338,7 @@ def bookkeeping_all_bets():
                 placed_at_edt = None
                 placed_at_utc = None
 
-            out.append({'bet_id': r.get('bet_id'), 'user_id': r.get('user_id'), 'screenname': user_map.get(str(r.get('user_id')), ''), 'placed_at_utc': placed_at_utc or r.get('placed_at'), 'placed_at_edt': placed_at_edt, 'game_id': r.get('game_id'), 'outcome': r.get('outcome'), 'bet_size': stake, 'odds_american': r.get('odds_american'), 'result': res, 'pnl_calc': float(pnl_calc)})
+            out.append({'bet_id': r.get('bet_id'), 'user_id': r.get('user_id'), 'screenname': user_map.get(str(r.get('user_id')), ''), 'placed_at_utc': placed_at_utc or r.get('placed_at'), 'placed_at_edt': placed_at_edt, 'game_id': r.get('game_id'), 'market': r.get('market') or '', 'outcome': r.get('outcome'), 'bet_size': stake, 'odds_american': r.get('odds_american'), 'result': res, 'pnl_calc': float(pnl_calc)})
 
         return jsonify({'bets': out}), 200
     except Exception as e:
@@ -1352,17 +1352,36 @@ def bookkeeping_edit_bet():
         return ('', 200)
     data = request.get_json(force=True) or {}
     bet_id = data.get('bet_id')
-    result = data.get('result')
-    if bet_id is None or result not in ('win', 'loss', 'push'):
-        return jsonify({'error': 'bet_id and valid result required'}), 400
+    if bet_id is None:
+        return jsonify({'error': 'bet_id required'}), 400
     client = _get_admin_client()
     if not client:
         return jsonify({'error': 'supabase client missing'}), 500
     try:
-        # Map result to DB canonical values if needed
-        db_map = {'win': 'Win', 'loss': 'Loss', 'push': 'Push'}
-        db_val = db_map.get(result, result)
-        upd = client.table('bets').update({'result': db_val}).eq('bet_id', int(bet_id)).execute()
+        update_fields = {}
+        # result
+        result = data.get('result')
+        if result is not None:
+            db_map = {'win': 'Win', 'loss': 'Loss', 'push': 'Push'}
+            db_val = db_map.get(result.lower() if isinstance(result, str) else result, result)
+            update_fields['result'] = db_val
+        # odds_american
+        odds = data.get('odds_american')
+        if odds is not None:
+            update_fields['odds_american'] = str(odds)
+        # bet_size
+        bet_size = data.get('bet_size')
+        if bet_size is not None:
+            update_fields['bet_size'] = float(bet_size)
+        # outcome
+        outcome = data.get('outcome')
+        if outcome is not None:
+            update_fields['outcome'] = str(outcome)
+
+        if not update_fields:
+            return jsonify({'error': 'No fields to update'}), 400
+
+        upd = client.table('bets').update(update_fields).eq('bet_id', int(bet_id)).execute()
         upd_rows = upd.data if hasattr(upd, 'data') else (upd.get('data') if isinstance(upd, dict) else None)
         if upd_rows and len(upd_rows) > 0:
             return jsonify({'success': True, 'bet': upd_rows[0]}), 200
@@ -1374,6 +1393,131 @@ def bookkeeping_edit_bet():
         return jsonify({'error': 'bet not found'}), 404
     except Exception as e:
         logging.exception('bookkeeping_edit_bet error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/bookkeeping/add-bet', methods=['POST', 'OPTIONS'])
+def bookkeeping_add_bet():
+    """Manually add a bet from the bookmaker dashboard."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    data = request.get_json(force=True) or {}
+    user_id = data.get('user_id')
+    market = data.get('market') or 'default'
+    outcome = data.get('outcome') or ''
+    bet_size = data.get('bet_size')
+    odds_american = data.get('odds_american')
+    game_id = data.get('game_id')
+    placed_at = data.get('placed_at')  # ISO string or None (defaults to now)
+    result = data.get('result')  # default None / Pending
+
+    if not user_id or bet_size is None or odds_american is None:
+        return jsonify({'error': 'user_id, bet_size, and odds_american are required'}), 400
+
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        row = {
+            'user_id': user_id,
+            'market': market,
+            'outcome': outcome,
+            'bet_size': float(bet_size),
+            'odds_american': str(odds_american),
+        }
+        if game_id is not None:
+            row['game_id'] = int(game_id)
+        if placed_at:
+            row['placed_at'] = placed_at
+        if result and str(result).strip().lower() not in ('', 'pending'):
+            db_map = {'win': 'Win', 'loss': 'Loss', 'push': 'Push'}
+            row['result'] = db_map.get(str(result).lower(), result)
+        else:
+            row['result'] = None
+
+        ins = client.table('bets').insert(row).execute()
+        ins_rows = ins.data if hasattr(ins, 'data') else (ins.get('data') if isinstance(ins, dict) else None)
+        if ins_rows and len(ins_rows) > 0:
+            return jsonify({'success': True, 'bet': ins_rows[0]}), 200
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('bookkeeping_add_bet error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/bookkeeping/delete-bet', methods=['POST', 'OPTIONS'])
+def bookkeeping_delete_bet():
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    data = request.get_json(force=True) or {}
+    bet_id = data.get('bet_id')
+    if bet_id is None:
+        return jsonify({'error': 'bet_id required'}), 400
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        client.table('bets').delete().eq('bet_id', int(bet_id)).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('bookkeeping_delete_bet error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/bookkeeping/users', methods=['GET', 'OPTIONS'])
+def bookkeeping_users():
+    """Return list of users with their bet counts, ordered by bet count descending."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        # Get all users
+        uc = client.table('users').select('user_id,screenname').execute()
+        urows = uc.data if hasattr(uc, 'data') else (uc.get('data') if isinstance(uc, dict) else None)
+        urows = urows or []
+
+        # Get bet counts per user
+        bc = client.table('bets').select('user_id').execute()
+        brows = bc.data if hasattr(bc, 'data') else (bc.get('data') if isinstance(bc, dict) else None)
+        brows = brows or []
+        bet_counts = {}
+        for b in brows:
+            uid = str(b.get('user_id')) if b.get('user_id') else None
+            if uid:
+                bet_counts[uid] = bet_counts.get(uid, 0) + 1
+
+        out = []
+        for u in urows:
+            uid = str(u.get('user_id')) if u.get('user_id') else None
+            out.append({
+                'user_id': uid,
+                'screenname': u.get('screenname') or '',
+                'bet_count': bet_counts.get(uid, 0)
+            })
+        out.sort(key=lambda x: x['bet_count'], reverse=True)
+        return jsonify({'users': out}), 200
+    except Exception as e:
+        logging.exception('bookkeeping_users error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/poker/players', methods=['GET', 'OPTIONS'])
+def poker_players():
+    """Return all poker players from poker_players table."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('poker_players').select('player_id,player_name,player_screenname').order('player_name').execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        rows = rows or []
+        return jsonify({'players': rows}), 200
+    except Exception as e:
+        logging.exception('poker_players error')
         return jsonify({'error': str(e)}), 500
 
 

@@ -1,22 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import './BetEditModal.css';
-import { editBetResult } from '../../lib/api/api';
+import { editBetFull } from '../../lib/api/api';
 
 export default function BetEditModal({ bet, onClose, onSaved }: { bet: any | null; onClose: () => void; onSaved: () => void }) {
-  const [result, setResult] = useState<string | null>(null);
+  const [result, setResult] = useState<string>('');
+  const [oddsAmerican, setOddsAmerican] = useState<string>('');
+  const [betSize, setBetSize] = useState<string>('');
+  const [outcome, setOutcome] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setResult(bet?.result ?? null);
+    if (bet) {
+      setResult(bet.result || '');
+      setOddsAmerican(bet.odds_american || '');
+      setBetSize(String(bet.bet_size || ''));
+      setOutcome(bet.outcome || '');
+    }
   }, [bet]);
 
   if (!bet) return null;
 
   const handleSave = async () => {
-    if (!result) return;
     setSaving(true);
     try {
-      await editBetResult(Number(bet.bet_id), result as any);
+      const fields: any = {};
+      if (result !== (bet.result || '')) fields.result = result ? result.toLowerCase() : null;
+      if (oddsAmerican && oddsAmerican !== (bet.odds_american || '')) fields.odds_american = oddsAmerican;
+      if (betSize && Number(betSize) !== Number(bet.bet_size)) fields.bet_size = Number(betSize);
+      if (outcome && outcome !== (bet.outcome || '')) fields.outcome = outcome;
+
+      if (Object.keys(fields).length === 0) {
+        onClose();
+        return;
+      }
+
+      await editBetFull(Number(bet.bet_id), fields);
       onSaved();
       onClose();
     } catch (e) {
@@ -28,29 +46,58 @@ export default function BetEditModal({ bet, onClose, onSaved }: { bet: any | nul
   };
 
   return (
-    <div className="bem-overlay">
-      <div className="bem-modal">
-        <h3>Edit Bet #{bet.bet_id}</h3>
-        <div className="bem-row"><strong>Placed:</strong> {bet.placed_at_edt || bet.placed_at_utc}</div>
-        <div className="bem-row"><strong>Game:</strong> {bet.game_id}</div>
-        <div className="bem-row"><strong>Outcome:</strong> {bet.outcome}</div>
-        <div className="bem-row"><strong>Bet Amount:</strong> {Number(bet.bet_size).toLocaleString(undefined,{style:'currency',currency:'USD'})}</div>
-        <div className="bem-row"><strong>Odds:</strong> {bet.odds_american}</div>
-        <div className="bem-row"><strong>P&L Calc:</strong> {Number(bet.pnl_calc).toLocaleString(undefined,{style:'currency',currency:'USD'})}</div>
+    <div className="bem-overlay" onClick={onClose}>
+      <div className="bem-modal" onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>Edit Bet #{bet.bet_id}</h3>
 
         <div className="bem-row">
-          <label>Result:</label>
-          <select value={result || ''} onChange={(e) => setResult(e.target.value)}>
-            <option value="">(select)</option>
-            <option value="win">Win</option>
-            <option value="loss">Loss</option>
-            <option value="push">Push</option>
+          <label style={{ display: 'block', color: '#94a3b8', marginBottom: 4 }}>Outcome:</label>
+          <input
+            type="text"
+            value={outcome}
+            onChange={(e) => setOutcome(e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #334155', background: '#071025', color: '#fff', fontSize: '0.95rem' }}
+          />
+        </div>
+
+        <div className="bem-row">
+          <label style={{ display: 'block', color: '#94a3b8', marginBottom: 4 }}>Bet Amount ($):</label>
+          <input
+            type="number"
+            value={betSize}
+            onChange={(e) => setBetSize(e.target.value)}
+            step="0.01"
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #334155', background: '#071025', color: '#fff', fontSize: '0.95rem' }}
+          />
+        </div>
+
+        <div className="bem-row">
+          <label style={{ display: 'block', color: '#94a3b8', marginBottom: 4 }}>Odds (American):</label>
+          <input
+            type="text"
+            value={oddsAmerican}
+            onChange={(e) => setOddsAmerican(e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #334155', background: '#071025', color: '#fff', fontSize: '0.95rem' }}
+          />
+        </div>
+
+        <div className="bem-row">
+          <label style={{ display: 'block', color: '#94a3b8', marginBottom: 4 }}>Result:</label>
+          <select
+            value={result}
+            onChange={(e) => setResult(e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #334155', background: '#071025', color: '#fff', fontSize: '0.95rem' }}
+          >
+            <option value="">(unsettled)</option>
+            <option value="Win">Win</option>
+            <option value="Loss">Loss</option>
+            <option value="Push">Push</option>
           </select>
         </div>
 
         <div className="bem-actions">
           <button onClick={onClose} className="bem-btn">Cancel</button>
-          <button onClick={handleSave} className="bem-btn primary" disabled={saving || !result}>{saving ? 'Saving...' : 'Save'}</button>
+          <button onClick={handleSave} className="bem-btn primary" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
         </div>
       </div>
     </div>

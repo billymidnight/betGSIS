@@ -29,6 +29,8 @@ export default function BetslipItem({ selection }: Props) {
               const match = (selection.outcome || '').match(/^(.+?)\s*-\s*(.+)$/);
               return match ? match[1].trim() : (selection.playerName || 'Monopoly');
             })()
+          ) : selection.market === 'Poker' ? (
+            selection.playerName || 'Poker'
           ) : selection.market === 'Specials' ? (
             'Specials'
           ) : (
@@ -48,6 +50,13 @@ export default function BetslipItem({ selection }: Props) {
               {(() => {
                 const match = (selection.outcome || '').match(/^(.+?)\s*-\s*(.+)$/);
                 return match ? match[2].trim() : (selection.outcome || 'Monopoly');
+              })()}
+            </div>
+          ) : selection.market === 'Poker' ? (
+            <div style={{fontWeight:700}}>
+              {(() => {
+                const match = (selection.outcome || '').match(/^(.+?)\s*-\s*(.+)$/);
+                return match ? match[2].trim() : 'Poker';
               })()}
             </div>
           ) : selection.market === 'Specials' ? (

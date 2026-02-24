@@ -190,6 +190,40 @@ export async function editBetResult(betId: number, result: 'win' | 'loss' | 'pus
   return r.data;
 }
 
+export async function editBetFull(betId: number, fields: { result?: string; odds_american?: string; bet_size?: number; outcome?: string }) {
+  const r = await api.post('/bookkeeping/edit-bet', { bet_id: betId, ...fields });
+  return r.data;
+}
+
+export async function deleteBet(betId: number) {
+  const r = await api.post('/bookkeeping/delete-bet', { bet_id: betId });
+  return r.data;
+}
+
+export async function fetchBetGSISUsers() {
+  const r = await api.get('/bookkeeping/users');
+  return r.data;
+}
+
+export async function fetchPokerPlayers() {
+  const r = await api.get('/poker/players');
+  return r.data;
+}
+
+export async function addBet(fields: {
+  user_id: string;
+  market?: string;
+  outcome?: string;
+  bet_size: number;
+  odds_american: string;
+  game_id?: number;
+  placed_at?: string;
+  result?: string;
+}) {
+  const r = await api.post('/bookkeeping/add-bet', fields);
+  return r.data;
+}
+
 export async function fetchGeoGameCounter() {
   const r = await api.get('/geo/game-counter');
   return r.data;

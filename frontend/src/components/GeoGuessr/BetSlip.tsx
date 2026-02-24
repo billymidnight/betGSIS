@@ -143,6 +143,13 @@ export default function BetSlip() {
         if (payloadMarket === 'Moneyline' || sel.market === 'zetamac_moneyline') {
           payloadPoint = null; // moneyline doesn't have a numeric point
         }
+
+        // Poker market: outcome = "PlayerName - Cash Game" or "PlayerName - Tournament"
+        if (sel.market === 'Poker') {
+          payloadMarket = 'Poker';
+          payloadOutcome = sel.outcome; // Already formatted as "Name - Cash Game"
+          payloadPoint = null;
+        }
         
         const payload = {
           market: payloadMarket,
