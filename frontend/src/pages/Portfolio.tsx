@@ -16,6 +16,18 @@ type Summary = {
   roi: number | null
   active_wager_risk?: number
   pnl_today?: number
+  combined_net_pnl?: number
+  combined_pnl_today?: number
+}
+
+type LayeurSummary = {
+  total_bets_accepted: number
+  total_won: number
+  net_pnl: number
+  total_wagered_accepted: number
+  active_risk: number
+  roi: number | null
+  pnl_today: number
 }
 
 type MarketEntry = {
@@ -37,6 +49,7 @@ export default function Portfolio() {
   const [range, setRange] = useState<'7d' | '30d' | 'ytd' | 'all'>('all')
   const [loading, setLoading] = useState(false)
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [layeurSummary, setLayeurSummary] = useState<LayeurSummary | null>(null)
   const [markets, setMarkets] = useState<MarketEntry[]>([])
   const [ts, setTs] = useState<TimePoint[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -60,6 +73,7 @@ export default function Portfolio() {
       }
       const j = await resp.json()
       setSummary(j.summary ?? null)
+      setLayeurSummary(j.layeur_summary ?? null)
       setMarkets(j.markets ?? [])
       setTs(j.time_series ?? [])
     } catch (e: any) {
@@ -160,16 +174,24 @@ export default function Portfolio() {
         {error && <div style={{ color: '#f88' }}>{error}</div>}
 
         <div className="summary-grid">
+          {/* ── Combined NET P&L (bettor + layeur) ── */}
           <Card className="stat-card stat-card--highlight" variant="elevated">
-            <div className={`stat-value ${summary && (summary.pnl_today ?? 0) >= 0 ? 'positive' : 'negative'}`}>
-              {summary ? ((summary.pnl_today ?? 0) >= 0 ? '+' : '') + formatCurrency(summary?.pnl_today ?? 0) : '—'}
+            <div className={`stat-value ${summary && (summary.combined_pnl_today ?? summary.pnl_today ?? 0) >= 0 ? 'positive' : 'negative'}`}>
+              {summary ? ((summary.combined_pnl_today ?? summary.pnl_today ?? 0) >= 0 ? '+' : '') + formatCurrency(summary.combined_pnl_today ?? summary.pnl_today ?? 0) : '—'}
             </div>
-            <div className="stat-label">Today's P&L</div>
+            <div className="stat-label">Today's P&L (Net)</div>
+          </Card>
+
+          <Card className="stat-card stat-card--highlight" variant="elevated">
+            <div className={`stat-value ${summary && (summary.combined_net_pnl ?? summary.net_pnl) >= 0 ? 'positive' : 'negative'}`}>
+              {summary ? ((summary.combined_net_pnl ?? summary.net_pnl) >= 0 ? '+' : '') + formatCurrency(summary.combined_net_pnl ?? summary.net_pnl) : '—'}
+            </div>
+            <div className="stat-label">Net P&L (Combined)</div>
           </Card>
 
           <Card className="stat-card" variant="elevated">
             <div className="stat-value" style={{ color: '#9aa6ad' }}>{summary ? summary.total_bets : '—'}</div>
-            <div className="stat-label">Total Bets</div>
+            <div className="stat-label">Bets Placed (Bettor)</div>
           </Card>
 
           <Card className="stat-card" variant="elevated">
@@ -179,27 +201,80 @@ export default function Portfolio() {
 
           <Card className="stat-card" variant="elevated">
             <div className="stat-value">{summary ? formatCurrency(summary.active_wager_risk ?? 0) : '—'}</div>
-            <div className="stat-label">Active Wager Risk</div>
+            <div className="stat-label">Active Risk (Bettor)</div>
           </Card>
 
           <Card className="stat-card" variant="elevated">
-            <div className="stat-value">{summary ? formatCurrency(summary.total_winnings) : '—'}</div>
-            <div className="stat-label">Total Winnings</div>
+            {(() => {
+              const bettorPnl = summary?.net_pnl ?? 0;
+              const layeurPnl = layeurSummary?.net_pnl ?? 0;
+              const bettorWagered = summary?.total_wagered ?? 0;
+              const layeurWagered = layeurSummary?.total_wagered_accepted ?? 0;
+              const totalVol = bettorWagered + layeurWagered;
+              const combinedRoi = totalVol > 0 ? (bettorPnl + layeurPnl) / totalVol : null;
+              return (
+                <>
+                  <div className="stat-value" style={{ color: combinedRoi != null ? trendColor(combinedRoi) : '#9aa6ad' }}>
+                    {combinedRoi != null ? (combinedRoi >= 0 ? '+' : '') + (combinedRoi * 100).toFixed(2) + '%' : '—'}
+                  </div>
+                  <div className="stat-label">ROI (Combined)</div>
+                </>
+              );
+            })()}
           </Card>
+        </div>
 
-          <Card className="stat-card stat-card--highlight" variant="elevated">
-            <div className={`stat-value ${summary && summary.net_pnl >= 0 ? 'positive' : 'negative'}`}>
-              {summary ? (summary.net_pnl >= 0 ? '+' : '') + formatCurrency(summary.net_pnl) : '—'}
+        {/* ── P&L Breakdown: As Bettor / As Layeur ── */}
+        <div style={{ display: 'flex', gap: 14, marginBottom: 18, flexWrap: 'wrap' }}>
+          {/* Bettor bucket */}
+          <div className="pnl-bucket">
+            <div className="pnl-bucket-header">As Bettor</div>
+            <div className="pnl-bucket-stats">
+              <div className="pnl-bucket-item">
+                <span className="pnl-bucket-label">Today</span>
+                <span className="pnl-bucket-value" style={{ color: trendColor(summary?.pnl_today ?? 0) }}>
+                  {summary ? ((summary.pnl_today ?? 0) >= 0 ? '+' : '') + formatCurrency(summary.pnl_today ?? 0) : '—'}
+                </span>
+              </div>
+              <div className="pnl-bucket-item">
+                <span className="pnl-bucket-label">Lifetime</span>
+                <span className="pnl-bucket-value" style={{ color: trendColor(summary?.net_pnl ?? 0) }}>
+                  {summary ? (summary.net_pnl >= 0 ? '+' : '') + formatCurrency(summary.net_pnl) : '—'}
+                </span>
+              </div>
+              <div className="pnl-bucket-item">
+                <span className="pnl-bucket-label">Bets</span>
+                <span className="pnl-bucket-value">{summary?.total_bets ?? '—'}</span>
+              </div>
             </div>
-            <div className="stat-label">Net P&L</div>
-          </Card>
+          </div>
 
-          <Card className="stat-card" variant="elevated">
-            <div className="stat-value" style={{ color: summary && summary.roi != null ? trendColor(summary.roi) : '#9aa6ad' }}>
-              {summary && summary.roi != null ? (summary.roi >= 0 ? '+' : '') + (summary.roi * 100).toFixed(2) + '%' : '—'}
+          {/* Layeur bucket */}
+          <div className="pnl-bucket pnl-bucket--gold">
+            <div className="pnl-bucket-header pnl-bucket-header--gold">As Layeur</div>
+            <div className="pnl-bucket-stats">
+              <div className="pnl-bucket-item">
+                <span className="pnl-bucket-label">Today</span>
+                <span className="pnl-bucket-value" style={{ color: trendColor(layeurSummary?.pnl_today ?? 0) }}>
+                  {layeurSummary ? ((layeurSummary.pnl_today ?? 0) >= 0 ? '+' : '') + formatCurrency(layeurSummary.pnl_today ?? 0) : '—'}
+                </span>
+              </div>
+              <div className="pnl-bucket-item">
+                <span className="pnl-bucket-label">Lifetime</span>
+                <span className="pnl-bucket-value" style={{ color: trendColor(layeurSummary?.net_pnl ?? 0) }}>
+                  {layeurSummary ? (layeurSummary.net_pnl >= 0 ? '+' : '') + formatCurrency(layeurSummary.net_pnl) : '—'}
+                </span>
+              </div>
+              <div className="pnl-bucket-item">
+                <span className="pnl-bucket-label">Accepted</span>
+                <span className="pnl-bucket-value">{layeurSummary?.total_bets_accepted ?? 0}</span>
+              </div>
+              <div className="pnl-bucket-item">
+                <span className="pnl-bucket-label">Risk</span>
+                <span className="pnl-bucket-value">{layeurSummary ? formatCurrency(layeurSummary.active_risk) : '—'}</span>
+              </div>
             </div>
-            <div className="stat-label">ROI</div>
-          </Card>
+          </div>
         </div>
 
         <Card title={<span style={{fontSize: '1.4rem', fontWeight: 600}}>Performance Over Time</span>} className="graph-card" variant="default">

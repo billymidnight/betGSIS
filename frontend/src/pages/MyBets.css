@@ -124,13 +124,11 @@
 .bet-card--loss .bet-payout-val { display: none; }
 
 .bet-tag {
-  position: absolute;
-  top: 10px;
-  right: 10px;
   padding: 4px 8px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 700;
+  flex-shrink: 0;
 }
 .bet-tag--active { background: #f6c85f; color: #1f1f1f; }
 .bet-tag--win { background: #2ed573; color: #06321a; }
@@ -152,3 +150,98 @@
 .page-title { margin:0; font-size:2.5rem; font-weight:700; color: #ebf4ff }
 .my-bets-sub { font-size:14px; color:var(--color-text-muted,#9aa6ad); }
 .my-bets-controls { display:flex; align-items:center; gap:12px }
+
+/* Role toggle (bettor / layeur) */
+.role-toggle {
+  display: inline-flex;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.role-btn {
+  padding: 7px 16px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted, #9aa6ad);
+  letter-spacing: 0.3px;
+  transition: background 100ms, color 100ms;
+}
+.role-btn.active {
+  background: rgba(246,200,95,0.12);
+  color: #f6c85f;
+}
+.role-btn:hover:not(.active) {
+  background: rgba(255,255,255,0.03);
+}
+
+/* Layeur tag inline fix */
+.layeur-tag-p2p {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(246,200,95,0.10);
+  color: #f6c85f;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+.layeur-tag-house {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.04);
+  color: var(--color-text-muted);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+/* Bigger layeur tags for card display */
+.layeur-tag-lg.layeur-tag-p2p {
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: rgba(246,200,95,0.12);
+  color: #f6c85f;
+}
+.layeur-tag-lg.layeur-tag-house {
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* betGSIS mini logo in My Bets */
+.layeur-tag-house .betgsis-mini-logo {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* Tags column layout (status on top, layeur underneath) */
+.bet-card-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+/* Layeur P&L values */
+.bet-pnl-val {
+  font-weight: 800;
+  font-size: 18px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+}
+.pnl-positive { color: #2ed573; }
+.pnl-negative { color: #ff4757; }

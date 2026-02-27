@@ -451,6 +451,7 @@ def bets_place():
             'result': None,
             'bet_pnl': None,
             'game_id': int(game_id),
+            'layeur': 'betgsis',
         }
 
         # set placed_at to current time so DB gets a timestamp value
@@ -1023,9 +1024,10 @@ def bookkeeping_summary():
         # Fetch relevant bets rows. The bets table uses columns: bet_id, user_id, market, point, outcome,
         # bet_size, odds_american, placed_at, result, game_id
         # NOTE: Do NOT rely on persisted `bet_pnl` column. Compute P&L on the fly from bet_size, odds_american and result.
-        rc = client.table('bets').select('user_id,bet_size,odds_american,placed_at,result').execute()
+        rc = client.table('bets').select('user_id,bet_size,odds_american,placed_at,result,layeur').execute()
         rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
-        all_bets = rows or []
+        # CRITICAL: only count house bets (layeur = 'betgsis') for bookmaker stats
+        all_bets = [r for r in (rows or []) if (r.get('layeur') or 'betgsis') == 'betgsis']
 
         # settled == result IS NOT NULL
         settled = [r for r in all_bets if r.get('result') is not None]
@@ -1203,9 +1205,10 @@ def bookkeeping_accounts():
         urows = urows or []
 
         # Fetch bets to compute unsettled counts and net_pnl on the fly (do not trust users.net_pnl)
-        brc = client.table('bets').select('user_id,bet_size,odds_american,result').execute()
-        brows = brc.data if hasattr(brc, 'data') else (brc.get('data') if isinstance(brc, dict) else None)
-        brows = brows or []
+        # CRITICAL: only count house bets (layeur = 'betgsis') for bookmaker stats
+        brc = client.table('bets').select('user_id,bet_size,odds_american,result,layeur').execute()
+        brows_raw = brc.data if hasattr(brc, 'data') else (brc.get('data') if isinstance(brc, dict) else None)
+        brows = [b for b in (brows_raw or []) if (b.get('layeur') or 'betgsis') == 'betgsis']
 
         unsettled = {}
         pnl_map = {}
@@ -1271,9 +1274,15 @@ def bookkeeping_all_bets():
         return jsonify({'error': 'supabase client missing'}), 500
     try:
         # Order by bet_id descending so newest bets appear first for the bookie view
-        rc = client.table('bets').select('bet_id,user_id,market,placed_at,game_id,outcome,bet_size,odds_american,result').order('bet_id', desc=True).execute()
+        rc = client.table('bets').select('bet_id,user_id,market,placed_at,game_id,outcome,bet_size,odds_american,result,layeur').order('bet_id', desc=True).execute()
         rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
         rows = rows or []
+
+        # CRITICAL: filter by layeur for bookmaker stats isolation
+        # Default to betgsis-only; pass ?layeur=all to get everything
+        layeur_filter = request.args.get('layeur', 'betgsis')
+        if layeur_filter != 'all':
+            rows = [r for r in rows if (r.get('layeur') or 'betgsis') == layeur_filter]
 
         def american_to_decimal_val(amer):
             try:
@@ -1338,7 +1347,7 @@ def bookkeeping_all_bets():
                 placed_at_edt = None
                 placed_at_utc = None
 
-            out.append({'bet_id': r.get('bet_id'), 'user_id': r.get('user_id'), 'screenname': user_map.get(str(r.get('user_id')), ''), 'placed_at_utc': placed_at_utc or r.get('placed_at'), 'placed_at_edt': placed_at_edt, 'game_id': r.get('game_id'), 'market': r.get('market') or '', 'outcome': r.get('outcome'), 'bet_size': stake, 'odds_american': r.get('odds_american'), 'result': res, 'pnl_calc': float(pnl_calc)})
+            out.append({'bet_id': r.get('bet_id'), 'user_id': r.get('user_id'), 'screenname': user_map.get(str(r.get('user_id')), ''), 'placed_at_utc': placed_at_utc or r.get('placed_at'), 'placed_at_edt': placed_at_edt, 'game_id': r.get('game_id'), 'market': r.get('market') or '', 'outcome': r.get('outcome'), 'bet_size': stake, 'odds_american': r.get('odds_american'), 'result': res, 'pnl_calc': float(pnl_calc), 'layeur': r.get('layeur') or 'betgsis'})
 
         return jsonify({'bets': out}), 200
     except Exception as e:
@@ -1424,6 +1433,7 @@ def bookkeeping_add_bet():
             'outcome': outcome,
             'bet_size': float(bet_size),
             'odds_american': str(odds_american),
+            'layeur': 'betgsis',
         }
         if game_id is not None:
             row['game_id'] = int(game_id)
@@ -1518,6 +1528,542 @@ def poker_players():
         return jsonify({'players': rows}), 200
     except Exception as e:
         logging.exception('poker_players error')
+        return jsonify({'error': str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════════════
+# ██  Exchange / P2P Offerings endpoints                          ██
+# ═══════════════════════════════════════════════════════════════════
+
+def _convert_odds_to_american(odds_str, odds_format='american'):
+    """Convert odds from decimal/probability/american string to canonical american string."""
+    try:
+        val = float(odds_str)
+        fmt = (odds_format or 'american').lower().strip()
+        if fmt == 'decimal':
+            # decimal 2.5 -> american +150
+            if val >= 2.0:
+                amer = int(round((val - 1.0) * 100))
+                return f'+{amer}'
+            else:
+                amer = int(round(-100.0 / (val - 1.0)))
+                return str(amer)
+        elif fmt in ('probability', 'prob', 'implied'):
+            # probability 0.4 -> decimal 2.5 -> american +150
+            if val <= 0 or val >= 1:
+                return str(odds_str)
+            dec = 1.0 / val
+            if dec >= 2.0:
+                amer = int(round((dec - 1.0) * 100))
+                return f'+{amer}'
+            else:
+                amer = int(round(-100.0 / (dec - 1.0)))
+                return str(amer)
+        else:
+            # already american – normalize
+            s = str(odds_str).strip()
+            a = int(float(s.replace('+', '')))
+            return f'+{a}' if a > 0 else str(a)
+    except Exception:
+        return str(odds_str)
+
+
+@api_bp.route('/exchange/offerings', methods=['GET', 'OPTIONS'])
+def exchange_offerings():
+    """List all open offerings with layeur screennames and remaining liquidity."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('offerings').select('*').order('created_at', desc=True).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        rows = rows or []
+
+        # Resolve layeur screennames
+        layeur_ids = list({str(r.get('layeur_id')) for r in rows if r.get('layeur_id')})
+        name_map = {}
+        if layeur_ids:
+            try:
+                uc = client.table('users').select('user_id,screenname').in_('user_id', layeur_ids).execute()
+                urows = uc.data if hasattr(uc, 'data') else (uc.get('data') if isinstance(uc, dict) else None)
+                for u in (urows or []):
+                    if u.get('user_id'):
+                        name_map[str(u['user_id'])] = u.get('screenname') or str(u['user_id'])
+            except Exception:
+                pass
+
+        out = []
+        for r in rows:
+            lid = str(r.get('layeur_id') or '')
+            max_bet = float(r.get('max_bet') or 0)
+            filled = float(r.get('filled') or 0)
+            out.append({
+                'offering_id': r.get('offering_id'),
+                'layeur_id': lid,
+                'layeur_screenname': name_map.get(lid, lid),
+                'bet_name': r.get('market') or '',
+                'bet_description': r.get('bet_description') or '',
+                'odds_american': r.get('odds_american') or '',
+                'max_bet': max_bet,
+                'filled': filled,
+                'remaining': max(0, max_bet - filled),
+                'status': r.get('status') or 'open',
+                'created_at': r.get('created_at'),
+                'updated_at': r.get('updated_at'),
+            })
+        return jsonify({'offerings': out}), 200
+    except Exception as e:
+        logging.exception('exchange_offerings error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/exchange/create', methods=['POST', 'OPTIONS'])
+def exchange_create():
+    """Create a new offering. Requires auth. Body: { bet_name, bet_description?, odds, odds_format?, max_bet }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.get_json(force=True) or {}
+    bet_name = data.get('bet_name')
+    if not bet_name:
+        return jsonify({'error': 'bet_name is required'}), 400
+    odds_raw = data.get('odds')
+    if odds_raw is None:
+        return jsonify({'error': 'odds is required'}), 400
+    max_bet = data.get('max_bet')
+    if max_bet is None or float(max_bet) <= 0:
+        return jsonify({'error': 'max_bet must be > 0'}), 400
+
+    odds_format = data.get('odds_format', 'american')
+    odds_american = _convert_odds_to_american(odds_raw, odds_format)
+
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        row = {
+            'layeur_id': str(user),
+            'market': str(bet_name),
+            'outcome': str(bet_name),
+            'bet_description': str(data.get('bet_description') or ''),
+            'odds_american': odds_american,
+            'max_bet': float(max_bet),
+            'filled': 0,
+            'status': 'open',
+        }
+        ins = client.table('offerings').insert(row).execute()
+        ins_rows = ins.data if hasattr(ins, 'data') else (ins.get('data') if isinstance(ins, dict) else None)
+        return jsonify({'success': True, 'offering': ins_rows[0] if ins_rows else row}), 200
+    except Exception as e:
+        logging.exception('exchange_create error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/exchange/edit', methods=['POST', 'OPTIONS'])
+def exchange_edit():
+    """Edit an offering (only by the layeur). Body: { offering_id, odds?, odds_format?, max_bet?, bet_name?, bet_description?, status? }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.get_json(force=True) or {}
+    offering_id = data.get('offering_id')
+    if not offering_id:
+        return jsonify({'error': 'offering_id required'}), 400
+
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        # Verify ownership
+        rc = client.table('offerings').select('*').eq('offering_id', int(offering_id)).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows or len(rows) == 0:
+            return jsonify({'error': 'offering not found'}), 404
+        off = rows[0]
+        if str(off.get('layeur_id')) != str(user):
+            return jsonify({'error': 'forbidden: not your offering'}), 403
+
+        update = {}
+        if 'odds' in data and data['odds'] is not None:
+            odds_format = data.get('odds_format', 'american')
+            update['odds_american'] = _convert_odds_to_american(data['odds'], odds_format)
+        if 'max_bet' in data and data['max_bet'] is not None:
+            new_max = float(data['max_bet'])
+            current_filled = float(off.get('filled') or 0)
+            if new_max < current_filled:
+                return jsonify({'error': f'max_bet cannot be less than already filled ({current_filled})'}), 400
+            update['max_bet'] = new_max
+        if 'bet_name' in data:
+            update['market'] = str(data['bet_name'])
+            update['outcome'] = str(data['bet_name'])
+        if 'bet_description' in data:
+            update['bet_description'] = str(data.get('bet_description') or '')
+        if 'status' in data:
+            update['status'] = str(data['status'])
+
+        if not update:
+            return jsonify({'error': 'no fields to update'}), 400
+
+        from datetime import datetime, timezone
+        update['updated_at'] = datetime.now(timezone.utc).isoformat()
+        upd = client.table('offerings').update(update).eq('offering_id', int(offering_id)).execute()
+        upd_rows = upd.data if hasattr(upd, 'data') else (upd.get('data') if isinstance(upd, dict) else None)
+        return jsonify({'success': True, 'offering': upd_rows[0] if upd_rows else {**off, **update}}), 200
+    except Exception as e:
+        logging.exception('exchange_edit error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/exchange/cancel', methods=['POST', 'OPTIONS'])
+def exchange_cancel():
+    """Cancel an offering (only by the layeur). Body: { offering_id }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.get_json(force=True) or {}
+    offering_id = data.get('offering_id')
+    if not offering_id:
+        return jsonify({'error': 'offering_id required'}), 400
+
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('offerings').select('*').eq('offering_id', int(offering_id)).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows or len(rows) == 0:
+            return jsonify({'error': 'offering not found'}), 404
+        off = rows[0]
+        if str(off.get('layeur_id')) != str(user):
+            return jsonify({'error': 'forbidden: not your offering'}), 403
+
+        from datetime import datetime, timezone
+        client.table('offerings').update({
+            'status': 'cancelled',
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).eq('offering_id', int(offering_id)).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('exchange_cancel error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/exchange/lock', methods=['POST', 'OPTIONS'])
+def exchange_lock():
+    """Lock an offering (only by the layeur). Sets status to 'locked'. Body: { offering_id }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.get_json(force=True) or {}
+    offering_id = data.get('offering_id')
+    if not offering_id:
+        return jsonify({'error': 'offering_id required'}), 400
+
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('offerings').select('*').eq('offering_id', int(offering_id)).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows or len(rows) == 0:
+            return jsonify({'error': 'offering not found'}), 404
+        off = rows[0]
+        if str(off.get('layeur_id')) != str(user):
+            return jsonify({'error': 'forbidden: not your offering'}), 403
+        if off.get('status') != 'open':
+            return jsonify({'error': 'can only lock an open offering'}), 400
+
+        from datetime import datetime, timezone
+        client.table('offerings').update({
+            'status': 'locked',
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).eq('offering_id', int(offering_id)).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('exchange_lock error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/exchange/unlock', methods=['POST', 'OPTIONS'])
+def exchange_unlock():
+    """Unlock an offering (only by the layeur). Sets status back to 'open'. Body: { offering_id }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.get_json(force=True) or {}
+    offering_id = data.get('offering_id')
+    if not offering_id:
+        return jsonify({'error': 'offering_id required'}), 400
+
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('offerings').select('*').eq('offering_id', int(offering_id)).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows or len(rows) == 0:
+            return jsonify({'error': 'offering not found'}), 404
+        off = rows[0]
+        if str(off.get('layeur_id')) != str(user):
+            return jsonify({'error': 'forbidden: not your offering'}), 403
+        if off.get('status') != 'locked':
+            return jsonify({'error': 'can only unlock a locked offering'}), 400
+
+        from datetime import datetime, timezone
+        client.table('offerings').update({
+            'status': 'open',
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).eq('offering_id', int(offering_id)).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('exchange_unlock error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/exchange/delete', methods=['POST', 'OPTIONS'])
+def exchange_delete():
+    """Permanently delete an offering (only by the layeur). Body: { offering_id }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.get_json(force=True) or {}
+    offering_id = data.get('offering_id')
+    if not offering_id:
+        return jsonify({'error': 'offering_id required'}), 400
+
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('offerings').select('*').eq('offering_id', int(offering_id)).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows or len(rows) == 0:
+            return jsonify({'error': 'offering not found'}), 404
+        off = rows[0]
+        if str(off.get('layeur_id')) != str(user):
+            return jsonify({'error': 'forbidden: not your offering'}), 403
+
+        client.table('offerings').delete().eq('offering_id', int(offering_id)).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('exchange_delete error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/exchange/take', methods=['POST', 'OPTIONS'])
+def exchange_take():
+    """Take (fill) an offering. Body: { offering_id, stake }. Creates a bet in the bets table with layeur = offering owner."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.get_json(force=True) or {}
+    offering_id = data.get('offering_id')
+    stake = data.get('stake')
+    if not offering_id or stake is None:
+        return jsonify({'error': 'offering_id and stake required'}), 400
+    stake = float(stake)
+    if stake <= 0:
+        return jsonify({'error': 'stake must be > 0'}), 400
+
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        # Fetch offering
+        rc = client.table('offerings').select('*').eq('offering_id', int(offering_id)).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows or len(rows) == 0:
+            return jsonify({'error': 'offering not found'}), 404
+        off = rows[0]
+
+        if off.get('status') != 'open':
+            return jsonify({'error': 'offering is not open'}), 400
+
+        # Prevent self-betting
+        if str(off.get('layeur_id')) == str(user):
+            return jsonify({'error': 'cannot bet on your own offering'}), 400
+
+        max_bet = float(off.get('max_bet') or 0)
+        filled = float(off.get('filled') or 0)
+        remaining = max_bet - filled
+        if stake > remaining + 0.001:  # small tolerance for floating point
+            return jsonify({'error': f'stake exceeds remaining liquidity ({remaining:.2f})'}), 400
+
+        # Insert bet into bets table with the layeur being the offering creator
+        from datetime import datetime, timezone
+        bet_row = {
+            'user_id': str(user),
+            'market': 'Exchange',
+            'outcome': off.get('market') or '',
+            'bet_size': stake,
+            'odds_american': off.get('odds_american') or '+100',
+            'placed_at': datetime.now(timezone.utc).isoformat(),
+            'result': None,
+            'layeur': str(off.get('layeur_id')),
+            'game_id': 0,
+            'point': '0',
+            'bet_pnl': None,
+        }
+        ins = client.table('bets').insert(bet_row).execute()
+        ins_rows = ins.data if hasattr(ins, 'data') else (ins.get('data') if isinstance(ins, dict) else None)
+
+        # Update offering filled amount
+        new_filled = filled + stake
+        update_data = {
+            'filled': new_filled,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }
+        if new_filled >= max_bet:
+            update_data['status'] = 'closed'
+        client.table('offerings').update(update_data).eq('offering_id', int(offering_id)).execute()
+
+        return jsonify({'success': True, 'bet': ins_rows[0] if ins_rows else bet_row, 'remaining': max(0, max_bet - new_filled)}), 200
+    except Exception as e:
+        logging.exception('exchange_take error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/exchange/portfolio', methods=['GET', 'OPTIONS'])
+def exchange_portfolio():
+    """Return all exchange bets + stats for the BOOKIE Exchange Portfolio page."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        # Fetch all exchange bets (market = 'Exchange')
+        rc = client.table('bets').select('*').eq('market', 'Exchange').order('bet_id', desc=True).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        bets_list = rows or []
+
+        # Fetch all offerings for stats
+        oc = client.table('offerings').select('offering_id,layeur_id,status,filled,max_bet,created_at').execute()
+        off_rows = oc.data if hasattr(oc, 'data') else (oc.get('data') if isinstance(oc, dict) else None)
+        off_rows = off_rows or []
+
+        # Resolve screennames
+        all_uids = list({str(b.get('user_id')) for b in bets_list if b.get('user_id')} |
+                        {str(b.get('layeur')) for b in bets_list if b.get('layeur') and b.get('layeur') != 'betgsis'} |
+                        {str(o.get('layeur_id')) for o in off_rows if o.get('layeur_id')})
+        name_map = {'betgsis': 'betGSIS'}
+        if all_uids:
+            try:
+                uc = client.table('users').select('user_id,screenname').in_('user_id', all_uids).execute()
+                urows = uc.data if hasattr(uc, 'data') else (uc.get('data') if isinstance(uc, dict) else None)
+                for u in (urows or []):
+                    if u.get('user_id'):
+                        name_map[str(u['user_id'])] = u.get('screenname') or str(u['user_id'])
+            except Exception:
+                pass
+
+        # Enrich bets with screennames
+        for b in bets_list:
+            lay = b.get('layeur') or 'betgsis'
+            b['layeur_screenname'] = name_map.get(str(lay), str(lay))
+            b['bettor_screenname'] = name_map.get(str(b.get('user_id', '')), '')
+
+        # Stats
+        from datetime import datetime, timezone
+        today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        total_volume = sum(float(b.get('bet_size') or 0) for b in bets_list)
+        volume_today = sum(float(b.get('bet_size') or 0) for b in bets_list
+                          if (b.get('placed_at') or '').startswith(today_str))
+        open_offerings = sum(1 for o in off_rows if o.get('status') == 'open')
+        distinct_layeurs = len({str(o.get('layeur_id')) for o in off_rows if o.get('layeur_id')})
+        total_offerings = len(off_rows)
+
+        stats = {
+            'total_volume': total_volume,
+            'volume_today': volume_today,
+            'open_offerings': open_offerings,
+            'distinct_layeurs': distinct_layeurs,
+            'total_bets': len(bets_list),
+            'total_offerings': total_offerings,
+        }
+
+        return jsonify({'bets': bets_list, 'stats': stats}), 200
+    except Exception as e:
+        logging.exception('exchange_portfolio error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/exchange/delete-bet', methods=['POST', 'OPTIONS'])
+def exchange_delete_bet():
+    """Delete a P2P bet (only by bettor, only if layeur is NOT betgsis). Body: { bet_id }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.get_json(force=True) or {}
+    bet_id = data.get('bet_id')
+    if not bet_id:
+        return jsonify({'error': 'bet_id required'}), 400
+
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        # Fetch bet
+        rc = client.table('bets').select('*').eq('bet_id', int(bet_id)).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows or len(rows) == 0:
+            return jsonify({'error': 'bet not found'}), 404
+        bet = rows[0]
+
+        # Only the bettor can delete
+        if str(bet.get('user_id')) != str(user):
+            return jsonify({'error': 'forbidden: not your bet'}), 403
+
+        # CRITICAL: cannot delete bets against betGSIS (house bets)
+        if (bet.get('layeur') or 'betgsis') == 'betgsis':
+            return jsonify({'error': 'cannot delete house bets (layeur: betGSIS)'}), 403
+
+        # Refund liquidity on the offering if bet is unsettled
+        if bet.get('result') is None:
+            # Try to find and update the offering
+            try:
+                bet_outcome = bet.get('outcome') or ''
+                lay_id = bet.get('layeur') or ''
+                # Find matching offering by layeur + market
+                orc = client.table('offerings').select('*').eq('layeur_id', lay_id).eq('market', bet_outcome).limit(1).execute()
+                orows = orc.data if hasattr(orc, 'data') else (orc.get('data') if isinstance(orc, dict) else None)
+                if orows and len(orows) > 0:
+                    off = orows[0]
+                    new_filled = max(0, float(off.get('filled') or 0) - float(bet.get('bet_size') or 0))
+                    from datetime import datetime, timezone
+                    upd_data = {'filled': new_filled, 'updated_at': datetime.now(timezone.utc).isoformat()}
+                    if off.get('status') == 'closed' and new_filled < float(off.get('max_bet') or 0):
+                        upd_data['status'] = 'open'
+                    client.table('offerings').update(upd_data).eq('offering_id', off.get('offering_id')).execute()
+            except Exception:
+                logging.exception('exchange_delete_bet: failed to refund liquidity')
+
+        client.table('bets').delete().eq('bet_id', int(bet_id)).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('exchange_delete_bet error')
         return jsonify({'error': str(e)}), 500
 
 
@@ -1793,10 +2339,15 @@ def portfolio():
         since = None
 
     try:
-        # fetch bets for this user (order ascending by placed_at)
+        # fetch bets for this user AS BETTOR (order ascending by placed_at)
         res = client.table('bets').select('*').eq('user_id', uid).order('placed_at').execute()
         rows = res.data if hasattr(res, 'data') else (res.get('data') if isinstance(res, dict) else None)
         bets = rows or []
+
+        # fetch bets where this user is the LAYEUR
+        lay_res = client.table('bets').select('*').eq('layeur', str(uid)).order('placed_at').execute()
+        lay_rows = lay_res.data if hasattr(lay_res, 'data') else (lay_res.get('data') if isinstance(lay_res, dict) else None)
+        lay_bets = lay_rows or []
 
         # helper to convert american odds to decimal
         def american_to_decimal(amer):
@@ -1972,6 +2523,87 @@ def portfolio():
             if padt and padt >= last_24:
                 pnl_today += p.get('pnl', 0.0)
 
+        # ── Layeur stats (bets where this user laid the odds) ──
+        # Process lay_bets the same way but invert the P&L (layeur wins when bettor loses)
+        lay_processed = []
+        for b in lay_bets:
+            placed_at_raw = b.get('placed_at') or b.get('placedAt')
+            placed_at = None
+            try:
+                if placed_at_raw is None:
+                    placed_at = None
+                elif isinstance(placed_at_raw, (int, float)):
+                    placed_at = datetime.fromtimestamp(float(placed_at_raw), tz=timezone.utc)
+                elif isinstance(placed_at_raw, str):
+                    try:
+                        placed_at = datetime.fromisoformat(placed_at_raw.replace('Z', '+00:00'))
+                    except Exception:
+                        try:
+                            placed_at = datetime.fromtimestamp(float(placed_at_raw), tz=timezone.utc)
+                        except Exception:
+                            placed_at = None
+                if placed_at is not None:
+                    if placed_at.tzinfo is None:
+                        placed_at = placed_at.replace(tzinfo=timezone.utc)
+                    else:
+                        placed_at = placed_at.astimezone(timezone.utc)
+            except Exception:
+                placed_at = None
+
+            if since and placed_at and placed_at < since:
+                continue
+
+            stake = float(b.get('bet_size') or b.get('stake') or 0)
+            result = b.get('result')
+            odds_raw = b.get('odds_american') or b.get('odds') or None
+            dec = None
+            if odds_raw is not None:
+                try:
+                    dec = american_to_decimal(int(str(odds_raw).replace('+', '')))
+                except Exception:
+                    dec = None
+
+            # Bettor's P&L
+            bettor_pnl = 0.0
+            if result is not None:
+                status = str(result).strip().lower()
+                if status == 'loss':
+                    bettor_pnl = -stake
+                elif status == 'win':
+                    bettor_pnl = (stake * dec - stake) if dec else 0.0
+                elif status == 'push':
+                    bettor_pnl = 0.0
+            # Layeur's P&L is the inverse
+            layeur_pnl = -bettor_pnl
+
+            lay_processed.append({
+                'placed_at_dt': placed_at,
+                'stake': stake,
+                'result': result,
+                'pnl': layeur_pnl,
+                'market': b.get('market'),
+            })
+
+        lay_settled = [p for p in lay_processed if p.get('result') is not None]
+        lay_active = [p for p in lay_processed if p.get('result') is None]
+
+        lay_total_bets = len(lay_processed)
+        lay_total_won = sum(1 for p in lay_settled if p.get('pnl', 0) > 0)
+        lay_net_pnl = sum(p.get('pnl', 0.0) for p in lay_settled)
+        lay_total_wagered = sum(p.get('stake', 0.0) for p in lay_settled)
+        lay_active_risk = sum(p.get('stake', 0.0) for p in lay_active)
+        lay_roi = (lay_net_pnl / lay_total_wagered) if lay_total_wagered > 0 else None
+
+        lay_pnl_today = 0.0
+        for p in lay_settled:
+            padt = p.get('placed_at_dt')
+            if padt and padt >= last_24:
+                lay_pnl_today += p.get('pnl', 0.0)
+
+        # Combined NET stats (bettor P&L + layeur P&L)
+        combined_net_pnl = net_pnl + lay_net_pnl
+        combined_pnl_today = pnl_today + lay_pnl_today
+
         return jsonify({
             'summary': {
                 'total_bets': total_bets,
@@ -1982,6 +2614,18 @@ def portfolio():
                 'roi': roi,
                 'active_wager_risk': active_wager_risk,
                 'pnl_today': pnl_today,
+                # new combined fields
+                'combined_net_pnl': combined_net_pnl,
+                'combined_pnl_today': combined_pnl_today,
+            },
+            'layeur_summary': {
+                'total_bets_accepted': lay_total_bets,
+                'total_won': lay_total_won,
+                'net_pnl': lay_net_pnl,
+                'total_wagered_accepted': lay_total_wagered,
+                'active_risk': lay_active_risk,
+                'roi': lay_roi,
+                'pnl_today': lay_pnl_today,
             },
             'markets': market_list,
             'time_series': ts,
@@ -2003,10 +2647,36 @@ def bets_my():
         return jsonify({'error': 'supabase client missing'}), 500
     try:
         uid = user
+        mode = request.args.get('mode', 'bettor')  # 'bettor' or 'layeur'
         # Query canonical bets table, order by placed_at (newer first)
-        res = client.table('bets').select('*').eq('user_id', uid).order('placed_at', desc=True).execute()
+        if mode == 'layeur':
+            res = client.table('bets').select('*').eq('layeur', uid).order('placed_at', desc=True).execute()
+        else:
+            res = client.table('bets').select('*').eq('user_id', uid).order('placed_at', desc=True).execute()
         rows = res.data if hasattr(res, 'data') else (res.get('data') if isinstance(res, dict) else None)
-        return jsonify({'bets': rows or []}), 200
+        bets_list = rows or []
+
+        # Resolve layeur and bettor UUIDs to screennames
+        all_uids = list({str(b.get('layeur')) for b in bets_list if b.get('layeur') and b.get('layeur') != 'betgsis'} |
+                        {str(b.get('user_id')) for b in bets_list if b.get('user_id')})
+        name_map = {'betgsis': 'betGSIS'}
+        if all_uids:
+            try:
+                lc = client.table('users').select('user_id,screenname').in_('user_id', all_uids).execute()
+                lrows = lc.data if hasattr(lc, 'data') else (lc.get('data') if isinstance(lc, dict) else None)
+                for u in (lrows or []):
+                    if u.get('user_id'):
+                        name_map[str(u['user_id'])] = u.get('screenname') or str(u['user_id'])
+            except Exception:
+                pass
+
+        for b in bets_list:
+            lay = b.get('layeur') or 'betgsis'
+            b['layeur'] = lay
+            b['layeur_screenname'] = name_map.get(lay, lay)
+            b['bettor_screenname'] = name_map.get(str(b.get('user_id', '')), '')
+
+        return jsonify({'bets': bets_list}), 200
     except Exception as e:
         logging.exception('bets_my error')
         return jsonify({'error': str(e)}), 500
@@ -2014,7 +2684,7 @@ def bets_my():
 
 @api_bp.route('/bets/active', methods=['GET', 'OPTIONS'])
 def bets_active():
-    """Return active bets (result IS NULL) for the authenticated user, ordered by bet_id desc."""
+    """Return active bets (result IS NULL) for bettor or layeur mode."""
     if request.method == 'OPTIONS':
         return ('', 200)
     user = _get_user_from_header(request)
@@ -2025,9 +2695,36 @@ def bets_active():
         return jsonify({'error': 'supabase client missing'}), 500
     try:
         uid = user
-        res = client.table('bets').select('*').eq('user_id', uid).is_('result', None).order('bet_id', desc=True).execute()
+        mode = request.args.get('mode', 'bettor')  # 'bettor' or 'layeur'
+        if mode == 'layeur':
+            # Bets where this user is the layeur and not yet settled
+            res = client.table('bets').select('*').eq('layeur', uid).is_('result', None).order('bet_id', desc=True).execute()
+        else:
+            res = client.table('bets').select('*').eq('user_id', uid).is_('result', None).order('bet_id', desc=True).execute()
         rows = res.data if hasattr(res, 'data') else (res.get('data') if isinstance(res, dict) else None)
-        return jsonify({'bets': rows or []}), 200
+        bets_list = rows or []
+
+        # Resolve user screennames for display
+        all_uids = list({str(b.get('user_id')) for b in bets_list if b.get('user_id')} |
+                        {str(b.get('layeur')) for b in bets_list if b.get('layeur') and b.get('layeur') != 'betgsis'})
+        name_map = {'betgsis': 'betGSIS'}
+        if all_uids:
+            try:
+                uc = client.table('users').select('user_id,screenname').in_('user_id', all_uids).execute()
+                urows = uc.data if hasattr(uc, 'data') else (uc.get('data') if isinstance(uc, dict) else None)
+                for u in (urows or []):
+                    if u.get('user_id'):
+                        name_map[str(u['user_id'])] = u.get('screenname') or str(u['user_id'])
+            except Exception:
+                pass
+
+        for b in bets_list:
+            lay = b.get('layeur') or 'betgsis'
+            b['layeur'] = lay
+            b['layeur_screenname'] = name_map.get(lay, lay)
+            b['bettor_screenname'] = name_map.get(str(b.get('user_id', '')), '')
+
+        return jsonify({'bets': bets_list}), 200
     except Exception as e:
         logging.exception('bets_active error')
         return jsonify({'error': str(e)}), 500
@@ -2059,8 +2756,12 @@ def bets_settle():
         if not rows or len(rows) == 0:
             return jsonify({'error': 'bet not found'}), 404
         bet = rows[0]
-        # ensure ownership
-        if str(bet.get('user_id')) != str(user):
+        # ensure ownership: bettor OR layeur can settle P2P bets
+        bet_owner = str(bet.get('user_id'))
+        bet_layeur = str(bet.get('layeur') or 'betgsis')
+        is_bettor = bet_owner == str(user)
+        is_layeur = bet_layeur == str(user)
+        if not is_bettor and not is_layeur:
             return jsonify({'error': 'forbidden'}), 403
 
         stake = float(bet.get('bet_size') or bet.get('stake') or 0)

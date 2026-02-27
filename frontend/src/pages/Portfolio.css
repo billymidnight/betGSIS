@@ -10,10 +10,10 @@
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
-  padding: var(--space-xl) var(--space-lg);
+  padding: var(--space-lg) var(--space-md);
   display: flex;
   flex-direction: column;
-  gap: var(--space-xl);
+  gap: var(--space-md);
   position: relative;
 }
 
@@ -47,18 +47,41 @@
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-lg);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  padding: 14px 18px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01)) !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
+  transition: border-color 150ms, transform 150ms;
+}
+.stat-card:hover {
+  border-color: rgba(255,255,255,0.10) !important;
+  transform: translateY(-2px);
+}
+.stat-card.stat-card--highlight {
+  border-color: rgba(246,200,95,0.14) !important;
+  background: linear-gradient(180deg, rgba(246,200,95,0.05), rgba(246,200,95,0.01)) !important;
 }
 
 .stat-card .stat-value {
-  font-size: 3rem;
+  font-size: 1.5rem;
   font-weight: 700;
-  color: #ffffff; /* neutral stats are white */
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, 'Roboto Mono', monospace;
+  letter-spacing: -0.5px;
 }
 
 .stat-card .stat-label {
-  font-size: 1.3rem;
+  font-size: 0.78rem;
+  margin-top: 3px;
+}
+
+.stat-card.stat-card--highlight .stat-value {
+  font-size: 1.65rem;
 }
 
 .graph-card {
@@ -116,10 +139,61 @@
 
 .stat-label { color: rgba(255,255,255,0.8); font-weight: 600; }
 
-.portfolio-title { color: #ebf4ff; font-size: 2.5rem; font-weight: 700; margin: 0 0 8px 0 }
+.portfolio-title { color: #ebf4ff; font-size: 1.8rem; font-weight: 700; margin: 0 0 4px 0 }
 
 .stat-value.positive { color: #2ed573; }
 .stat-value.negative { color: #ff4757; }
+
+/* ─── P&L Buckets (As Bettor / As Layeur) ─── */
+.pnl-bucket {
+  flex: 1;
+  min-width: 260px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 12px;
+  padding: 18px 22px;
+}
+.pnl-bucket--gold {
+  background: rgba(246,200,95,0.03);
+  border-color: rgba(246,200,95,0.08);
+}
+.pnl-bucket-header {
+  font-size: 0.88rem;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--color-text-muted);
+  margin-bottom: 14px;
+  font-weight: 700;
+}
+.pnl-bucket-header--gold {
+  color: #f6c85f;
+}
+.pnl-bucket-stats {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.pnl-bucket-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pnl-bucket-label {
+  font-size: 0.82rem;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+.pnl-bucket-value {
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, 'Roboto Mono', monospace;
+  font-weight: 800;
+  font-size: 1.35rem;
+  color: var(--color-text);
+  letter-spacing: 0.2px;
+  line-height: 1.2;
+}
 
 /* make table header stand out with blue tint */
 .table-header { background: linear-gradient(90deg, rgba(10,36,64,0.95), rgba(26,56,97,0.95)); color: #e6f3ff; }

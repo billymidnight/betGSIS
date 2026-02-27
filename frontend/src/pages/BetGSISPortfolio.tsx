@@ -408,7 +408,6 @@ export default function BetGSISPortfolio() {
                   <tr>
                     <th>BetID</th>
                     <th>Time Placed</th>
-                    <th>Game No</th>
                     <th>Bettor</th>
                     <th>Outcome</th>
                     <th>Bet Amount</th>
@@ -425,7 +424,6 @@ export default function BetGSISPortfolio() {
                       <tr key={r.bet_id}>
                         <td style={{fontFamily:'monospace'}}>{r.bet_id}</td>
                         <td style={{whiteSpace:'nowrap'}}>{fmtTime(r.placed_at_edt || r.placed_at_utc)}</td>
-                        <td>{r.game_id}</td>
                         <td>{r.screenname || '—'}</td>
                         <td style={{maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.outcome}</td>
                         <td style={{fontFamily:'monospace'}}>${Number(r.bet_size).toFixed(2)}</td>
@@ -448,7 +446,7 @@ export default function BetGSISPortfolio() {
                     );
                   })}
                   {displayBets.length === 0 && (
-                    <tr><td colSpan={10} style={{textAlign:'center',padding:24,color:'#94a3b8'}}>No bets found</td></tr>
+                    <tr><td colSpan={9} style={{textAlign:'center',padding:24,color:'#94a3b8'}}>No bets found</td></tr>
                   )}
                 </tbody>
               </table>

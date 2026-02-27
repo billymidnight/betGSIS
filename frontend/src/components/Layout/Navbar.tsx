@@ -42,41 +42,60 @@ export default function Navbar({ pnlValue = 0 }: NavbarProps) {
   // Compute live P&L for the logged-in user by fetching their bets and summing per rules.
   const computePnl = async () => {
     try {
-      const bets = await fetchMyBets();
-      if (!bets || !Array.isArray(bets)) {
-        setPnlValueLive(0);
-        return;
-      }
-      let total = 0;
-      for (const b of bets) {
-        const stake = Number(b.bet_size ?? b.stake ?? 0) || 0;
-        // prefer stored decimal odds, otherwise convert from american
-        let dec = null;
-        if (b.odds_decimal || b.odds_decimal === 0) dec = Number(b.odds_decimal);
-        else if (b.decimal_odds || b.odds_decimal) dec = Number(b.decimal_odds || b.odds_decimal);
-        else if (b.odds_american || b.odds) {
-          // parse american like '+480' or '-150'
-          const raw = String(b.odds_american ?? b.odds ?? '');
-          const num = parseInt(raw.replace('+', ''), 10);
-          if (!Number.isNaN(num)) dec = americanToDecimal(num);
-        }
+      // Fetch both bettor and layeur bets in parallel
+      const [bettorBets, layeurBets] = await Promise.all([
+        fetchMyBets('bettor'),
+        fetchMyBets('layeur'),
+      ]);
 
-        const status = (b.result ?? '').toString().toLowerCase();
-        let profit = 0;
-        if (status === 'win') {
-          if (dec && !Number.isNaN(Number(dec))) profit = stake * (Number(dec) - 1.0);
-          else profit = 0;
-        } else if (status === 'loss') {
-          profit = -stake;
-        } else {
-          // pending / other -> ignore
-          profit = 0;
+      let total = 0;
+
+      // Bettor P&L: standard (win = profit, loss = -stake)
+      if (bettorBets && Array.isArray(bettorBets)) {
+        for (const b of bettorBets) {
+          const stake = Number(b.bet_size ?? b.stake ?? 0) || 0;
+          let dec = null;
+          if (b.odds_decimal || b.odds_decimal === 0) dec = Number(b.odds_decimal);
+          else if (b.decimal_odds || b.odds_decimal) dec = Number(b.decimal_odds || b.odds_decimal);
+          else if (b.odds_american || b.odds) {
+            const raw = String(b.odds_american ?? b.odds ?? '');
+            const num = parseInt(raw.replace('+', ''), 10);
+            if (!Number.isNaN(num)) dec = americanToDecimal(num);
+          }
+          const status = (b.result ?? '').toString().toLowerCase();
+          if (status === 'win') {
+            if (dec && !Number.isNaN(Number(dec))) total += stake * (Number(dec) - 1.0);
+          } else if (status === 'loss') {
+            total -= stake;
+          }
         }
-        total += Number(profit || 0);
       }
+
+      // Layeur P&L: inverted (bettor win = layeur loses payout, bettor loss = layeur keeps stake)
+      if (layeurBets && Array.isArray(layeurBets)) {
+        for (const b of layeurBets) {
+          const stake = Number(b.bet_size ?? b.stake ?? 0) || 0;
+          let dec = null;
+          if (b.odds_decimal || b.odds_decimal === 0) dec = Number(b.odds_decimal);
+          else if (b.decimal_odds || b.odds_decimal) dec = Number(b.decimal_odds || b.odds_decimal);
+          else if (b.odds_american || b.odds) {
+            const raw = String(b.odds_american ?? b.odds ?? '');
+            const num = parseInt(raw.replace('+', ''), 10);
+            if (!Number.isNaN(num)) dec = americanToDecimal(num);
+          }
+          const status = (b.result ?? '').toString().toLowerCase();
+          if (status === 'win') {
+            // Bettor won → layeur pays out profit
+            if (dec && !Number.isNaN(Number(dec))) total -= stake * (Number(dec) - 1.0);
+          } else if (status === 'loss') {
+            // Bettor lost → layeur keeps the stake
+            total += stake;
+          }
+        }
+      }
+
       setPnlValueLive(total);
     } catch (e) {
-      // on error, do not crash the nav; leave previous pnl
       console.warn('Failed to compute live P&L', e);
     }
   };
@@ -95,8 +114,8 @@ export default function Navbar({ pnlValue = 0 }: NavbarProps) {
     const onBetsUpdated = () => computePnl();
     window.addEventListener('bets-updated', onBetsUpdated as EventListener);
 
-    // periodic refresh every 15s
-    const iv = setInterval(() => computePnl(), 15000);
+    // periodic refresh every 5s
+    const iv = setInterval(() => computePnl(), 5000);
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
@@ -129,9 +148,13 @@ export default function Navbar({ pnlValue = 0 }: NavbarProps) {
           </Link>
           {user && user.role === 'BOOKIE' && (
             <>
-              <Link to="/betgsis-portfolio" className="navbar-link">
-                betGSIS-Portfolio
-              </Link>
+              <div className="navbar-dropdown-wrap">
+                <span className="navbar-link navbar-dropdown-trigger">Bookkeeping ▾</span>
+                <div className="navbar-dropdown">
+                  <Link to="/betgsis-portfolio" className="navbar-dropdown-item">Sportsbook</Link>
+                  <Link to="/exchange-portfolio" className="navbar-dropdown-item">Bet Exchange</Link>
+                </div>
+              </div>
               <Link to="/market-locker" className="navbar-link">
                 Market Locker
               </Link>

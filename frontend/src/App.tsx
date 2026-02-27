@@ -22,6 +22,8 @@ import BetGSISPortfolio from './pages/BetGSISPortfolio'
 import MarketLocker from './pages/MarketLocker'
 import BookieMasterLocker from './pages/BookieMasterLocker'
 import Help from './pages/Help'
+import Exchange from './pages/Exchange'
+import ExchangePortfolio from './pages/ExchangePortfolio'
 import ChessTemplate from './pages/templates/Chess'
 import ZetamacTemplate from './pages/templates/Zetamac'
 import MonopolyTemplate from './pages/templates/Monopoly'
@@ -214,6 +216,28 @@ export default function App() {
             <BookRoute>
               <AppShell>
                 <BetGSISPortfolio />
+              </AppShell>
+            </BookRoute>
+          }
+        />
+
+        <Route
+          path="/exchange"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <Exchange />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/exchange-portfolio"
+          element={
+            <BookRoute>
+              <AppShell>
+                <ExchangePortfolio />
               </AppShell>
             </BookRoute>
           }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { fetchActiveBets, settleBet } from '../lib/api/api';
+import { fetchActiveBets, settleBet, deleteP2PBet } from '../lib/api/api';
 import './BetSettler.css';
 
 export default function BetSettler() {
@@ -7,11 +7,12 @@ export default function BetSettler() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<any | null>(null);
   const [choice, setChoice] = useState<'win'|'loss'|'push'>('win');
+  const [mode, setMode] = useState<'bettor' | 'layeur'>('bettor');
 
   async function load() {
     setLoading(true);
     try {
-      const rows = await fetchActiveBets();
+      const rows = await fetchActiveBets(mode);
       setBets(rows || []);
     } catch (e) {
       console.error('fetchActiveBets failed', e);
@@ -20,7 +21,7 @@ export default function BetSettler() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [mode]);
 
   function openSettle(bet: any) {
     setEditing(bet);
@@ -35,13 +36,28 @@ export default function BetSettler() {
     if (!editing) return;
     try {
       await settleBet(editing.bet_id || editing.id || editing.betId, choice);
-      // refresh
       await load();
       closeModal();
     } catch (e) {
       console.error('settle failed', e);
       alert('Settle failed: ' + (e as any).message);
     }
+  }
+
+  async function doDelete(bet: any) {
+    const id = bet.bet_id || bet.id || bet.betId;
+    if (!confirm('Delete this P2P bet? This cannot be undone.')) return;
+    try {
+      await deleteP2PBet(id);
+      await load();
+    } catch (e: any) {
+      alert('Delete failed: ' + (e?.response?.data?.error || e.message));
+    }
+  }
+
+  function isP2P(bet: any): boolean {
+    const lay = bet.layeur || 'betgsis';
+    return lay !== 'betgsis';
   }
 
   function fmtUTC(ts: string | null) {
@@ -57,15 +73,29 @@ export default function BetSettler() {
     <div className="bet-settler-page">
       <h1 className="page-title">Bet Settler</h1>
       <p className="muted">Only active bets (not yet settled) are listed here.</p>
+
+      {/* Mode Toggle */}
+      <div style={{ display: 'inline-flex', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 16 }}>
+        <button
+          onClick={() => setMode('bettor')}
+          style={{ padding: '8px 18px', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', border: 'none', background: mode === 'bettor' ? 'rgba(246,200,95,0.12)' : 'transparent', color: mode === 'bettor' ? '#f6c85f' : 'var(--color-text-muted)' }}
+        >As Bettor</button>
+        <button
+          onClick={() => setMode('layeur')}
+          style={{ padding: '8px 18px', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', border: 'none', background: mode === 'layeur' ? 'rgba(246,200,95,0.12)' : 'transparent', color: mode === 'layeur' ? '#f6c85f' : 'var(--color-text-muted)' }}
+        >As Layeur</button>
+      </div>
+
         {loading ? <div>Loading…</div> : (
           <table className="settler-table">
             <thead>
               <tr>
                 <th>Time Placed (UTC)</th>
-                <th>Game No</th>
                 <th>Outcome</th>
                 <th>Bet Amount</th>
                 <th>Odds</th>
+                {mode === 'bettor' && <th>Layeur</th>}
+                {mode === 'layeur' && <th>Bettor</th>}
                 <th></th>
               </tr>
             </thead>
@@ -73,11 +103,17 @@ export default function BetSettler() {
               {bets.map((b) => (
                 <tr key={b.bet_id || b.id}>
                   <td>{fmtUTC(b.placed_at || b.created_at || null)}</td>
-                  <td>{b.game_id ?? b.game}</td>
                   <td className="mono">{String(b.outcome || b.market || '')}</td>
                   <td>{Number(b.bet_size || b.stake || 0).toFixed(2)}</td>
                   <td>{String(b.odds_american || b.odds || '')}</td>
-                  <td><button className="icon-btn" onClick={() => openSettle(b)} title="Settle"><span>✎</span></button></td>
+                  {mode === 'bettor' && <td>{(b.layeur_screenname || b.layeur || 'betGSIS') === 'betGSIS' || (!b.layeur_screenname && (!b.layeur || b.layeur === 'betgsis')) ? (<span className="betgsis-layeur-badge"><img src="/assets/logo/—Pngtree—unicorn horse glitter copper_4221660.png" alt="" className="betgsis-mini-logo" />betGSIS</span>) : (b.layeur_screenname || b.layeur)}</td>}
+                  {mode === 'layeur' && <td>{b.bettor_screenname || b.user_id || ''}</td>}
+                  <td style={{ display: 'flex', gap: 6 }}>
+                    <button className="icon-btn" onClick={() => openSettle(b)} title="Settle"><span>✎</span></button>
+                    {mode === 'bettor' && isP2P(b) && (
+                      <button className="icon-btn" onClick={() => doDelete(b)} title="Delete P2P bet" style={{ color: '#ff3b30' }}><span>🗑</span></button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -93,6 +129,8 @@ export default function BetSettler() {
               <div className="modal-row"><strong>Outcome:</strong> <span className="mono">{editing.outcome}</span></div>
               <div className="modal-row"><strong>Bet Amount:</strong> ${Number(editing.bet_size || editing.stake || 0).toFixed(2)}</div>
               <div className="modal-row"><strong>Odds:</strong> {String(editing.odds_american || editing.odds || '')}</div>
+              {mode === 'bettor' && <div className="modal-row"><strong>Layeur:</strong> {editing.layeur_screenname || editing.layeur || 'betGSIS'}</div>}
+              {mode === 'layeur' && <div className="modal-row"><strong>Bettor:</strong> {editing.bettor_screenname || editing.user_id}</div>}
 
               <div className="modal-row">
                 <label>Result:</label>

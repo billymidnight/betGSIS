@@ -1,28 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { fetchMyBets, fetchCurrentGame } from '../lib/api/api';
+import { fetchMyBets } from '../lib/api/api';
 import { parseOutcome } from '../lib/utils/bets';
 import { americanToDecimal, formatOdds, formatCurrency } from '../lib/format';
 import './MyBets.css';
 
 export default function MyBets() {
   const [bets, setBets] = useState<any[]>([]);
-  const [gameNo, setGameNo] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState<'bettor' | 'layeur'>('bettor');
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const [myBets, g] = await Promise.all([fetchMyBets(), fetchCurrentGame()]);
+        const myBets = await fetchMyBets(role);
         setBets(myBets || []);
-        setGameNo(g ?? null);
       } catch (e) {
         console.error('Failed to fetch bets or game:', e);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [role]);
 
   const totalBets = bets.length;
 
@@ -55,7 +54,10 @@ export default function MyBets() {
             <div className="my-bets-sub">Total Bets: <strong>{totalBets}</strong></div>
           </div>
           <div className="my-bets-controls">
-            <div className="my-bets-game">Geo Game #: <strong>{gameNo ?? '—'}</strong></div>
+            <div className="role-toggle">
+              <button className={`role-btn ${role === 'bettor' ? 'active' : ''}`} onClick={() => setRole('bettor')}>As Bettor</button>
+              <button className={`role-btn ${role === 'layeur' ? 'active' : ''}`} onClick={() => setRole('layeur')}>As Layeur</button>
+            </div>
             <div className="filter-bar">
               <button className={`filter-btn ${filter==='all'?'active':''}`} onClick={() => setFilter('all')}>All</button>
               <button className={`filter-btn ${filter==='active'?'active':''}`} onClick={() => setFilter('active')}>Active</button>
@@ -113,16 +115,42 @@ export default function MyBets() {
               const payout = (Number(b.bet_size) || 0) * Number(decimalOdds || 1);
 
               // Normalize status to lowercase for consistent CSS class names (DB may store 'Win'/'Loss'/'Push')
-              const status = b.result === null || b.result === undefined ? 'active' : String(b.result).toLowerCase();
+              const rawStatus = b.result === null || b.result === undefined ? 'active' : String(b.result).toLowerCase();
+              // For layeur perspective: flip win/loss (bettor's win = layeur's loss)
+              const status = role === 'layeur'
+                ? (rawStatus === 'win' ? 'loss' : rawStatus === 'loss' ? 'win' : rawStatus)
+                : rawStatus;
               const isActive = status === 'active';
               const isWin = status === 'win';
               const isLoss = status === 'loss';
+
+              // Layeur P&L: +stake if bettor lost, -(profit) if bettor won
+              let layeurPnl: number | null = null;
+              if (role === 'layeur' && rawStatus !== 'active') {
+                if (rawStatus === 'loss') {
+                  // Bettor lost → layeur keeps the stake
+                  layeurPnl = Number(b.bet_size || 0);
+                } else if (rawStatus === 'win') {
+                  // Bettor won → layeur pays the profit payout
+                  layeurPnl = -(Number(b.bet_size || 0) * (Number(decimalOdds) - 1));
+                }
+              }
 
               return (
                 <div className={`bet-card bet-card--${status}`} key={b.bet_id || `${b.user_id}_${b.placed_at}` }>
                   <div className="bet-card-top">
                     <div className="bet-card-time">{placed}</div>
-                    <div className={`bet-tag bet-tag--${status}`}>{status === 'active' ? 'Active' : status.charAt(0).toUpperCase() + status.slice(1)}</div>
+                    <div className="bet-card-tags">
+                      <div className={`bet-tag bet-tag--${status}`}>{status === 'active' ? 'Active' : status.charAt(0).toUpperCase() + status.slice(1)}</div>
+                      {b.layeur && b.layeur !== 'betgsis' && (
+                        <div className="layeur-tag-p2p layeur-tag-lg">
+                          {role === 'layeur' ? `bettor: ${b.bettor_screenname || b.user_id}` : `vs ${b.layeur_screenname || b.layeur}`}
+                        </div>
+                      )}
+                      {b.layeur === 'betgsis' && (
+                        <div className="layeur-tag-house layeur-tag-lg"><img src="/assets/logo/—Pngtree—unicorn horse glitter copper_4221660.png" alt="" className="betgsis-mini-logo" />betGSIS</div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="bet-card-body">
@@ -132,12 +160,20 @@ export default function MyBets() {
                       <div className="bet-bottom-left">
                         <div className="bet-stake-label">Stake:</div>
                         <div className="bet-stake-val">{formatCurrency(Number(b.bet_size || 0))}</div>
-                        {/* Payout label: show 'Potential Payout' for active, 'Payout' for wins, hide for losses */}
-                        {!isLoss && (
+                        {role === 'layeur' && layeurPnl !== null ? (
                           <>
-                            <div className="bet-payout-label">{isWin ? 'Payout:' : 'Potential Payout:'}</div>
-                            <div className="bet-payout-val">{formatCurrency(Number(payout || 0))}</div>
+                            <div className="bet-payout-label">P&L:</div>
+                            <div className={`bet-pnl-val ${layeurPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}`}>
+                              {layeurPnl >= 0 ? '+' : ''}{formatCurrency(layeurPnl)}
+                            </div>
                           </>
+                        ) : (
+                          !isLoss && (
+                            <>
+                              <div className="bet-payout-label">{isWin ? 'Payout:' : 'Potential Payout:'}</div>
+                              <div className="bet-payout-val">{formatCurrency(Number(payout || 0))}</div>
+                            </>
+                          )
                         )}
                       </div>
                     </div>

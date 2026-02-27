@@ -17,6 +17,9 @@ export default function Sidebar() {
         <Link to="/templates/poker">Poker Odds</Link>
         <Link to="/templates/birthday-paradox">Birthday Paradox Odds</Link>
         <div style={{height:12}} />
+        <div className="sidebar-section-title">Exchanges</div>
+        <Link to="/exchange">GSIS Bet Exchange</Link>
+        <div style={{height:12}} />
         <div className="sidebar-section-title">Trading</div>
         <Link to="/trading">Trading Games</Link>
         <div style={{height:8}} />

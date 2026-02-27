@@ -140,23 +140,24 @@
 .bgp-bets-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.92rem;
+  font-size: 1.02rem;
 }
 .bgp-bets-table thead th {
   text-align: left;
   color: #94a3b8;
   font-weight: 700;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 10px 8px;
+  padding: 11px 10px;
   border-bottom: 1px solid #1e293b;
   white-space: nowrap;
 }
 .bgp-bets-table tbody td {
-  padding: 9px 8px;
+  padding: 10px 10px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
   color: #cbd5e1;
+  font-size: 0.98rem;
 }
 .bgp-bets-table tbody tr:hover {
   background: rgba(59,130,246,0.04);

@@ -48,8 +48,11 @@
 
 .navbar-menu {
   display: flex;
-  gap: var(--space-xl);
+  gap: var(--space-md);
   flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  overflow: hidden;
 
   @media (max-width: 768px) {
     display: none;
@@ -59,10 +62,11 @@
 .navbar-link {
   color: var(--color-text-primary);
   text-decoration: none;
-  font-size: 1.05rem; /* slightly bigger for readability */
+  font-size: 0.88rem;
   font-family: var(--font-family-mono);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
   transition: color var(--transition-normal) ease;
   position: relative;
 
@@ -86,6 +90,51 @@
       width: 100%;
     }
   }
+}
+
+/* ── Bookkeeping Hover Dropdown ── */
+.navbar-dropdown-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.navbar-dropdown-trigger {
+  cursor: default;
+  user-select: none;
+}
+.navbar-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 6px;
+  min-width: 170px;
+  background: #0b1a30;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 6px 0;
+  z-index: 1000;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+.navbar-dropdown-wrap:hover .navbar-dropdown {
+  display: flex;
+  flex-direction: column;
+}
+.navbar-dropdown-item {
+  padding: 9px 18px;
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-family: var(--font-family-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+.navbar-dropdown-item:hover {
+  background: rgba(246,200,95,0.08);
+  color: #f6c85f;
 }
 
 .navbar-right {

@@ -180,8 +180,8 @@ export async function fetchBookkeepingAccounts() {
   return r.data;
 }
 
-export async function fetchAllBets() {
-  const r = await api.get('/bookkeeping/all-bets');
+export async function fetchAllBets(layeur: string = 'betgsis') {
+  const r = await api.get(`/bookkeeping/all-bets?layeur=${layeur}`);
   return r.data;
 }
 
@@ -264,14 +264,14 @@ export async function placeBetServer(betPayload: Record<string, any>) {
   return r.data;
 }
 
-export async function fetchMyBets() {
+export async function fetchMyBets(mode: 'bettor' | 'layeur' = 'bettor') {
   const session = await supabase.auth.getSession();
   let token = (session as any)?.data?.session?.access_token;
   if (!token) token = useAuthStore.getState().accessToken ?? null;
   if (import.meta.env.DEV) console.log('fetchMyBets token present?', !!token);
   if (!token) return [];
   const headers = { Authorization: `Bearer ${token}` };
-  const r = await api.get('/bets/my', { headers });
+  const r = await api.get(`/bets/my?mode=${mode}`, { headers });
   return r.data.bets || [];
 }
 
@@ -280,14 +280,14 @@ export async function fetchCurrentGame() {
   return (r.data && r.data.game_id) ? r.data.game_id : null;
 }
 
-export async function fetchActiveBets() {
+export async function fetchActiveBets(mode: 'bettor' | 'layeur' = 'bettor') {
   const session = await supabase.auth.getSession();
   let token = (session as any)?.data?.session?.access_token;
   if (!token) token = useAuthStore.getState().accessToken ?? null;
   if (import.meta.env.DEV) console.log('fetchActiveBets token present?', !!token);
   if (!token) return [];
   const headers = { Authorization: `Bearer ${token}` };
-  const r = await api.get('/bets/active', { headers });
+  const r = await api.get(`/bets/active?mode=${mode}`, { headers });
   return r.data.bets || [];
 }
 
@@ -539,6 +539,90 @@ export async function endGoodShepherdSession(data: { num_bets: number; net_pnl: 
       'Authorization': `Bearer ${token}`
     }
   });
+  return r.data;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Exchange / P2P Offerings API
+// ═══════════════════════════════════════════════════════════════════
+
+async function _getAuthHeaders(): Promise<Record<string, string>> {
+  const session = await supabase.auth.getSession();
+  let token = (session as any)?.data?.session?.access_token;
+  if (!token) token = useAuthStore.getState().accessToken ?? null;
+  if (!token) throw new Error('Not authenticated');
+  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+}
+
+export async function fetchOfferings(): Promise<any[]> {
+  const r = await api.get('/exchange/offerings');
+  return r.data.offerings || [];
+}
+
+export async function createOffering(payload: {
+  bet_name: string;
+  bet_description?: string;
+  odds: string | number;
+  odds_format?: 'american' | 'decimal' | 'probability';
+  max_bet: number;
+}): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/exchange/create', payload, { headers });
+  return r.data;
+}
+
+export async function editOffering(payload: {
+  offering_id: number;
+  odds?: string | number;
+  odds_format?: string;
+  max_bet?: number;
+  bet_name?: string;
+  bet_description?: string;
+}): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/exchange/edit', payload, { headers });
+  return r.data;
+}
+
+export async function cancelOffering(offeringId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/exchange/cancel', { offering_id: offeringId }, { headers });
+  return r.data;
+}
+
+export async function lockOffering(offeringId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/exchange/lock', { offering_id: offeringId }, { headers });
+  return r.data;
+}
+
+export async function unlockOffering(offeringId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/exchange/unlock', { offering_id: offeringId }, { headers });
+  return r.data;
+}
+
+export async function deleteOffering(offeringId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/exchange/delete', { offering_id: offeringId }, { headers });
+  return r.data;
+}
+
+export async function takeOffering(offeringId: number, stake: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/exchange/take', { offering_id: offeringId, stake }, { headers });
+  return r.data;
+}
+
+export async function deleteP2PBet(betId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/exchange/delete-bet', { bet_id: betId }, { headers });
+  return r.data;
+}
+
+export async function fetchExchangePortfolio(): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.get('/exchange/portfolio', { headers });
   return r.data;
 }
 
