@@ -3202,7 +3202,10 @@ def pari_sessions_list():
         except Exception:
             pass
 
-        return jsonify({'sessions': sessions, 'enrolled_session_ids': enrolled_ids}), 200
+        resp = jsonify({'sessions': sessions, 'enrolled_session_ids': enrolled_ids})
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp, 200
     except Exception as e:
         logging.exception('pari_sessions_list error')
         return jsonify({'error': str(e)}), 500
@@ -3271,12 +3274,15 @@ def pari_session_detail(session_id):
                 count_rows = (cc.data if hasattr(cc, 'data') else (cc.get('data') if isinstance(cc, dict) else None)) or []
                 pool['wager_count'] = len(count_rows)
 
-        return jsonify({
+        resp = jsonify({
             'session': session,
             'participants': parts,
             'pools': pools,
             'is_host': is_host,
-        }), 200
+        })
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp, 200
     except Exception as e:
         logging.exception('pari_session_detail error')
         return jsonify({'error': str(e)}), 500

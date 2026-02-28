@@ -644,13 +644,15 @@ export async function pariCreateSession(payload: {
 
 export async function pariListSessions(status = 'lobby'): Promise<any> {
   const headers = await _getAuthHeaders();
-  const r = await api.get(`/pari/sessions?status=${status}`, { headers });
+  const t = Date.now();
+  const r = await api.get(`/pari/sessions?status=${status}&_t=${t}`, { headers });
   return r.data;
 }
 
 export async function pariSessionDetail(sessionId: number): Promise<any> {
   const headers = await _getAuthHeaders();
-  const r = await api.get(`/pari/session/${sessionId}`, { headers });
+  const t = Date.now();
+  const r = await api.get(`/pari/session/${sessionId}?_t=${t}`, { headers });
   return r.data;
 }
 

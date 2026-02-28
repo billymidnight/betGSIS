@@ -129,6 +129,7 @@ export default function Parimutuel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   // Create session form
   const [showCreate, setShowCreate] = useState(false);
@@ -398,6 +399,24 @@ export default function Parimutuel() {
     setLoading(false);
   };
 
+  // ── Manual Refresh (guaranteed fresh, no stale) ──
+  // Bumps seq refs TWICE so in-flight polls are guaranteed stale,
+  // then loads fresh, so the manual pull always wins.
+  const handleRefreshLobby = async () => {
+    setRefreshing(true);
+    lobbySeqRef.current += 10;          // nuke in-flight polls
+    try { await loadLobby(); } catch {}
+    setRefreshing(false);
+  };
+
+  const handleRefreshSession = async () => {
+    if (!activeSessionId) return;
+    setRefreshing(true);
+    sessionSeqRef.current += 10;        // nuke in-flight polls
+    try { await loadSession(activeSessionId); } catch {}
+    setRefreshing(false);
+  };
+
   // ── Computed values ──
   const currentPool = pools.find(p => p.status === 'betting') || null;
   const lastClosedPool = [...pools].reverse().find(p => p.status === 'closed') || null;
@@ -422,6 +441,9 @@ export default function Parimutuel() {
         <div className="pari-header">
           <h1>Parimutuel: Play</h1>
           <p className="pari-subtitle">Multi-player totalisator betting sessions</p>
+          <button className="pari-refresh-btn" onClick={handleRefreshLobby} disabled={refreshing}>
+            {refreshing ? (<><span className="pari-refresh-spin">⟳</span> Pulling Latest…</>) : (<>🔄 Refresh</>)}
+          </button>
         </div>
 
         {error && <div className="pari-toast pari-toast-error">{error}</div>}
@@ -552,6 +574,9 @@ export default function Parimutuel() {
             {session.status.toUpperCase()}
           </span>
         </div>
+        <button className="pari-refresh-btn pari-refresh-btn-topbar" onClick={handleRefreshSession} disabled={refreshing}>
+          {refreshing ? (<><span className="pari-refresh-spin">⟳</span> Refreshing…</>) : (<>🔄 Refresh</>)}
+        </button>
         {isHost && session.status !== 'concluded' && (
           <button className="pari-btn pari-btn-red pari-btn-sm" onClick={handleDelete} disabled={loading}>Delete</button>
         )}
