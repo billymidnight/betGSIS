@@ -1,0 +1,690 @@
+/* ═══════════════════════════════════════════════════════════════════
+   PARIMUTUEL — Totalisator Multi-Player Betting
+   ═══════════════════════════════════════════════════════════════════ */
+
+.pari-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+  color: #e2e8f0;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* ── Header ── */
+.pari-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.pari-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0 0 6px;
+}
+.pari-subtitle {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+/* ── Toasts ── */
+.pari-toast {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+  text-align: center;
+  animation: pari-fade-in 0.2s ease;
+}
+.pari-toast-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.pari-toast-success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+@keyframes pari-fade-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Badges ── */
+.pari-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+.pari-badge-lobby { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+.pari-badge-active { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+.pari-badge-concluded { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+.pari-badge-enrolled { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+.pari-badge-betting { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+.pari-badge-closed { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+.pari-badge-settled { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+
+/* ── Section ── */
+.pari-section {
+  margin-bottom: 28px;
+}
+.pari-section h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0 0 14px;
+}
+.pari-section h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 0 0 12px;
+}
+
+.pari-muted {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+/* ── Session cards grid ── */
+.pari-session-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.pari-session-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.15s;
+}
+.pari-session-card:hover {
+  border-color: #475569;
+}
+.pari-session-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.pari-session-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+.pari-session-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+.pari-session-meta strong {
+  color: #e2e8f0;
+}
+
+/* ── Buttons ── */
+.pari-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.pari-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pari-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.pari-btn-blue {
+  background: #3b82f6;
+  color: #fff;
+}
+.pari-btn-blue:hover:not(:disabled) { background: #2563eb; }
+
+.pari-btn-green {
+  background: #10b981;
+  color: #fff;
+}
+.pari-btn-green:hover:not(:disabled) { background: #059669; }
+
+.pari-btn-red {
+  background: #ef4444;
+  color: #fff;
+}
+.pari-btn-red:hover:not(:disabled) { background: #dc2626; }
+
+.pari-btn-amber {
+  background: #f59e0b;
+  color: #000;
+}
+.pari-btn-amber:hover:not(:disabled) { background: #d97706; }
+
+.pari-btn-outline {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #475569;
+}
+.pari-btn-outline:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.1);
+  color: #e2e8f0;
+}
+.pari-btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+.pari-btn-lg { padding: 12px 28px; font-size: 1rem; }
+
+.pari-back-btn {
+  margin-bottom: 12px;
+}
+
+/* ── Top bar ── */
+.pari-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.pari-topbar-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pari-topbar-info h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  color: #f8fafc;
+}
+
+/* ── Info banner ── */
+.pari-info-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+.pari-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 100px;
+}
+.pari-info-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  font-weight: 600;
+}
+.pari-info-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+.pari-info-balance .pari-info-value {
+  color: #fbbf24;
+}
+
+/* ── Body layout ── */
+.pari-body {
+  display: flex;
+  gap: 24px;
+}
+.pari-main {
+  flex: 1;
+  min-width: 0;
+}
+.pari-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+}
+@media (max-width: 800px) {
+  .pari-body {
+    flex-direction: column;
+  }
+  .pari-sidebar {
+    width: 100%;
+  }
+}
+
+/* ── Player chips (lobby) ── */
+.pari-player-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.pari-player-chip {
+  background: #334155;
+  color: #e2e8f0;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+/* ── Side cards ── */
+.pari-sides-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.pari-side-card {
+  flex: 1;
+  min-width: 120px;
+  background: #1e293b;
+  border: 2px solid #475569;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  cursor: default;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  position: relative;
+  overflow: hidden;
+}
+.pari-side-card[style*="cursor"] {
+  cursor: pointer;
+}
+.pari-pool-section .pari-side-card {
+  cursor: pointer;
+}
+.pari-side-card:hover {
+  transform: translateY(-2px);
+}
+.pari-side-selected {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+  transform: translateY(-2px);
+}
+.pari-side-winner {
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.3);
+}
+.pari-side-loser {
+  opacity: 0.5;
+}
+
+.pari-side-color-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 12px 12px 0 0;
+}
+.pari-side-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 10px;
+  margin-top: 4px;
+}
+.pari-side-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 6px;
+}
+.pari-stat-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 600;
+}
+.pari-stat-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.pari-winner-badge {
+  margin-top: 8px;
+  padding: 3px 12px;
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  display: inline-block;
+}
+
+/* ── Wager form ── */
+.pari-wager-form {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+}
+.pari-wager-selected {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #f1f5f9;
+}
+.pari-wager-input-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.pari-wager-input-row input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #475569;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-size: 1rem;
+  font-weight: 600;
+  outline: none;
+}
+.pari-wager-input-row input:focus {
+  border-color: #3b82f6;
+}
+
+.pari-wager-confirmed {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+/* ── Host actions ── */
+.pari-host-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 18px 0;
+}
+.pari-host-actions h3 {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+/* ── Settle row ── */
+.pari-settle-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.pari-settle-btn {
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: 2px solid #475569;
+  background: transparent;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pari-settle-btn:hover {
+  opacity: 0.85;
+}
+.pari-settle-selected {
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.1);
+}
+
+/* ── Wager table ── */
+.pari-wagers-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 18px;
+}
+.pari-wagers-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.pari-wagers-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  border-bottom: 1px solid #334155;
+  font-weight: 700;
+}
+.pari-wagers-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e293b;
+  color: #e2e8f0;
+  font-weight: 500;
+}
+.pari-wagers-table-sm {
+  font-size: 0.82rem;
+}
+.pari-wagers-table-sm td,
+.pari-wagers-table-sm th {
+  padding: 6px 10px;
+}
+
+.pari-side-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.pari-pnl { font-weight: 700; }
+.pari-pnl-pos { color: #34d399; }
+.pari-pnl-neg { color: #f87171; }
+
+/* ── Create / Pool forms ── */
+.pari-create-form,
+.pari-create-pool-section {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 420px;
+}
+.pari-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.pari-form-row label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.03em;
+}
+.pari-form-row input {
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid #475569;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-size: 0.95rem;
+  font-weight: 500;
+  outline: none;
+}
+.pari-form-row input:focus {
+  border-color: #3b82f6;
+}
+.pari-form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* Sides picker */
+.pari-sides-picker {
+  display: flex;
+  gap: 8px;
+}
+.pari-sides-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 2px solid #475569;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pari-sides-btn-active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+}
+
+/* ── Leaderboard ── */
+.pari-sidebar h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0 0 12px;
+}
+.pari-leaderboard {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.pari-lb-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  gap: 8px;
+  padding: 10px 14px;
+  align-items: center;
+  border-bottom: 1px solid #0f172a;
+  font-size: 0.88rem;
+}
+.pari-lb-row:last-child {
+  border-bottom: none;
+}
+.pari-lb-me {
+  background: rgba(59, 130, 246, 0.08);
+}
+.pari-lb-rank {
+  font-weight: 800;
+  color: #64748b;
+  text-align: center;
+  font-size: 0.82rem;
+}
+.pari-lb-name {
+  font-weight: 600;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pari-lb-bal {
+  font-weight: 700;
+  color: #f1f5f9;
+  text-align: right;
+}
+.pari-lb-pnl {
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-align: right;
+  min-width: 60px;
+}
+
+/* ── Pool History ── */
+.pari-history-section {
+  margin-top: 12px;
+}
+.pari-history-pool {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.pari-history-pool-header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.pari-history-total {
+  color: #94a3b8;
+  font-weight: 500;
+}
+.pari-history-winner {
+  font-weight: 700;
+}
+
+.pari-waiting-msg {
+  font-size: 1.1rem;
+  text-align: center;
+  padding: 32px 0;
+}
+
+/* ── Pool section ── */
+.pari-pool-section {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 20px 24px;
+}
+.pari-pool-header {
+  margin-bottom: 16px;
+}
+.pari-pool-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── YOU tag ── */
+.pari-you-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(59, 130, 246, 0.25);
+  color: #93c5fd;
+  vertical-align: middle;
+}

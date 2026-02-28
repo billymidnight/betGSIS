@@ -3088,3 +3088,641 @@ def monopoly_players():
     except Exception as e:
         logging.exception('monopoly_players error')
         return jsonify({'error': str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════════════
+# PARIMUTUEL SYSTEM — Fully independent session-based totalisator
+# ═══════════════════════════════════════════════════════════════════
+
+SIDE_COLORS = {
+    2: ['#3b82f6', '#ef4444'],
+    3: ['#3b82f6', '#ef4444', '#f59e0b'],
+    4: ['#3b82f6', '#ef4444', '#f59e0b', '#10b981'],
+}
+
+def _is_bookie(user_id):
+    """Check if user has BOOKIE role."""
+    client = _get_admin_client()
+    if not client:
+        return False
+    try:
+        rc = client.table('users').select('role').eq('user_id', str(user_id)).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if rows and len(rows) > 0:
+            return (rows[0].get('role') or '').upper() == 'BOOKIE'
+    except Exception:
+        pass
+    return False
+
+
+def _resolve_screennames(client, user_ids):
+    """Resolve a list of user UUIDs to a {uid: screenname} map."""
+    name_map = {}
+    if not user_ids:
+        return name_map
+    try:
+        uc = client.table('users').select('user_id,screenname').in_('user_id', list(user_ids)).execute()
+        urows = uc.data if hasattr(uc, 'data') else (uc.get('data') if isinstance(uc, dict) else None)
+        for u in (urows or []):
+            if u.get('user_id'):
+                name_map[str(u['user_id'])] = u.get('screenname') or str(u['user_id'])
+    except Exception:
+        pass
+    return name_map
+
+
+# ── Session CRUD ──
+
+@api_bp.route('/pari/session/create', methods=['POST', 'OPTIONS'])
+def pari_session_create():
+    """Create a new parimutuel session. Body: { name, starting_balance?, min_bet?, max_bet?, mode? }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only BOOKIE can create sessions'}), 403
+    data = request.get_json(force=True) or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'error': 'name is required'}), 400
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        row = {
+            'name': name,
+            'host_id': str(user),
+            'status': 'lobby',
+            'starting_balance': float(data.get('starting_balance', 100)),
+            'min_bet': float(data.get('min_bet', 1)),
+            'max_bet': float(data.get('max_bet', 50)),
+            'mode': data.get('mode', 'vibe'),
+        }
+        rc = client.table('pari_sessions').insert(row).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        return jsonify({'success': True, 'session': rows[0] if rows else row}), 200
+    except Exception as e:
+        logging.exception('pari_session_create error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/pari/sessions', methods=['GET', 'OPTIONS'])
+def pari_sessions_list():
+    """List sessions. ?status=lobby (default) or ?status=all. Lobby sessions visible to everyone."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        status_filter = request.args.get('status', 'lobby')
+        q = client.table('pari_sessions').select('*').order('created_at', desc=True)
+        if status_filter != 'all':
+            q = q.eq('status', status_filter)
+        rc = q.execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        sessions = rows or []
+        # Resolve host screennames
+        host_ids = list({str(s.get('host_id')) for s in sessions if s.get('host_id')})
+        name_map = _resolve_screennames(client, host_ids)
+        for s in sessions:
+            s['host_screenname'] = name_map.get(str(s.get('host_id', '')), '')
+
+        # Find which sessions this user is enrolled in
+        enrolled_ids = []
+        try:
+            ec = client.table('pari_participants').select('session_id').eq('user_id', str(user)).execute()
+            e_rows = ec.data if hasattr(ec, 'data') else (ec.get('data') if isinstance(ec, dict) else None)
+            enrolled_ids = [r['session_id'] for r in (e_rows or [])]
+        except Exception:
+            pass
+
+        return jsonify({'sessions': sessions, 'enrolled_session_ids': enrolled_ids}), 200
+    except Exception as e:
+        logging.exception('pari_sessions_list error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/pari/session/<int:session_id>', methods=['GET', 'OPTIONS'])
+def pari_session_detail(session_id):
+    """Get full session details: session info, participants, current pool, pool history."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        # Session
+        rc = client.table('pari_sessions').select('*').eq('session_id', session_id).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows:
+            return jsonify({'error': 'session not found'}), 404
+        session = rows[0]
+
+        # Participants
+        pc = client.table('pari_participants').select('*').eq('session_id', session_id).order('joined_at').execute()
+        parts = (pc.data if hasattr(pc, 'data') else (pc.get('data') if isinstance(pc, dict) else None)) or []
+        part_uids = [str(p.get('user_id')) for p in parts]
+        name_map = _resolve_screennames(client, part_uids + [str(session.get('host_id', ''))])
+        for p in parts:
+            p['screenname'] = name_map.get(str(p.get('user_id', '')), '')
+        session['host_screenname'] = name_map.get(str(session.get('host_id', '')), '')
+
+        # Pools
+        plc = client.table('pari_pools').select('*').eq('session_id', session_id).order('pool_number').execute()
+        pools = (plc.data if hasattr(plc, 'data') else (plc.get('data') if isinstance(plc, dict) else None)) or []
+
+        # Pool sides for all pools
+        pool_ids = [p['pool_id'] for p in pools]
+        sides_map = {}
+        if pool_ids:
+            sc = client.table('pari_pool_sides').select('*').in_('pool_id', pool_ids).execute()
+            sides = (sc.data if hasattr(sc, 'data') else (sc.get('data') if isinstance(sc, dict) else None)) or []
+            for s in sides:
+                sides_map.setdefault(s['pool_id'], []).append(s)
+
+        # Determine if requester is host
+        is_host = str(user) == str(session.get('host_id', ''))
+
+        # Wagers — only return if pool is closed/settled OR if requester is host
+        for pool in pools:
+            pool['sides'] = sorted(sides_map.get(pool['pool_id'], []), key=lambda x: x.get('side_number', 0))
+            if pool['status'] != 'betting' or is_host:
+                wc = client.table('pari_wagers').select('*').eq('pool_id', pool['pool_id']).execute()
+                wagers = (wc.data if hasattr(wc, 'data') else (wc.get('data') if isinstance(wc, dict) else None)) or []
+                for w in wagers:
+                    w['screenname'] = name_map.get(str(w.get('user_id', '')), '')
+                pool['wagers'] = wagers
+            else:
+                # During betting, non-host: only return own wager if any
+                wc = client.table('pari_wagers').select('*').eq('pool_id', pool['pool_id']).eq('user_id', str(user)).execute()
+                own = (wc.data if hasattr(wc, 'data') else (wc.get('data') if isinstance(wc, dict) else None)) or []
+                pool['wagers'] = own
+                # Also return wager count per side (no amounts, no names)
+                cc = client.table('pari_wagers').select('side_number').eq('pool_id', pool['pool_id']).execute()
+                count_rows = (cc.data if hasattr(cc, 'data') else (cc.get('data') if isinstance(cc, dict) else None)) or []
+                pool['wager_count'] = len(count_rows)
+
+        return jsonify({
+            'session': session,
+            'participants': parts,
+            'pools': pools,
+            'is_host': is_host,
+        }), 200
+    except Exception as e:
+        logging.exception('pari_session_detail error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/pari/session/<int:session_id>/join', methods=['POST', 'OPTIONS'])
+def pari_session_join(session_id):
+    """Join a session. Only works if status=lobby."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('pari_sessions').select('*').eq('session_id', session_id).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows:
+            return jsonify({'error': 'session not found'}), 404
+        sess = rows[0]
+        if sess.get('status') != 'lobby':
+            return jsonify({'error': 'session is no longer accepting players'}), 400
+        starting = float(sess.get('starting_balance', 100))
+        row = {'session_id': session_id, 'user_id': str(user), 'balance': starting}
+        client.table('pari_participants').insert(row).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        err = str(e)
+        if 'duplicate' in err.lower() or '23505' in err:
+            return jsonify({'error': 'already joined'}), 409
+        logging.exception('pari_session_join error')
+        return jsonify({'error': err}), 500
+
+
+@api_bp.route('/pari/session/<int:session_id>/begin', methods=['POST', 'OPTIONS'])
+def pari_session_begin(session_id):
+    """Host begins the session — locks registration."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can begin session'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('pari_sessions').select('*').eq('session_id', session_id).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows:
+            return jsonify({'error': 'session not found'}), 404
+        sess = rows[0]
+        if str(sess.get('host_id')) != str(user):
+            return jsonify({'error': 'not your session'}), 403
+        if sess.get('status') != 'lobby':
+            return jsonify({'error': 'session already started or concluded'}), 400
+        client.table('pari_sessions').update({'status': 'active'}).eq('session_id', session_id).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('pari_session_begin error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/pari/session/<int:session_id>/conclude', methods=['POST', 'OPTIONS'])
+def pari_session_conclude(session_id):
+    """Host concludes the session. Writes net P&L to bets table."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can conclude'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('pari_sessions').select('*').eq('session_id', session_id).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows:
+            return jsonify({'error': 'session not found'}), 404
+        sess = rows[0]
+        if str(sess.get('host_id')) != str(user):
+            return jsonify({'error': 'not your session'}), 403
+        if sess.get('status') != 'active':
+            return jsonify({'error': 'session not active'}), 400
+
+        starting = float(sess.get('starting_balance', 100))
+        session_name = sess.get('name', f'Pari #{session_id}')
+
+        # Get all participants
+        pc = client.table('pari_participants').select('*').eq('session_id', session_id).execute()
+        parts = (pc.data if hasattr(pc, 'data') else (pc.get('data') if isinstance(pc, dict) else None)) or []
+
+        # For each participant, compute net and write to bets table
+        now_str = datetime.now(timezone.utc).isoformat()
+        for p in parts:
+            uid = str(p.get('user_id'))
+            ending_balance = float(p.get('balance', starting))
+            net = ending_balance - starting
+            if net > 0:
+                result = 'Win'
+            elif net < 0:
+                result = 'Loss'
+            else:
+                result = 'Push'
+            bet_row = {
+                'user_id': uid,
+                'market': 'Parimutuel',
+                'outcome': session_name,
+                'bet_size': round(abs(net), 2) if net != 0 else 0,
+                'odds_american': '+100',
+                'result': result,
+                'game_id': 0,
+                'layeur': 'betgsis',
+                'placed_at': now_str,
+            }
+            client.table('bets').insert(bet_row).execute()
+
+        # Mark session concluded
+        client.table('pari_sessions').update({
+            'status': 'concluded',
+            'concluded_at': now_str,
+        }).eq('session_id', session_id).execute()
+
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('pari_session_conclude error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/pari/session/<int:session_id>/delete', methods=['POST', 'OPTIONS'])
+def pari_session_delete(session_id):
+    """Delete a session. Only removes from pari tables, never touches bets."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can delete'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('pari_sessions').select('host_id').eq('session_id', session_id).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows:
+            return jsonify({'error': 'session not found'}), 404
+        if str(rows[0].get('host_id')) != str(user):
+            return jsonify({'error': 'not your session'}), 403
+        # CASCADE deletes participants, pools, sides, wagers
+        client.table('pari_sessions').delete().eq('session_id', session_id).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('pari_session_delete error')
+        return jsonify({'error': str(e)}), 500
+
+
+# ── Pool Management ──
+
+@api_bp.route('/pari/session/<int:session_id>/pool/create', methods=['POST', 'OPTIONS'])
+def pari_pool_create(session_id):
+    """Host creates a new pool. Body: { num_sides, labels? (array of strings, one per side) }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can create pools'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        # Verify session
+        rc = client.table('pari_sessions').select('*').eq('session_id', session_id).limit(1).execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if not rows:
+            return jsonify({'error': 'session not found'}), 404
+        sess = rows[0]
+        if str(sess.get('host_id')) != str(user):
+            return jsonify({'error': 'not your session'}), 403
+        if sess.get('status') != 'active':
+            return jsonify({'error': 'session not active'}), 400
+
+        # Check no pool is currently in 'betting' status
+        pc = client.table('pari_pools').select('pool_id,status').eq('session_id', session_id).eq('status', 'betting').execute()
+        betting_pools = (pc.data if hasattr(pc, 'data') else (pc.get('data') if isinstance(pc, dict) else None)) or []
+        if len(betting_pools) > 0:
+            return jsonify({'error': 'close current pool before creating a new one'}), 400
+
+        data = request.get_json(force=True) or {}
+        num_sides = int(data.get('num_sides', 2))
+        if num_sides < 2 or num_sides > 4:
+            return jsonify({'error': 'num_sides must be 2-4'}), 400
+        labels = data.get('labels', [])
+
+        # Determine pool number
+        existing = client.table('pari_pools').select('pool_number').eq('session_id', session_id).order('pool_number', desc=True).limit(1).execute()
+        ex_rows = (existing.data if hasattr(existing, 'data') else (existing.get('data') if isinstance(existing, dict) else None)) or []
+        next_num = (ex_rows[0]['pool_number'] + 1) if ex_rows else 1
+
+        # Create pool
+        pool_row = {
+            'session_id': session_id,
+            'pool_number': next_num,
+            'status': 'betting',
+            'num_sides': num_sides,
+        }
+        prc = client.table('pari_pools').insert(pool_row).execute()
+        p_rows = (prc.data if hasattr(prc, 'data') else (prc.get('data') if isinstance(prc, dict) else None)) or []
+        pool = p_rows[0]
+        pool_id = pool['pool_id']
+
+        # Create sides
+        colors = SIDE_COLORS.get(num_sides, SIDE_COLORS[2])
+        for i in range(num_sides):
+            side_row = {
+                'pool_id': pool_id,
+                'side_number': i + 1,
+                'color': colors[i],
+                'label': labels[i] if i < len(labels) else '',
+            }
+            client.table('pari_pool_sides').insert(side_row).execute()
+
+        return jsonify({'success': True, 'pool': pool}), 200
+    except Exception as e:
+        logging.exception('pari_pool_create error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/pari/pool/<int:pool_id>/wager', methods=['POST', 'OPTIONS'])
+def pari_pool_wager(pool_id):
+    """Place a wager. Body: { side_number, stake }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        # Fetch pool + session
+        pc = client.table('pari_pools').select('*').eq('pool_id', pool_id).limit(1).execute()
+        p_rows = (pc.data if hasattr(pc, 'data') else (pc.get('data') if isinstance(pc, dict) else None)) or []
+        if not p_rows:
+            return jsonify({'error': 'pool not found'}), 404
+        pool = p_rows[0]
+        if pool.get('status') != 'betting':
+            return jsonify({'error': 'wagering is closed for this pool'}), 400
+        session_id = pool['session_id']
+
+        # Verify participant
+        pp = client.table('pari_participants').select('*').eq('session_id', session_id).eq('user_id', str(user)).limit(1).execute()
+        pp_rows = (pp.data if hasattr(pp, 'data') else (pp.get('data') if isinstance(pp, dict) else None)) or []
+        if not pp_rows:
+            return jsonify({'error': 'you are not in this session'}), 403
+        participant = pp_rows[0]
+        balance = float(participant.get('balance', 0))
+
+        # Session limits
+        sc = client.table('pari_sessions').select('min_bet,max_bet').eq('session_id', session_id).limit(1).execute()
+        s_rows = (sc.data if hasattr(sc, 'data') else (sc.get('data') if isinstance(sc, dict) else None)) or []
+        min_bet = float(s_rows[0].get('min_bet', 1)) if s_rows else 1
+        max_bet = float(s_rows[0].get('max_bet', 50)) if s_rows else 50
+
+        data = request.get_json(force=True) or {}
+        side_number = int(data.get('side_number', 0))
+        stake = float(data.get('stake', 0))
+
+        if side_number < 1 or side_number > pool.get('num_sides', 2):
+            return jsonify({'error': f'invalid side_number (1-{pool.get("num_sides", 2)})'}), 400
+        if stake < min_bet:
+            return jsonify({'error': f'minimum bet is {min_bet}'}), 400
+        if stake > max_bet:
+            return jsonify({'error': f'maximum bet is {max_bet}'}), 400
+        if stake > balance:
+            return jsonify({'error': f'insufficient balance ({balance})'}), 400
+
+        wager_row = {
+            'pool_id': pool_id,
+            'user_id': str(user),
+            'side_number': side_number,
+            'stake': stake,
+        }
+        client.table('pari_wagers').insert(wager_row).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        err = str(e)
+        if 'duplicate' in err.lower() or '23505' in err:
+            return jsonify({'error': 'you already wagered on this pool'}), 409
+        logging.exception('pari_pool_wager error')
+        return jsonify({'error': err}), 500
+
+
+@api_bp.route('/pari/pool/<int:pool_id>/close', methods=['POST', 'OPTIONS'])
+def pari_pool_close(pool_id):
+    """Host closes wagering. Computes implied odds for each wager."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can close pools'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        pc = client.table('pari_pools').select('*').eq('pool_id', pool_id).limit(1).execute()
+        p_rows = (pc.data if hasattr(pc, 'data') else (pc.get('data') if isinstance(pc, dict) else None)) or []
+        if not p_rows:
+            return jsonify({'error': 'pool not found'}), 404
+        pool = p_rows[0]
+        if pool.get('status') != 'betting':
+            return jsonify({'error': 'pool is not in betting status'}), 400
+
+        # Verify host
+        session_id = pool['session_id']
+        sc = client.table('pari_sessions').select('host_id').eq('session_id', session_id).limit(1).execute()
+        s_rows = (sc.data if hasattr(sc, 'data') else (sc.get('data') if isinstance(sc, dict) else None)) or []
+        if not s_rows or str(s_rows[0].get('host_id')) != str(user):
+            return jsonify({'error': 'not your session'}), 403
+
+        # Fetch all wagers
+        wc = client.table('pari_wagers').select('*').eq('pool_id', pool_id).execute()
+        wagers = (wc.data if hasattr(wc, 'data') else (wc.get('data') if isinstance(wc, dict) else None)) or []
+
+        # Compute totalisator
+        total_pool = sum(float(w.get('stake', 0)) for w in wagers)
+        side_totals = {}
+        for w in wagers:
+            sn = w.get('side_number')
+            side_totals[sn] = side_totals.get(sn, 0) + float(w.get('stake', 0))
+
+        # Update implied odds per wager
+        for w in wagers:
+            sn = w.get('side_number')
+            st = side_totals.get(sn, 0)
+            if st > 0 and total_pool > 0:
+                implied_decimal = total_pool / st
+            else:
+                implied_decimal = 1.0
+            client.table('pari_wagers').update({
+                'implied_odds': round(implied_decimal, 4),
+            }).eq('wager_id', w['wager_id']).execute()
+
+        # Close pool
+        now_str = datetime.now(timezone.utc).isoformat()
+        client.table('pari_pools').update({
+            'status': 'closed',
+            'closed_at': now_str,
+        }).eq('pool_id', pool_id).execute()
+
+        return jsonify({'success': True, 'total_pool': total_pool, 'side_totals': side_totals}), 200
+    except Exception as e:
+        logging.exception('pari_pool_close error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/pari/pool/<int:pool_id>/settle', methods=['POST', 'OPTIONS'])
+def pari_pool_settle(pool_id):
+    """Host settles a pool. Body: { winner_side }. Computes payouts and updates balances."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can settle'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        data = request.get_json(force=True) or {}
+        winner_side = int(data.get('winner_side', 0))
+        if winner_side < 1:
+            return jsonify({'error': 'winner_side is required'}), 400
+
+        pc = client.table('pari_pools').select('*').eq('pool_id', pool_id).limit(1).execute()
+        p_rows = (pc.data if hasattr(pc, 'data') else (pc.get('data') if isinstance(pc, dict) else None)) or []
+        if not p_rows:
+            return jsonify({'error': 'pool not found'}), 404
+        pool = p_rows[0]
+        if pool.get('status') != 'closed':
+            return jsonify({'error': 'pool must be closed before settling'}), 400
+        session_id = pool['session_id']
+
+        # Verify host
+        sc = client.table('pari_sessions').select('host_id').eq('session_id', session_id).limit(1).execute()
+        s_rows = (sc.data if hasattr(sc, 'data') else (sc.get('data') if isinstance(sc, dict) else None)) or []
+        if not s_rows or str(s_rows[0].get('host_id')) != str(user):
+            return jsonify({'error': 'not your session'}), 403
+
+        # Fetch all wagers
+        wc = client.table('pari_wagers').select('*').eq('pool_id', pool_id).execute()
+        wagers = (wc.data if hasattr(wc, 'data') else (wc.get('data') if isinstance(wc, dict) else None)) or []
+
+        total_pool = sum(float(w.get('stake', 0)) for w in wagers)
+        winning_side_total = sum(float(w.get('stake', 0)) for w in wagers if w.get('side_number') == winner_side)
+
+        # Edge case: if no bets on winning side, or ALL bets on winning side → push everyone
+        is_push = (winning_side_total == 0) or (total_pool > 0 and winning_side_total == total_pool)
+
+        # Compute payouts
+        for w in wagers:
+            stake = float(w.get('stake', 0))
+            if is_push:
+                # Push: everyone gets their stake back, P&L = 0
+                payout = stake
+                pnl = 0.0
+            elif w.get('side_number') == winner_side:
+                payout = (stake / winning_side_total) * total_pool
+                pnl = payout - stake
+            else:
+                payout = 0
+                pnl = -stake
+
+            client.table('pari_wagers').update({
+                'payout': round(payout, 2),
+                'pnl': round(pnl, 2),
+            }).eq('wager_id', w['wager_id']).execute()
+
+            # Update participant balance
+            pp = client.table('pari_participants').select('balance').eq('session_id', session_id).eq('user_id', str(w.get('user_id'))).limit(1).execute()
+            pp_rows = (pp.data if hasattr(pp, 'data') else (pp.get('data') if isinstance(pp, dict) else None)) or []
+            if pp_rows:
+                old_bal = float(pp_rows[0].get('balance', 0))
+                new_bal = round(old_bal + pnl, 2)
+                client.table('pari_participants').update({'balance': new_bal}).eq('session_id', session_id).eq('user_id', str(w.get('user_id'))).execute()
+
+        # Mark pool settled
+        now_str = datetime.now(timezone.utc).isoformat()
+        client.table('pari_pools').update({
+            'status': 'settled',
+            'winner_side': winner_side,
+            'settled_at': now_str,
+        }).eq('pool_id', pool_id).execute()
+
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('pari_pool_settle error')
+        return jsonify({'error': str(e)}), 500
+

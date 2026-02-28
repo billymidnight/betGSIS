@@ -1,5 +1,5 @@
 import ProfileIcon from './ProfileIcon';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/state/authStore';
 import { Badge } from '../Shared/Badge';
@@ -16,6 +16,20 @@ export default function Navbar({ pnlValue = 0 }: NavbarProps) {
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [bookkeepingOpen, setBookkeepingOpen] = useState(false);
+  const bkRef = useRef<HTMLDivElement>(null);
+
+  // Close bookkeeping dropdown when clicking outside
+  useEffect(() => {
+    if (!bookkeepingOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (bkRef.current && !bkRef.current.contains(e.target as Node)) {
+        setBookkeepingOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [bookkeepingOpen]);
 
   const handleLogout = () => {
     logout();
@@ -148,12 +162,19 @@ export default function Navbar({ pnlValue = 0 }: NavbarProps) {
           </Link>
           {user && user.role === 'BOOKIE' && (
             <>
-              <div className="navbar-dropdown-wrap">
-                <span className="navbar-link navbar-dropdown-trigger">Bookkeeping ▾</span>
-                <div className="navbar-dropdown">
-                  <Link to="/betgsis-portfolio" className="navbar-dropdown-item">Sportsbook</Link>
-                  <Link to="/exchange-portfolio" className="navbar-dropdown-item">Bet Exchange</Link>
-                </div>
+              <div className="navbar-dropdown-wrap" ref={bkRef}>
+                <span
+                  className="navbar-link navbar-dropdown-trigger"
+                  onClick={() => setBookkeepingOpen(prev => !prev)}
+                >
+                  Bookkeeping {bookkeepingOpen ? '▴' : '▾'}
+                </span>
+                {bookkeepingOpen && (
+                  <div className="navbar-dropdown navbar-dropdown-show">
+                    <Link to="/betgsis-portfolio" className="navbar-dropdown-item" onClick={() => setBookkeepingOpen(false)}>Sportsbook</Link>
+                    <Link to="/exchange-portfolio" className="navbar-dropdown-item" onClick={() => setBookkeepingOpen(false)}>Bet Exchange</Link>
+                  </div>
+                )}
               </div>
               <Link to="/market-locker" className="navbar-link">
                 Market Locker

@@ -19,6 +19,7 @@ export default function Sidebar() {
         <div style={{height:12}} />
         <div className="sidebar-section-title">Exchanges</div>
         <Link to="/exchange">GSIS Bet Exchange</Link>
+        <Link to="/parimutuel">Parimutuel</Link>
         <div style={{height:12}} />
         <div className="sidebar-section-title">Trading</div>
         <Link to="/trading">Trading Games</Link>

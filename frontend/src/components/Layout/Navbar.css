@@ -52,7 +52,6 @@
   flex: 1;
   flex-wrap: wrap;
   align-items: center;
-  overflow: hidden;
 
   @media (max-width: 768px) {
     display: none;
@@ -99,11 +98,10 @@
   align-items: center;
 }
 .navbar-dropdown-trigger {
-  cursor: default;
+  cursor: pointer;
   user-select: none;
 }
 .navbar-dropdown {
-  display: none;
   position: absolute;
   top: 100%;
   left: 50%;
@@ -116,8 +114,6 @@
   padding: 6px 0;
   z-index: 1000;
   box-shadow: 0 8px 24px rgba(0,0,0,0.45);
-}
-.navbar-dropdown-wrap:hover .navbar-dropdown {
   display: flex;
   flex-direction: column;
 }
@@ -201,23 +197,7 @@
   }
 }
 
-.navbar-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  /* make dropdown more opaque for readability */
-  background-color: rgba(8,12,18,0.98);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  min-width: 200px;
-  margin-top: var(--space-sm);
-  box-shadow: var(--shadow-lg);
-  animation: slideInUp var(--transition-normal) ease;
-
-  @media (max-width: 768px) {
-    left: 0;
-  }
-}
+/* Profile dropdown (separate from bookkeeping dropdown) */
 
 .navbar-dropdown-item {
   display: block;

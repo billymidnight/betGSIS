@@ -24,6 +24,7 @@ import BookieMasterLocker from './pages/BookieMasterLocker'
 import Help from './pages/Help'
 import Exchange from './pages/Exchange'
 import ExchangePortfolio from './pages/ExchangePortfolio'
+import Parimutuel from './pages/Parimutuel'
 import ChessTemplate from './pages/templates/Chess'
 import ZetamacTemplate from './pages/templates/Zetamac'
 import MonopolyTemplate from './pages/templates/Monopoly'
@@ -240,6 +241,17 @@ export default function App() {
                 <ExchangePortfolio />
               </AppShell>
             </BookRoute>
+          }
+        />
+
+        <Route
+          path="/parimutuel"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <Parimutuel />
+              </AppShell>
+            </ProtectedRoute>
           }
         />
 

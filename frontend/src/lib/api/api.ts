@@ -626,5 +626,84 @@ export async function fetchExchangePortfolio(): Promise<any> {
   return r.data;
 }
 
+// ═══════════════════════════════════════════════════════════
+// PARIMUTUEL API
+// ═══════════════════════════════════════════════════════════
+
+export async function pariCreateSession(payload: {
+  name: string;
+  starting_balance?: number;
+  min_bet?: number;
+  max_bet?: number;
+  mode?: string;
+}): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/pari/session/create', payload, { headers });
+  return r.data;
+}
+
+export async function pariListSessions(status = 'lobby'): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.get(`/pari/sessions?status=${status}`, { headers });
+  return r.data;
+}
+
+export async function pariSessionDetail(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.get(`/pari/session/${sessionId}`, { headers });
+  return r.data;
+}
+
+export async function pariJoinSession(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/pari/session/${sessionId}/join`, {}, { headers });
+  return r.data;
+}
+
+export async function pariBeginSession(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/pari/session/${sessionId}/begin`, {}, { headers });
+  return r.data;
+}
+
+export async function pariConcludeSession(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/pari/session/${sessionId}/conclude`, {}, { headers });
+  return r.data;
+}
+
+export async function pariDeleteSession(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/pari/session/${sessionId}/delete`, {}, { headers });
+  return r.data;
+}
+
+export async function pariCreatePool(sessionId: number, payload: {
+  num_sides: number;
+  labels?: string[];
+}): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/pari/session/${sessionId}/pool/create`, payload, { headers });
+  return r.data;
+}
+
+export async function pariPlaceWager(poolId: number, sideNumber: number, stake: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/pari/pool/${poolId}/wager`, { side_number: sideNumber, stake }, { headers });
+  return r.data;
+}
+
+export async function pariClosePool(poolId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/pari/pool/${poolId}/close`, {}, { headers });
+  return r.data;
+}
+
+export async function pariSettlePool(poolId: number, winnerSide: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/pari/pool/${poolId}/settle`, { winner_side: winnerSide }, { headers });
+  return r.data;
+}
+
 export default api;
 
