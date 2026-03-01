@@ -10,19 +10,30 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 # Prefer explicit service role key for server-side operations; fall back to SUPABASE_KEY if needed
 SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_KEY') or os.getenv('SUPABASE_SERVICE_KEY')
 
+# ---------- Singleton admin client (created once, reused across all requests) ----------
+_admin_client = None
+
 
 def get_admin_client():
-    """Return a Supabase client using the service role key for privileged server-side operations.
+    """Return a cached Supabase client using the service role key.
 
-    Ensure you set SUPABASE_SERVICE_ROLE_KEY in env for production.
+    The client is created once on first call and reused for all subsequent
+    requests.  This avoids the overhead of create_client() on every request
+    (HTTP session setup, auth header config, etc.) which was the main
+    cause of latency under concurrent polling.
     """
+    global _admin_client
+    if _admin_client is not None:
+        return _admin_client
     if create_client is None:
         logging.warning('supabase-py not installed; supabase client unavailable')
         return None
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         logging.warning('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set')
         return None
-    return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    _admin_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    logging.info('Supabase admin client created (singleton)')
+    return _admin_client
 
 
 def get_user_from_access_token(access_token: str):

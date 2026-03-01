@@ -3258,24 +3258,29 @@ def pari_session_detail(session_id):
         # Determine if requester is host
         is_host = str(user) == str(session.get('host_id', ''))
 
-        # Wagers — only return if pool is closed/settled OR if requester is host
+        # Wagers — batch fetch all wagers for all pools in ONE query
+        all_wagers = []
+        if pool_ids:
+            wc = client.table('pari_wagers').select('*').in_('pool_id', pool_ids).execute()
+            all_wagers = (wc.data if hasattr(wc, 'data') else (wc.get('data') if isinstance(wc, dict) else None)) or []
+
+        # Index wagers by pool_id
+        wagers_by_pool = {}
+        for w in all_wagers:
+            wagers_by_pool.setdefault(w['pool_id'], []).append(w)
+
         for pool in pools:
             pool['sides'] = sorted(sides_map.get(pool['pool_id'], []), key=lambda x: x.get('side_number', 0))
+            pool_wagers = wagers_by_pool.get(pool['pool_id'], [])
             if pool['status'] != 'betting' or is_host:
-                wc = client.table('pari_wagers').select('*').eq('pool_id', pool['pool_id']).execute()
-                wagers = (wc.data if hasattr(wc, 'data') else (wc.get('data') if isinstance(wc, dict) else None)) or []
-                for w in wagers:
+                for w in pool_wagers:
                     w['screenname'] = name_map.get(str(w.get('user_id', '')), '')
-                pool['wagers'] = wagers
+                pool['wagers'] = pool_wagers
             else:
-                # During betting, non-host: only return own wager if any
-                wc = client.table('pari_wagers').select('*').eq('pool_id', pool['pool_id']).eq('user_id', str(user)).execute()
-                own = (wc.data if hasattr(wc, 'data') else (wc.get('data') if isinstance(wc, dict) else None)) or []
+                # During betting, non-host: only return own wager + total count
+                own = [w for w in pool_wagers if str(w.get('user_id', '')) == str(user)]
                 pool['wagers'] = own
-                # Also return wager count per side (no amounts, no names)
-                cc = client.table('pari_wagers').select('side_number').eq('pool_id', pool['pool_id']).execute()
-                count_rows = (cc.data if hasattr(cc, 'data') else (cc.get('data') if isinstance(cc, dict) else None)) or []
-                pool['wager_count'] = len(count_rows)
+                pool['wager_count'] = len(pool_wagers)
 
         resp = jsonify({
             'session': session,

@@ -212,17 +212,17 @@ export default function Parimutuel() {
     }
   }, [activeSessionId, loadLobby, loadSession]);
 
-  // ── POLLING: the reliable backbone (every 2s) ──
+  // ── POLLING: the reliable backbone ──
   // Professionals use polling + realtime together. Polling guarantees
   // freshness even when Realtime filters/RLS/publication are flaky.
   useEffect(() => {
     if (activeSessionId === null) {
-      // Poll lobby every 4s
-      const id = setInterval(() => { loadLobby(); }, 4000);
+      // Poll lobby every 6s
+      const id = setInterval(() => { loadLobby(); }, 6000);
       return () => clearInterval(id);
     } else {
-      // Poll session every 2s — fast enough for live game feel
-      const id = setInterval(() => { loadSession(activeSessionId); }, 2000);
+      // Poll session every 4s — balanced for live game feel vs server load
+      const id = setInterval(() => { loadSession(activeSessionId); }, 4000);
       return () => clearInterval(id);
     }
   }, [activeSessionId, loadLobby, loadSession]);
