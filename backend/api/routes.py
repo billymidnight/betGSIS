@@ -1699,6 +1699,9 @@ def exchange_edit():
             if new_max < current_filled:
                 return jsonify({'error': f'max_bet cannot be less than already filled ({current_filled})'}), 400
             update['max_bet'] = new_max
+            # Auto-reopen a filled offering when layeur adds more liquidity
+            if off.get('status') == 'filled' and new_max > current_filled:
+                update['status'] = 'open'
         if 'bet_name' in data:
             update['market'] = str(data['bet_name'])
             update['outcome'] = str(data['bet_name'])
@@ -1930,7 +1933,7 @@ def exchange_take():
             'updated_at': datetime.now(timezone.utc).isoformat()
         }
         if new_filled >= max_bet:
-            update_data['status'] = 'closed'
+            update_data['status'] = 'filled'
         client.table('offerings').update(update_data).eq('offering_id', int(offering_id)).execute()
 
         return jsonify({'success': True, 'bet': ins_rows[0] if ins_rows else bet_row, 'remaining': max(0, max_bet - new_filled)}), 200

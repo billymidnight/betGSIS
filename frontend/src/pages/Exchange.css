@@ -19,8 +19,53 @@
 
 .exchange-subtitle {
   color: var(--color-text-muted);
-  margin: 0 0 20px 0;
+  margin: 0 0 12px 0;
   font-size: 0.95rem;
+}
+
+/* ─── Refresh Button (toolbar-inline) ─── */
+.exchange-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: #e2e8f0;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s, border-color 0.15s;
+}
+.exchange-refresh-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(96, 165, 250, 0.55);
+  transform: scale(1.08);
+}
+.exchange-refresh-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.exchange-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+@keyframes exchange-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.exchange-refresh-spin {
+  display: inline-block;
+  animation: exchange-spin 0.8s linear infinite;
+}
+
+/* ─── Filled-disabled take button ─── */
+.btn-filled-disabled {
+  background: rgba(251, 191, 36, 0.1) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(251, 191, 36, 0.3) !important;
+  font-weight: 600;
+  cursor: not-allowed;
 }
 
 /* ─── Two-column layout (GeoGuessr-style) ─── */
@@ -162,6 +207,10 @@
   opacity: 0.35;
   pointer-events: none;
 }
+.offering-card.filled-card {
+  opacity: 0.75;
+  border-color: rgba(251, 191, 36, 0.25);
+}
 .offering-card.selected-card {
   border-color: rgba(246,200,95,0.45);
   box-shadow: 0 0 18px rgba(246,200,95,0.08);
@@ -265,6 +314,7 @@
 }
 .status-open { background: rgba(52,199,89,0.12); color: #34c759; }
 .status-closed { background: rgba(255,59,48,0.10); color: #ff3b30; }
+.status-filled { background: rgba(251,191,36,0.15); color: #fbbf24; font-weight: 700; }
 .status-locked { background: rgba(246,200,95,0.12); color: #f6c85f; }
 .status-cancelled { background: rgba(255,255,255,0.05); color: var(--color-text-muted); }
 

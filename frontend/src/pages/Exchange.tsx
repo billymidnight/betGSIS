@@ -77,10 +77,10 @@ export default function Exchange() {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'name' | 'odds_desc' | 'odds_asc'>('newest');
   const [layeurFilter, setLayeurFilter] = useState('');
 
-  // Modal states
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState<any | null>(null);
   const [showTake, setShowTake] = useState<any | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -96,6 +96,18 @@ export default function Exchange() {
 
   useEffect(() => { load(); }, []);
 
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const rows = await fetchOfferings();
+      setOfferings(rows || []);
+    } catch (e) {
+      console.error('refresh failed', e);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   // ─── Filtering & Sorting ───
   const layeurs = useMemo(() => {
     const names = new Set<string>();
@@ -109,7 +121,7 @@ export default function Exchange() {
       list = list.filter((o) => o.layeur_id === userId);
     } else {
       // In "All" view, show open/locked offerings (+ user's own in any status)
-      list = list.filter((o) => o.status === 'open' || o.status === 'locked' || o.layeur_id === userId);
+      list = list.filter((o) => o.status === 'open' || o.status === 'locked' || o.status === 'filled' || o.layeur_id === userId);
     }
     if (search.trim()) {
       const s = search.toLowerCase();
@@ -168,6 +180,9 @@ export default function Exchange() {
           <option value="odds_desc">Odds: High → Low</option>
           <option value="odds_asc">Odds: Low → High</option>
         </select>
+        <button className="exchange-refresh-btn" onClick={handleRefresh} disabled={refreshing} title="Refresh">
+          {refreshing ? <span className="exchange-refresh-spin">⟳</span> : '🔄'}
+        </button>
         <span className="toolbar-spacer" />
         <button className="btn-lay" onClick={() => setShowCreate(true)}>+ Lay Odds</button>
       </div>
@@ -189,11 +204,12 @@ export default function Exchange() {
                 const isOwn = o.layeur_id === userId;
                 const isOpen = o.status === 'open';
                 const isLocked = o.status === 'locked';
+                const isFilled = o.status === 'filled' || (o.status === 'closed' && o.remaining <= 0);
                 const isSelected = showTake?.offering_id === o.offering_id;
                 return (
                   <div
                     key={o.offering_id}
-                    className={`offering-card${!isOpen && !isOwn && !isLocked ? ' closed-card' : ''}${isSelected ? ' selected-card' : ''}${isLocked && !isOwn ? ' locked-card' : ''}`}
+                    className={`offering-card${!isOpen && !isOwn && !isLocked && !isFilled ? ' closed-card' : ''}${isFilled && !isOwn ? ' filled-card' : ''}${isSelected ? ' selected-card' : ''}${isLocked && !isOwn ? ' locked-card' : ''}`}
                   >
                     {/* Lock overlay for non-owners */}
                     {isLocked && !isOwn && (
@@ -214,7 +230,7 @@ export default function Exchange() {
                           </span>
                         )}
                       </div>
-                      <span className={`card-status status-${o.status}`}>{o.status}</span>
+                      <span className={`card-status ${isFilled ? 'status-filled' : `status-${o.status}`}`}>{isFilled ? 'FILLED' : o.status}</span>
                     </div>
                     <div className="card-stats">
                       <div>
@@ -235,13 +251,15 @@ export default function Exchange() {
                     {o.created_at && <div className="card-date-laid">{new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
 
                     <div className="card-actions">
-                      {isOwn && isOpen && (
+                      {isOwn && (isOpen || isFilled) && (
                         <>
                           <button className="btn-edit-card" onClick={() => setShowEdit(o)} title="Edit">✎ Edit</button>
-                          <button className="btn-lock-card" onClick={async () => {
-                            if (!confirm('Lock this market? Others will not be able to take bets until you unlock it.')) return;
-                            try { await lockOffering(o.offering_id); load(); } catch (e) { alert('Failed: ' + (e as any).message); }
-                          }} title="Lock">🔒 Lock</button>
+                          {isOpen && (
+                            <button className="btn-lock-card" onClick={async () => {
+                              if (!confirm('Lock this market? Others will not be able to take bets until you unlock it.')) return;
+                              try { await lockOffering(o.offering_id); load(); } catch (e) { alert('Failed: ' + (e as any).message); }
+                            }} title="Lock">🔒 Lock</button>
+                          )}
                           <button className="btn-delete-card" onClick={async () => {
                             if (!confirm('Permanently delete this offering? This cannot be undone.')) return;
                             try { await deleteOffering(o.offering_id); load(); } catch (e) { alert('Failed: ' + (e as any).message); }
@@ -270,8 +288,8 @@ export default function Exchange() {
                           {isSelected ? '✓ Selected' : 'Take Bet'}
                         </button>
                       )}
-                      {!isOwn && isOpen && o.remaining <= 0 && (
-                        <button className="btn-take" disabled>Fully Filled</button>
+                      {!isOwn && (isFilled || (isOpen && o.remaining <= 0)) && (
+                        <button className="btn-take btn-filled-disabled" disabled>FILLED — No Liquidity</button>
                       )}
                     </div>
                   </div>

@@ -93,8 +93,23 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
   init: async () => {
     try {
-      const sessRes = await supabase.auth.getSession();
-      const session = (sessRes as any)?.data?.session;
+      let sessRes = await supabase.auth.getSession();
+      let session = (sessRes as any)?.data?.session;
+
+      // If we have a session, proactively refresh it so we never
+      // send an expired access_token to the backend.
+      if (session) {
+        try {
+          const refreshRes = await supabase.auth.refreshSession();
+          const refreshed = (refreshRes as any)?.data?.session;
+          if (refreshed) {
+            session = refreshed;
+          }
+        } catch (e) {
+          if (import.meta.env.DEV) console.warn('Token refresh failed — using existing session', e);
+        }
+      }
+
       if (!session) {
         set({ user: null, isAuthenticated: false });
         return;
