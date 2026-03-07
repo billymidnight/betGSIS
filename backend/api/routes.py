@@ -3101,6 +3101,7 @@ SIDE_COLORS = {
     2: ['#3b82f6', '#ef4444'],
     3: ['#3b82f6', '#ef4444', '#f59e0b'],
     4: ['#3b82f6', '#ef4444', '#f59e0b', '#10b981'],
+    5: ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6'],
 }
 
 def _is_bookie(user_id):
@@ -3488,8 +3489,8 @@ def pari_pool_create(session_id):
 
         data = request.get_json(force=True) or {}
         num_sides = int(data.get('num_sides', 2))
-        if num_sides < 2 or num_sides > 4:
-            return jsonify({'error': 'num_sides must be 2-4'}), 400
+        if num_sides < 2 or num_sides > 5:
+            return jsonify({'error': 'num_sides must be 2-5'}), 400
         labels = data.get('labels', [])
 
         # Determine pool number

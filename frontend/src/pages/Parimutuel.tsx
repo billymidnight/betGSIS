@@ -141,7 +141,7 @@ export default function Parimutuel() {
   // Pool create form
   const [showPoolCreate, setShowPoolCreate] = useState(false);
   const [pNumSides, setPNumSides] = useState(2);
-  const [pLabels, setPLabels] = useState<string[]>(['', '', '', '']);
+  const [pLabels, setPLabels] = useState<string[]>(['', '', '', '', '']);
 
   // Wager form
   const [wagerSide, setWagerSide] = useState<number | null>(null);
@@ -320,7 +320,7 @@ export default function Parimutuel() {
         labels: labels.length > 0 ? pLabels.slice(0, pNumSides) : undefined,
       });
       setShowPoolCreate(false);
-      setPLabels(['', '', '', '']);
+      setPLabels(['', '', '', '', '']);
       setSuccessMsg('Pool created — wagering open!');
       loadSession(activeSessionId);
     } catch (err: any) {
@@ -864,7 +864,7 @@ export default function Parimutuel() {
                   <div className="pari-form-row">
                     <label>Sides</label>
                     <div className="pari-sides-picker">
-                      {[2, 3, 4].map(n => (
+                      {[2, 3, 4, 5].map(n => (
                         <button
                           key={n}
                           className={`pari-sides-btn ${pNumSides === n ? 'pari-sides-btn-active' : ''}`}
@@ -877,7 +877,7 @@ export default function Parimutuel() {
                   </div>
                   {Array.from({ length: pNumSides }).map((_, i) => (
                     <div className="pari-form-row" key={i}>
-                      <label style={{ color: (['#3b82f6', '#ef4444', '#f59e0b', '#10b981'])[i] }}>
+                      <label style={{ color: (['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6'])[i] }}>
                         Side {i + 1} label (optional)
                       </label>
                       <input
