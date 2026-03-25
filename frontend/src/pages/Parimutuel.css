@@ -180,6 +180,20 @@
 }
 .pari-btn-amber:hover:not(:disabled) { background: #d97706; }
 
+.pari-btn-void {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #64748b;
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  margin-top: 6px;
+}
+.pari-btn-void:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: #f87171;
+}
+
 .pari-btn-outline {
   background: transparent;
   color: #94a3b8;
@@ -650,6 +664,15 @@
 }
 .pari-history-winner {
   font-weight: 700;
+}
+.pari-history-voided {
+  font-weight: 700;
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
 }
 
 .pari-waiting-msg {

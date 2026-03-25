@@ -707,5 +707,11 @@ export async function pariSettlePool(poolId: number, winnerSide: number): Promis
   return r.data;
 }
 
+export async function pariVoidPool(poolId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/pari/pool/${poolId}/void`, {}, { headers });
+  return r.data;
+}
+
 export default api;
 

@@ -3283,6 +3283,25 @@ def pari_session_detail(session_id):
                 pool['wagers'] = own
                 pool['wager_count'] = len(pool_wagers)
 
+        # ── Derive balances from wager history (single source of truth) ──
+        starting = float(session.get('starting_balance', 100))
+        # settled/voided pools → sum pnl per user; unsettled pools with wagers → subtract stake (money is "in play")
+        settled_statuses = ('settled', 'voided')
+        for p in parts:
+            uid = str(p.get('user_id', ''))
+            pnl_sum = 0.0
+            pending_stakes = 0.0
+            for pool in pools:
+                for w in wagers_by_pool.get(pool['pool_id'], []):
+                    if str(w.get('user_id', '')) != uid:
+                        continue
+                    if pool['status'] in settled_statuses and w.get('pnl') is not None:
+                        pnl_sum += float(w['pnl'])
+                    elif pool['status'] in ('betting', 'closed'):
+                        pending_stakes += float(w.get('stake', 0))
+            p['balance'] = round(starting + pnl_sum - pending_stakes, 2)
+            p['computed_pnl'] = round(pnl_sum, 2)
+
         resp = jsonify({
             'session': session,
             'participants': parts,
@@ -3389,12 +3408,29 @@ def pari_session_conclude(session_id):
         pc = client.table('pari_participants').select('*').eq('session_id', session_id).execute()
         parts = (pc.data if hasattr(pc, 'data') else (pc.get('data') if isinstance(pc, dict) else None)) or []
 
+        # Derive net P&L per participant from wager history
+        all_pools_rc = client.table('pari_pools').select('pool_id,status').eq('session_id', session_id).execute()
+        all_pools = (all_pools_rc.data if hasattr(all_pools_rc, 'data') else (all_pools_rc.get('data') if isinstance(all_pools_rc, dict) else None)) or []
+        all_pool_ids = [p['pool_id'] for p in all_pools]
+        pool_status_map = {p['pool_id']: p['status'] for p in all_pools}
+
+        all_wagers = []
+        if all_pool_ids:
+            aw_rc = client.table('pari_wagers').select('pool_id,user_id,pnl').in_('pool_id', all_pool_ids).execute()
+            all_wagers = (aw_rc.data if hasattr(aw_rc, 'data') else (aw_rc.get('data') if isinstance(aw_rc, dict) else None)) or []
+
+        user_pnl = {}
+        for w in all_wagers:
+            ps = pool_status_map.get(w['pool_id'], '')
+            if ps in ('settled', 'voided') and w.get('pnl') is not None:
+                uid = str(w.get('user_id', ''))
+                user_pnl[uid] = user_pnl.get(uid, 0.0) + float(w['pnl'])
+
         # For each participant, compute net and write to bets table
         now_str = datetime.now(timezone.utc).isoformat()
         for p in parts:
             uid = str(p.get('user_id'))
-            ending_balance = float(p.get('balance', starting))
-            net = ending_balance - starting
+            net = round(user_pnl.get(uid, 0.0), 2)
             if net > 0:
                 result = 'Win'
             elif net < 0:
@@ -3554,14 +3590,35 @@ def pari_pool_wager(pool_id):
         pp_rows = (pp.data if hasattr(pp, 'data') else (pp.get('data') if isinstance(pp, dict) else None)) or []
         if not pp_rows:
             return jsonify({'error': 'you are not in this session'}), 403
-        participant = pp_rows[0]
-        balance = float(participant.get('balance', 0))
 
-        # Session limits
-        sc = client.table('pari_sessions').select('min_bet,max_bet').eq('session_id', session_id).limit(1).execute()
-        s_rows = (sc.data if hasattr(sc, 'data') else (sc.get('data') if isinstance(sc, dict) else None)) or []
+        # Compute available balance from wager history (not stored column)
+        sess_rc = client.table('pari_sessions').select('starting_balance,min_bet,max_bet').eq('session_id', session_id).limit(1).execute()
+        s_rows = (sess_rc.data if hasattr(sess_rc, 'data') else (sess_rc.get('data') if isinstance(sess_rc, dict) else None)) or []
+        starting = float(s_rows[0].get('starting_balance', 100)) if s_rows else 100
         min_bet = float(s_rows[0].get('min_bet', 1)) if s_rows else 1
         max_bet = float(s_rows[0].get('max_bet', 50)) if s_rows else 50
+
+        # Fetch all pools + wagers for this user in this session to derive balance
+        all_pools_rc = client.table('pari_pools').select('pool_id,status').eq('session_id', session_id).execute()
+        all_pools = (all_pools_rc.data if hasattr(all_pools_rc, 'data') else (all_pools_rc.get('data') if isinstance(all_pools_rc, dict) else None)) or []
+        all_pool_ids = [p['pool_id'] for p in all_pools]
+        pool_status_map = {p['pool_id']: p['status'] for p in all_pools}
+
+        user_wagers = []
+        if all_pool_ids:
+            uw_rc = client.table('pari_wagers').select('pool_id,stake,pnl').eq('user_id', str(user)).in_('pool_id', all_pool_ids).execute()
+            user_wagers = (uw_rc.data if hasattr(uw_rc, 'data') else (uw_rc.get('data') if isinstance(uw_rc, dict) else None)) or []
+
+        pnl_sum = 0.0
+        pending_stakes = 0.0
+        for w in user_wagers:
+            ps = pool_status_map.get(w['pool_id'], '')
+            if ps in ('settled', 'voided') and w.get('pnl') is not None:
+                pnl_sum += float(w['pnl'])
+            elif ps in ('betting', 'closed'):
+                pending_stakes += float(w.get('stake', 0))
+
+        balance = round(starting + pnl_sum - pending_stakes, 2)
 
         data = request.get_json(force=True) or {}
         side_number = int(data.get('side_number', 0))
@@ -3659,7 +3716,7 @@ def pari_pool_close(pool_id):
 
 @api_bp.route('/pari/pool/<int:pool_id>/settle', methods=['POST', 'OPTIONS'])
 def pari_pool_settle(pool_id):
-    """Host settles a pool. Body: { winner_side }. Computes payouts and updates balances."""
+    """Host settles a pool. Body: { winner_side }. Idempotent — writes pnl to wagers, marks settled."""
     if request.method == 'OPTIONS':
         return ('', 200)
     user = _get_user_from_header(request)
@@ -3681,6 +3738,11 @@ def pari_pool_settle(pool_id):
         if not p_rows:
             return jsonify({'error': 'pool not found'}), 404
         pool = p_rows[0]
+        # Idempotent: if already settled with same winner, just succeed
+        if pool.get('status') == 'settled':
+            return jsonify({'success': True, 'note': 'already settled'}), 200
+        if pool.get('status') == 'voided':
+            return jsonify({'error': 'pool was voided, cannot settle'}), 400
         if pool.get('status') != 'closed':
             return jsonify({'error': 'pool must be closed before settling'}), 400
         session_id = pool['session_id']
@@ -3701,11 +3763,10 @@ def pari_pool_settle(pool_id):
         # Edge case: if no bets on winning side, or ALL bets on winning side → push everyone
         is_push = (winning_side_total == 0) or (total_pool > 0 and winning_side_total == total_pool)
 
-        # Compute payouts
+        # Compute payouts and write to wagers (no balance column updates — balance is derived)
         for w in wagers:
             stake = float(w.get('stake', 0))
             if is_push:
-                # Push: everyone gets their stake back, P&L = 0
                 payout = stake
                 pnl = 0.0
             elif w.get('side_number') == winner_side:
@@ -3720,14 +3781,6 @@ def pari_pool_settle(pool_id):
                 'pnl': round(pnl, 2),
             }).eq('wager_id', w['wager_id']).execute()
 
-            # Update participant balance
-            pp = client.table('pari_participants').select('balance').eq('session_id', session_id).eq('user_id', str(w.get('user_id'))).limit(1).execute()
-            pp_rows = (pp.data if hasattr(pp, 'data') else (pp.get('data') if isinstance(pp, dict) else None)) or []
-            if pp_rows:
-                old_bal = float(pp_rows[0].get('balance', 0))
-                new_bal = round(old_bal + pnl, 2)
-                client.table('pari_participants').update({'balance': new_bal}).eq('session_id', session_id).eq('user_id', str(w.get('user_id'))).execute()
-
         # Mark pool settled
         now_str = datetime.now(timezone.utc).isoformat()
         client.table('pari_pools').update({
@@ -3739,5 +3792,61 @@ def pari_pool_settle(pool_id):
         return jsonify({'success': True}), 200
     except Exception as e:
         logging.exception('pari_pool_settle error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/pari/pool/<int:pool_id>/void', methods=['POST', 'OPTIONS'])
+def pari_pool_void(pool_id):
+    """Host voids a pool — everyone gets stakes refunded, no winners or losers."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can void'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        pc = client.table('pari_pools').select('*').eq('pool_id', pool_id).limit(1).execute()
+        p_rows = (pc.data if hasattr(pc, 'data') else (pc.get('data') if isinstance(pc, dict) else None)) or []
+        if not p_rows:
+            return jsonify({'error': 'pool not found'}), 404
+        pool = p_rows[0]
+        if pool.get('status') == 'voided':
+            return jsonify({'success': True, 'note': 'already voided'}), 200
+        if pool.get('status') == 'settled':
+            return jsonify({'error': 'pool already settled, cannot void'}), 400
+        if pool.get('status') not in ('betting', 'closed'):
+            return jsonify({'error': 'pool cannot be voided in this state'}), 400
+        session_id = pool['session_id']
+
+        # Verify host
+        sc = client.table('pari_sessions').select('host_id').eq('session_id', session_id).limit(1).execute()
+        s_rows = (sc.data if hasattr(sc, 'data') else (sc.get('data') if isinstance(sc, dict) else None)) or []
+        if not s_rows or str(s_rows[0].get('host_id')) != str(user):
+            return jsonify({'error': 'not your session'}), 403
+
+        # Set all wagers pnl=0, payout=stake (refund)
+        wc = client.table('pari_wagers').select('wager_id,stake').eq('pool_id', pool_id).execute()
+        wagers = (wc.data if hasattr(wc, 'data') else (wc.get('data') if isinstance(wc, dict) else None)) or []
+        for w in wagers:
+            stake = float(w.get('stake', 0))
+            client.table('pari_wagers').update({
+                'payout': round(stake, 2),
+                'pnl': 0.0,
+            }).eq('wager_id', w['wager_id']).execute()
+
+        # Mark pool voided
+        now_str = datetime.now(timezone.utc).isoformat()
+        client.table('pari_pools').update({
+            'status': 'voided',
+            'settled_at': now_str,
+        }).eq('pool_id', pool_id).execute()
+
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('pari_pool_void error')
         return jsonify({'error': str(e)}), 500
 

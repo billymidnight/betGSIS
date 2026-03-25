@@ -11,6 +11,7 @@ import {
   pariPlaceWager,
   pariClosePool,
   pariSettlePool,
+  pariVoidPool,
 } from '../lib/api/api';
 import { useAuthStore } from '../lib/state/authStore';
 import supabase from '../lib/supabaseClient';
@@ -65,7 +66,7 @@ interface PariPool {
   pool_id: number;
   session_id: number;
   pool_number: number;
-  status: 'betting' | 'closed' | 'settled';
+  status: 'betting' | 'closed' | 'settled' | 'voided';
   num_sides: number;
   winner_side?: number;
   sides: PariSide[];
@@ -372,6 +373,19 @@ export default function Parimutuel() {
     setLoading(false);
   };
 
+  const handleVoidPool = async (poolId: number) => {
+    if (!window.confirm('Void this pool? All stakes will be refunded — no winners or losers.')) return;
+    setLoading(true);
+    try {
+      await pariVoidPool(poolId);
+      setSuccessMsg('Pool voided — stakes refunded!');
+      loadSession(activeSessionId!);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Void failed');
+    }
+    setLoading(false);
+  };
+
   const handleConclude = async () => {
     if (!activeSessionId) return;
     setLoading(true);
@@ -420,7 +434,7 @@ export default function Parimutuel() {
   // ── Computed values ──
   const currentPool = pools.find(p => p.status === 'betting') || null;
   const lastClosedPool = [...pools].reverse().find(p => p.status === 'closed') || null;
-  const settledPools = pools.filter(p => p.status === 'settled');
+  const settledPools = pools.filter(p => p.status === 'settled' || p.status === 'voided');
   const displayPool = currentPool || lastClosedPool || null;
   const myParticipant = participants.find(p => p.user_id === myUserId);
   const isInSession = !!myParticipant;
@@ -824,6 +838,9 @@ export default function Parimutuel() {
                       <button className="pari-btn pari-btn-amber" onClick={() => handleClosePool(displayPool.pool_id)} disabled={loading}>
                         Close Wagering
                       </button>
+                      <button className="pari-btn pari-btn-void" onClick={() => handleVoidPool(displayPool.pool_id)} disabled={loading}>
+                        Void Pool
+                      </button>
                     </div>
                   )}
 
@@ -844,6 +861,9 @@ export default function Parimutuel() {
                       </div>
                       <button className="pari-btn pari-btn-green pari-btn-lg" onClick={() => handleSettlePool(displayPool.pool_id)} disabled={loading || settleWinner === null}>
                         Settle Pool
+                      </button>
+                      <button className="pari-btn pari-btn-void" onClick={() => handleVoidPool(displayPool.pool_id)} disabled={loading}>
+                        Void Pool
                       </button>
                     </div>
                   )}
@@ -928,11 +948,13 @@ export default function Parimutuel() {
                     <div className="pari-history-pool-header">
                       <span>Pool #{pool.pool_number}</span>
                       <span className="pari-history-total">Total Pool: {fmtMoney(totalPool)}</span>
-                      {winnerSide && (
+                      {pool.status === 'voided' ? (
+                        <span className="pari-history-voided">VOIDED</span>
+                      ) : winnerSide ? (
                         <span className="pari-history-winner" style={{ color: winnerSide.color }}>
                           Winner: {sideName(winnerSide, pool.winner_side! - 1)}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                     <table className="pari-wagers-table pari-wagers-table-sm">
                       <thead>
