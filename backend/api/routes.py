@@ -3284,22 +3284,19 @@ def pari_session_detail(session_id):
                 pool['wager_count'] = len(pool_wagers)
 
         # ── Derive balances from wager history (single source of truth) ──
+        # Only settled/voided pools affect balance — unsettled bets don't change it yet
         starting = float(session.get('starting_balance', 100))
-        # settled/voided pools → sum pnl per user; unsettled pools with wagers → subtract stake (money is "in play")
         settled_statuses = ('settled', 'voided')
         for p in parts:
             uid = str(p.get('user_id', ''))
             pnl_sum = 0.0
-            pending_stakes = 0.0
             for pool in pools:
                 for w in wagers_by_pool.get(pool['pool_id'], []):
                     if str(w.get('user_id', '')) != uid:
                         continue
                     if pool['status'] in settled_statuses and w.get('pnl') is not None:
                         pnl_sum += float(w['pnl'])
-                    elif pool['status'] in ('betting', 'closed'):
-                        pending_stakes += float(w.get('stake', 0))
-            p['balance'] = round(starting + pnl_sum - pending_stakes, 2)
+            p['balance'] = round(starting + pnl_sum, 2)
             p['computed_pnl'] = round(pnl_sum, 2)
 
         resp = jsonify({
