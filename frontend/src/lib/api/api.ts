@@ -720,10 +720,11 @@ export async function pariVoidPool(poolId: number): Promise<any> {
 
 export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> {
   const headers = await _getAuthHeaders();
+  delete (headers as any)['Content-Type'];
   const form = new FormData();
   form.append('avatar', file);
   const r = await api.post('/profile/avatar', form, {
-    headers: { ...headers, 'Content-Type': 'multipart/form-data' },
+    headers,
     timeout: 30000,
   });
   return r.data;
@@ -731,10 +732,11 @@ export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> 
 
 export async function adminUploadAvatar(userId: string, file: File): Promise<{ avatar_url: string }> {
   const headers = await _getAuthHeaders();
+  delete (headers as any)['Content-Type'];
   const form = new FormData();
   form.append('avatar', file);
   const r = await api.post(`/profile/avatar/${userId}`, form, {
-    headers: { ...headers, 'Content-Type': 'multipart/form-data' },
+    headers,
     timeout: 30000,
   });
   return r.data;
@@ -750,6 +752,26 @@ export async function listAllUsers(): Promise<any[]> {
   const headers = await _getAuthHeaders();
   const r = await api.get('/profile/users', { headers });
   return r.data.users || [];
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  BET TICKER
+// ═══════════════════════════════════════════════════════════════
+
+export interface RecentBet {
+  bet_id: number;
+  screenname: string;
+  avatar_url: string;
+  market: string;
+  outcome: string;
+  result: string;
+  pnl: number;
+  odds_american: string;
+}
+
+export async function fetchRecentBets(limit = 15): Promise<RecentBet[]> {
+  const r = await api.get(`/bets/recent?limit=${limit}`);
+  return r.data.bets || [];
 }
 
 export default api;

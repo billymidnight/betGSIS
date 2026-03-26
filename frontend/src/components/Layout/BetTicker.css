@@ -1,0 +1,112 @@
+/* ── Bet Ticker Belt ─────────────────────────────────────── */
+.bet-ticker {
+  width: 100%;
+  overflow: hidden;
+  background: linear-gradient(90deg, rgba(6,10,16,0.95) 0%, rgba(12,18,28,0.95) 50%, rgba(6,10,16,0.95) 100%);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  position: relative;
+  z-index: 40;
+  height: 50px;
+  display: flex;
+  align-items: center;
+}
+
+/* Fade edges */
+.bet-ticker::before,
+.bet-ticker::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 60px;
+  z-index: 2;
+  pointer-events: none;
+}
+.bet-ticker::before { left: 0; background: linear-gradient(90deg, rgba(6,10,16,1) 0%, transparent 100%); }
+.bet-ticker::after  { right: 0; background: linear-gradient(270deg, rgba(6,10,16,1) 0%, transparent 100%); }
+
+/* Scrolling track — duplicated children for seamless loop */
+.bet-ticker-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  white-space: nowrap;
+  animation: ticker-scroll 55s linear infinite;
+  will-change: transform;
+}
+.bet-ticker:hover .bet-ticker-track { animation-play-state: paused; }
+
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Individual bet chip */
+.ticker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 18px;
+  flex-shrink: 0;
+  border-right: 1px solid rgba(255,255,255,0.04);
+  cursor: default;
+  transition: background 0.2s;
+}
+.ticker-chip:hover { background: rgba(255,255,255,0.03); }
+
+/* Avatar */
+.ticker-avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid #334155;
+  flex-shrink: 0;
+}
+.ticker-avatar-placeholder {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; font-weight: 700; color: #fff;
+  flex-shrink: 0;
+}
+
+/* Text bits */
+.ticker-name {
+  font-weight: 700;
+  color: #c8d0d8;
+  font-size: 0.84rem;
+  letter-spacing: 0.02em;
+}
+.ticker-detail {
+  color: #6b7a88;
+  font-size: 0.8rem;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ticker-pnl {
+  font-weight: 800;
+  font-size: 0.86rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  letter-spacing: 0.01em;
+}
+.ticker-pnl.win  { color: #34d399; }
+.ticker-pnl.loss { color: #f87171; }
+.ticker-pnl.push { color: #94a3b8; }
+
+.ticker-arrow {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+/* Loading / empty state */
+.bet-ticker-empty {
+  width: 100%;
+  text-align: center;
+  color: #3a4550;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}

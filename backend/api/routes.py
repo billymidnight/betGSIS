@@ -1265,6 +1265,63 @@ def bookkeeping_accounts():
         return jsonify({'error': str(e)}), 500
 
 
+@api_bp.route('/bets/recent', methods=['GET', 'OPTIONS'])
+def bets_recent():
+    """Public endpoint: last N settled bets for the ticker belt. No auth required."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        limit = min(int(request.args.get('limit', 15)), 50)
+        rc = (client.table('bets')
+              .select('bet_id,user_id,market,outcome,bet_size,odds_american,result,placed_at')
+              .not_.is_('result', 'null')
+              .order('bet_id', desc=True)
+              .limit(limit)
+              .execute())
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        rows = rows or []
+
+        def _american_to_dec(amer):
+            try:
+                a = int(str(amer).replace('+', ''))
+                return (a / 100.0 + 1.0) if a > 0 else (100.0 / abs(a) + 1.0)
+            except Exception:
+                return None
+
+        user_ids = list({str(r.get('user_id')) for r in rows if r.get('user_id')})
+        name_map, avatar_map = _resolve_screennames(client, user_ids)
+
+        out = []
+        for r in rows:
+            uid = str(r.get('user_id', ''))
+            stake = float(r.get('bet_size') or 0)
+            dec = _american_to_dec(r.get('odds_american'))
+            res = str(r.get('result', '')).strip().lower()
+            if res == 'win':
+                pnl = (dec - 1.0) * stake if dec else 0.0
+            elif res == 'loss':
+                pnl = -stake
+            else:
+                pnl = 0.0
+            out.append({
+                'bet_id': r.get('bet_id'),
+                'screenname': name_map.get(uid, uid[:8]),
+                'avatar_url': avatar_map.get(uid, ''),
+                'market': r.get('market', ''),
+                'outcome': r.get('outcome', ''),
+                'result': r.get('result'),
+                'pnl': round(pnl, 2),
+                'odds_american': r.get('odds_american'),
+            })
+        return jsonify({'bets': out}), 200
+    except Exception as e:
+        logging.exception('bets_recent error')
+        return jsonify({'error': str(e)}), 500
+
+
 @api_bp.route('/bookkeeping/all-bets', methods=['GET', 'OPTIONS'])
 def bookkeeping_all_bets():
     if request.method == 'OPTIONS':
@@ -3867,26 +3924,18 @@ MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2 MB
 
 
 def _upload_avatar_for_user(client, target_uid, file_data, content_type):
-    """Upload avatar to Supabase Storage and update users.avatar_url. Returns public URL."""
-    ext_map = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif'}
-    ext = ext_map.get(content_type, 'jpg')
-    filename = f"{target_uid}/avatar.{ext}"
-
-    # Upload (upsert) to storage
-    client.storage.from_(AVATAR_BUCKET).upload(
-        filename,
-        file_data,
-        {'content-type': content_type, 'upsert': 'true'},
-    )
-
-    # Build public URL
-    supa_url = os.getenv('SUPABASE_URL', '').rstrip('/')
-    public_url = f"{supa_url}/storage/v1/object/public/{AVATAR_BUCKET}/{filename}"
+    """Store avatar as a data-URI in the users.avatar_url column.
+    This avoids needing Supabase Storage buckets / service-role key entirely.
+    Images are kept small (profile pics) so a data URI is fine.
+    """
+    # Build data URI
+    b64 = base64.b64encode(file_data).decode('ascii')
+    data_uri = f"data:{content_type};base64,{b64}"
 
     # Update users table
-    client.table('users').update({'avatar_url': public_url}).eq('user_id', str(target_uid)).execute()
+    client.table('users').update({'avatar_url': data_uri}).eq('user_id', str(target_uid)).execute()
 
-    return public_url
+    return data_uri
 
 
 @api_bp.route('/profile/avatar', methods=['POST', 'OPTIONS'])
@@ -4018,9 +4067,19 @@ def profile_list_users():
     if not client:
         return jsonify({'error': 'supabase client missing'}), 500
     try:
-        rc = client.table('users').select('user_id,screenname,email,avatar_url,role').order('screenname').execute()
+        rc = client.table('users').select('*').order('screenname').execute()
         rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
-        return jsonify({'users': rows or []}), 200
+        # Project only the fields the frontend needs
+        users = []
+        for r in (rows or []):
+            users.append({
+                'user_id': r.get('user_id'),
+                'screenname': r.get('screenname'),
+                'email': r.get('email'),
+                'avatar_url': r.get('avatar_url'),
+                'role': r.get('role'),
+            })
+        return jsonify({'users': users}), 200
     except Exception as e:
         logging.exception('profile_list_users error')
         return jsonify({'error': str(e)}), 500
