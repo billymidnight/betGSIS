@@ -3120,19 +3120,24 @@ def _is_bookie(user_id):
 
 
 def _resolve_screennames(client, user_ids):
-    """Resolve a list of user UUIDs to a {uid: screenname} map."""
+    """Resolve a list of user UUIDs to a {uid: screenname} map.
+    Also populates avatar_url into a second map returned as a tuple: (name_map, avatar_map).
+    For backwards compat, callers that only unpack one value still work (returns name_map only
+    when called in dict context)."""
     name_map = {}
+    avatar_map = {}
     if not user_ids:
-        return name_map
+        return name_map, avatar_map
     try:
-        uc = client.table('users').select('user_id,screenname').in_('user_id', list(user_ids)).execute()
+        uc = client.table('users').select('user_id,screenname,avatar_url').in_('user_id', list(user_ids)).execute()
         urows = uc.data if hasattr(uc, 'data') else (uc.get('data') if isinstance(uc, dict) else None)
         for u in (urows or []):
             if u.get('user_id'):
                 name_map[str(u['user_id'])] = u.get('screenname') or str(u['user_id'])
+                avatar_map[str(u['user_id'])] = u.get('avatar_url') or ''
     except Exception:
         pass
-    return name_map
+    return name_map, avatar_map
 
 
 # ── Session CRUD ──
@@ -3193,7 +3198,7 @@ def pari_sessions_list():
         sessions = rows or []
         # Resolve host screennames
         host_ids = list({str(s.get('host_id')) for s in sessions if s.get('host_id')})
-        name_map = _resolve_screennames(client, host_ids)
+        name_map, _avatar_map = _resolve_screennames(client, host_ids)
         for s in sessions:
             s['host_screenname'] = name_map.get(str(s.get('host_id', '')), '')
 
@@ -3238,9 +3243,10 @@ def pari_session_detail(session_id):
         pc = client.table('pari_participants').select('*').eq('session_id', session_id).order('joined_at').execute()
         parts = (pc.data if hasattr(pc, 'data') else (pc.get('data') if isinstance(pc, dict) else None)) or []
         part_uids = [str(p.get('user_id')) for p in parts]
-        name_map = _resolve_screennames(client, part_uids + [str(session.get('host_id', ''))])
+        name_map, avatar_map = _resolve_screennames(client, part_uids + [str(session.get('host_id', ''))])
         for p in parts:
             p['screenname'] = name_map.get(str(p.get('user_id', '')), '')
+            p['avatar_url'] = avatar_map.get(str(p.get('user_id', '')), '')
         session['host_screenname'] = name_map.get(str(session.get('host_id', '')), '')
 
         # Pools
@@ -3845,5 +3851,177 @@ def pari_pool_void(pool_id):
         return jsonify({'success': True}), 200
     except Exception as e:
         logging.exception('pari_pool_void error')
+        return jsonify({'error': str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════════
+#  AVATAR / PROFILE PICTURE ENDPOINTS
+# ═══════════════════════════════════════════════════════════════
+
+import base64
+import uuid as uuid_mod
+
+AVATAR_BUCKET = 'avatars'
+ALLOWED_AVATAR_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2 MB
+
+
+def _upload_avatar_for_user(client, target_uid, file_data, content_type):
+    """Upload avatar to Supabase Storage and update users.avatar_url. Returns public URL."""
+    ext_map = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif'}
+    ext = ext_map.get(content_type, 'jpg')
+    filename = f"{target_uid}/avatar.{ext}"
+
+    # Upload (upsert) to storage
+    client.storage.from_(AVATAR_BUCKET).upload(
+        filename,
+        file_data,
+        {'content-type': content_type, 'upsert': 'true'},
+    )
+
+    # Build public URL
+    supa_url = os.getenv('SUPABASE_URL', '').rstrip('/')
+    public_url = f"{supa_url}/storage/v1/object/public/{AVATAR_BUCKET}/{filename}"
+
+    # Update users table
+    client.table('users').update({'avatar_url': public_url}).eq('user_id', str(target_uid)).execute()
+
+    return public_url
+
+
+@api_bp.route('/profile/avatar', methods=['POST', 'OPTIONS'])
+def profile_avatar_upload():
+    """Upload avatar for the authenticated user.
+    Accepts multipart/form-data with field 'avatar' OR JSON with base64 'data' + 'content_type'.
+    """
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+
+    try:
+        file_data = None
+        content_type = None
+
+        if request.content_type and 'multipart' in request.content_type:
+            f = request.files.get('avatar')
+            if not f:
+                return jsonify({'error': 'no avatar file in request'}), 400
+            content_type = f.content_type or 'image/jpeg'
+            file_data = f.read()
+        else:
+            body = request.get_json(force=True) or {}
+            b64 = body.get('data')
+            content_type = body.get('content_type', 'image/jpeg')
+            if not b64:
+                return jsonify({'error': 'no data provided'}), 400
+            file_data = base64.b64decode(b64)
+
+        if content_type not in ALLOWED_AVATAR_TYPES:
+            return jsonify({'error': f'unsupported image type: {content_type}'}), 400
+        if len(file_data) > MAX_AVATAR_SIZE:
+            return jsonify({'error': 'file too large (max 2MB)'}), 400
+
+        public_url = _upload_avatar_for_user(client, user, file_data, content_type)
+        return jsonify({'success': True, 'avatar_url': public_url}), 200
+    except Exception as e:
+        logging.exception('profile_avatar_upload error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/profile/avatar/<user_id>', methods=['POST', 'OPTIONS'])
+def admin_avatar_upload(user_id):
+    """Admin (BOOKIE) upload avatar for any user."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    caller = _get_user_from_header(request)
+    if not caller:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(caller):
+        return jsonify({'error': 'only BOOKIE can set other users avatars'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+
+    try:
+        file_data = None
+        content_type = None
+
+        if request.content_type and 'multipart' in request.content_type:
+            f = request.files.get('avatar')
+            if not f:
+                return jsonify({'error': 'no avatar file in request'}), 400
+            content_type = f.content_type or 'image/jpeg'
+            file_data = f.read()
+        else:
+            body = request.get_json(force=True) or {}
+            b64 = body.get('data')
+            content_type = body.get('content_type', 'image/jpeg')
+            if not b64:
+                return jsonify({'error': 'no data provided'}), 400
+            file_data = base64.b64decode(b64)
+
+        if content_type not in ALLOWED_AVATAR_TYPES:
+            return jsonify({'error': f'unsupported image type: {content_type}'}), 400
+        if len(file_data) > MAX_AVATAR_SIZE:
+            return jsonify({'error': 'file too large (max 2MB)'}), 400
+
+        public_url = _upload_avatar_for_user(client, user_id, file_data, content_type)
+        return jsonify({'success': True, 'avatar_url': public_url}), 200
+    except Exception as e:
+        logging.exception('admin_avatar_upload error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/profile/update', methods=['POST', 'OPTIONS'])
+def profile_update():
+    """Update current user's screen_name."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        body = request.get_json(force=True) or {}
+        updates = {}
+        if 'screenname' in body:
+            sn = str(body['screenname']).strip()[:50]
+            if sn:
+                updates['screenname'] = sn
+        if not updates:
+            return jsonify({'error': 'nothing to update'}), 400
+        client.table('users').update(updates).eq('user_id', str(user)).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('profile_update error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/profile/users', methods=['GET', 'OPTIONS'])
+def profile_list_users():
+    """BOOKIE-only: list all users with id, screenname, email, avatar_url."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only BOOKIE'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('users').select('user_id,screenname,email,avatar_url,role').order('screenname').execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        return jsonify({'users': rows or []}), 200
+    except Exception as e:
+        logging.exception('profile_list_users error')
         return jsonify({'error': str(e)}), 500
 

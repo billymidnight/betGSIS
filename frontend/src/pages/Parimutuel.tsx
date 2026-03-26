@@ -39,6 +39,7 @@ interface PariParticipant {
   session_id: number;
   user_id: string;
   screenname?: string;
+  avatar_url?: string;
   balance: number;
   joined_at: string;
 }
@@ -652,6 +653,11 @@ export default function Parimutuel() {
               <div className="pari-player-list">
                 {participants.map(p => (
                   <div className="pari-player-chip" key={p.user_id}>
+                    {p.avatar_url ? (
+                      <img src={p.avatar_url} alt="" className="pari-chip-avatar" />
+                    ) : (
+                      <span className="pari-chip-avatar-placeholder">{(p.screenname || '?')[0].toUpperCase()}</span>
+                    )}
                     {p.screenname || p.user_id.slice(0, 8)}
                   </div>
                 ))}
@@ -1007,6 +1013,11 @@ export default function Parimutuel() {
               return (
                 <div className={`pari-lb-row ${p.user_id === myUserId ? 'pari-lb-me' : ''}`} key={p.user_id}>
                   <span className="pari-lb-rank">{idx + 1}</span>
+                  {p.avatar_url ? (
+                    <img src={p.avatar_url} alt="" className="pari-lb-avatar" />
+                  ) : (
+                    <span className="pari-lb-avatar-placeholder">{(p.screenname || '?')[0].toUpperCase()}</span>
+                  )}
                   <span className="pari-lb-name">{p.screenname || p.user_id.slice(0, 8)}</span>
                   <span className="pari-lb-bal">{fmtMoney(p.balance)}</span>
                   <span className={`pari-lb-pnl ${netPnl >= 0 ? 'pari-pnl-pos' : 'pari-pnl-neg'}`}>

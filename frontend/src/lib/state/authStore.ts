@@ -6,6 +6,7 @@ export interface User {
   user_id: string;
   screen_name?: string;
   email?: string;
+  avatar_url?: string;
   // optional fields kept for compatibility with other modules
   username?: string;
   role?: string;
@@ -136,7 +137,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
                   const d2 = JSON.parse(raw2);
                   const userObj2 = d2?.user ?? d2;
                   if (userObj2 && (userObj2.user_id || userObj2.id)) {
-                    set({ user: { user_id: userObj2.user_id ?? userObj2.id, screen_name: userObj2.screen_name, email: (s as any)?.user?.email, username: userObj2.screenname, role: userObj2.role }, isAuthenticated: true });
+                    set({ user: { user_id: userObj2.user_id ?? userObj2.id, screen_name: userObj2.screen_name, email: (s as any)?.user?.email, username: userObj2.screenname, role: userObj2.role, avatar_url: userObj2.avatar_url }, isAuthenticated: true });
                   }
                 } catch (err) {
                   if (import.meta.env.DEV) console.warn('onAuthStateChange /api/auth/me returned non-json');
@@ -166,7 +167,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         const data = JSON.parse(raw);
         const userObj = data?.user ?? data;
         if (userObj && (userObj.user_id || userObj.id)) {
-          set({ user: { user_id: userObj.user_id ?? userObj.id, screen_name: userObj.screen_name, email: session.user?.email, username: userObj.screenname, role: userObj.role }, isAuthenticated: true });
+          set({ user: { user_id: userObj.user_id ?? userObj.id, screen_name: userObj.screen_name, email: session.user?.email, username: userObj.screenname, role: userObj.role, avatar_url: userObj.avatar_url }, isAuthenticated: true });
         } else {
           console.warn('/api/auth/me returned JSON but no user information found:', data);
           set({ user: { user_id: session.user?.id, email: session.user?.email }, isAuthenticated: true });

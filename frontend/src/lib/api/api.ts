@@ -713,5 +713,44 @@ export async function pariVoidPool(poolId: number): Promise<any> {
   return r.data;
 }
 
+
+// ═══════════════════════════════════════════════════════════════
+//  PROFILE / AVATAR
+// ═══════════════════════════════════════════════════════════════
+
+export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> {
+  const headers = await _getAuthHeaders();
+  const form = new FormData();
+  form.append('avatar', file);
+  const r = await api.post('/profile/avatar', form, {
+    headers: { ...headers, 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
+  });
+  return r.data;
+}
+
+export async function adminUploadAvatar(userId: string, file: File): Promise<{ avatar_url: string }> {
+  const headers = await _getAuthHeaders();
+  const form = new FormData();
+  form.append('avatar', file);
+  const r = await api.post(`/profile/avatar/${userId}`, form, {
+    headers: { ...headers, 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
+  });
+  return r.data;
+}
+
+export async function updateProfile(screenname: string): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/profile/update', { screenname }, { headers });
+  return r.data;
+}
+
+export async function listAllUsers(): Promise<any[]> {
+  const headers = await _getAuthHeaders();
+  const r = await api.get('/profile/users', { headers });
+  return r.data.users || [];
+}
+
 export default api;
 
