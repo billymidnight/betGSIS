@@ -54,10 +54,7 @@ export default function BetslipItem({ selection }: Props) {
             </div>
           ) : selection.market === 'Poker' ? (
             <div style={{fontWeight:700}}>
-              {(() => {
-                const match = (selection.outcome || '').match(/^(.+?)\s*-\s*(.+)$/);
-                return match ? match[2].trim() : 'Poker';
-              })()}
+              {selection.outcome || 'Poker'}
             </div>
           ) : selection.market === 'Specials' ? (
               <div style={{fontWeight:700}}>{selection.outcome || selection.playerName}</div>

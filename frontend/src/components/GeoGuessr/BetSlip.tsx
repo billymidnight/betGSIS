@@ -147,7 +147,7 @@ export default function BetSlip() {
         // Poker market: outcome = "PlayerName - Cash Game" or "PlayerName - Tournament"
         if (sel.market === 'Poker') {
           payloadMarket = 'Poker';
-          payloadOutcome = sel.outcome; // Already formatted as "Name - Cash Game"
+          payloadOutcome = sel.outcome; // "Poker Cash Game" or "Poker Tournament"
           payloadPoint = null;
         }
         

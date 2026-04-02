@@ -37,7 +37,7 @@ export default function PokerTemplate() {
   const tabLabel = tab === 'cash' ? 'Cash Game' : 'Tournament';
 
   const handleSelect = (p: PokerPlayer) => {
-    const outcome = `${p.player_name} - ${tabLabel}`;
+    const outcome = `Poker ${tabLabel}`;
     const sel = {
       playerId: p.player_id,
       playerName: p.player_name,

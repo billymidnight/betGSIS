@@ -375,14 +375,34 @@ export default function Parimutuel() {
   };
 
   const handleVoidPool = async (poolId: number) => {
-    if (!window.confirm('Void this pool? All stakes will be refunded — no winners or losers.')) return;
+    if (!window.confirm('Delete this pool? All wagers will be removed.')) return;
     setLoading(true);
     try {
       await pariVoidPool(poolId);
-      setSuccessMsg('Pool voided — stakes refunded!');
+      setSuccessMsg('Pool deleted!');
       loadSession(activeSessionId!);
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Void failed');
+      setError(err?.response?.data?.error || 'Delete failed');
+    }
+    setLoading(false);
+  };
+
+  const handleVoidAndCreateNext = async (poolId: number) => {
+    if (!window.confirm('Delete this pool and create the next one?')) return;
+    if (!activeSessionId) return;
+    setLoading(true);
+    try {
+      await pariVoidPool(poolId);
+      const labels = pLabels.slice(0, pNumSides).filter(l => l.trim());
+      await pariCreatePool(activeSessionId, {
+        num_sides: pNumSides,
+        labels: labels.length > 0 ? pLabels.slice(0, pNumSides) : undefined,
+      });
+      setPLabels(['', '', '', '', '']);
+      setSuccessMsg('Pool deleted & next pool created!');
+      loadSession(activeSessionId);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Delete & create failed');
     }
     setLoading(false);
   };
@@ -845,7 +865,7 @@ export default function Parimutuel() {
                         Close Wagering
                       </button>
                       <button className="pari-btn pari-btn-void" onClick={() => handleVoidPool(displayPool.pool_id)} disabled={loading}>
-                        Void Pool
+                        Delete Pool
                       </button>
                     </div>
                   )}
@@ -868,8 +888,8 @@ export default function Parimutuel() {
                       <button className="pari-btn pari-btn-green pari-btn-lg" onClick={() => handleSettlePool(displayPool.pool_id)} disabled={loading || settleWinner === null}>
                         Settle Pool
                       </button>
-                      <button className="pari-btn pari-btn-void" onClick={() => handleVoidPool(displayPool.pool_id)} disabled={loading}>
-                        Void Pool
+                      <button className="pari-btn pari-btn-void" onClick={() => handleVoidAndCreateNext(displayPool.pool_id)} disabled={loading}>
+                        Delete &amp; Create Next Pool
                       </button>
                     </div>
                   )}

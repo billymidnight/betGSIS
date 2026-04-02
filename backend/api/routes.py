@@ -37,51 +37,55 @@ def _get_user_from_header(req):
     This helper always returns a primitive string (UUID) to avoid passing complex objects
     into DB queries which cause 'invalid input syntax for type uuid' errors.
     """
-    auth = req.headers.get('Authorization') or req.headers.get('authorization')
-    if not auth:
-        return None
-    if auth.lower().startswith('bearer '):
-        token = auth.split(' ', 1)[1].strip()
-    else:
-        token = auth.strip()
-
-    # Use admin/service-role client to decode token
-    client = _get_admin_client()
-    if not client:
-        # fallback: try helper
-        user_obj = get_user_from_access_token(token)
-        if not user_obj:
-            return None
-        # normalize id and log to server console
-        try:
-            if isinstance(user_obj, dict):
-                uid = user_obj.get('id') or user_obj.get('user', {}).get('id')
-            else:
-                uid = getattr(user_obj, 'id', None) or (getattr(user_obj, 'user', None) and getattr(user_obj.user, 'id', None))
-            if uid is None:
-                return None
-            uid_str = str(uid)
-            try:
-                app.logger.info(f"Brudda, your uid is {uid_str}")
-            except Exception:
-                # fallback to print if logger unavailable
-                print(f"Brudda, your uid is {uid_str}")
-            return uid_str
-        except Exception:
-            return None
-
     try:
-        # Prefer client.auth.get_user(token) (newer supabase-py)
+        auth = req.headers.get('Authorization') or req.headers.get('authorization')
+        if not auth:
+            return None
+        if auth.lower().startswith('bearer '):
+            token = auth.split(' ', 1)[1].strip()
+        else:
+            token = auth.strip()
+
+        # Fast path: decode JWT locally without hitting Supabase API
+        # This avoids race conditions with the shared singleton client under concurrent requests
+        try:
+            import json as _json, base64 as _b64
+            parts = token.split('.')
+            if len(parts) == 3:
+                # Decode payload (part 1) — add padding
+                payload_b64 = parts[1] + '=' * (4 - len(parts[1]) % 4)
+                payload = _json.loads(_b64.urlsafe_b64decode(payload_b64))
+                sub = payload.get('sub')
+                if sub:
+                    return str(sub)
+        except Exception:
+            pass  # Fall through to API-based validation
+
+        # Fallback: Use admin/service-role client to decode token
+        client = _get_admin_client()
+        if not client:
+            user_obj = get_user_from_access_token(token)
+            if not user_obj:
+                return None
+            try:
+                if isinstance(user_obj, dict):
+                    uid = user_obj.get('id') or user_obj.get('user', {}).get('id')
+                else:
+                    uid = getattr(user_obj, 'id', None) or (getattr(user_obj, 'user', None) and getattr(user_obj.user, 'id', None))
+                if uid is None:
+                    return None
+                return str(uid)
+            except Exception:
+                return None
+
         try:
             if hasattr(client.auth, 'get_user'):
                 r = client.auth.get_user(token)
-                # r may be dict-like with data.user or user
                 if isinstance(r, dict):
                     user_candidate = r.get('data') and r['data'].get('user') or r.get('user') or r.get('data')
                 else:
                     user_candidate = getattr(r, 'user', None) or getattr(r, 'data', None) or r
             else:
-                # older interface
                 user_candidate = client.auth.api.get_user(token)
         except Exception:
             user_candidate = get_user_from_access_token(token)
@@ -89,7 +93,6 @@ def _get_user_from_header(req):
         if not user_candidate:
             return None
 
-        # Extract id from candidate and log
         try:
             if isinstance(user_candidate, dict):
                 uid = user_candidate.get('id') or (user_candidate.get('user') and user_candidate['user'].get('id'))
@@ -97,12 +100,7 @@ def _get_user_from_header(req):
                 uid = getattr(user_candidate, 'id', None) or (getattr(user_candidate, 'user', None) and getattr(user_candidate.user, 'id', None))
             if uid is None:
                 return None
-            uid_str = str(uid)
-            try:
-                app.logger.info(f"Brudda, your uid is {uid_str}")
-            except Exception:
-                print(f"Brudda, your uid is {uid_str}")
-            return uid_str
+            return str(uid)
         except Exception:
             return None
     except Exception:
@@ -372,6 +370,12 @@ def bets_place():
             outcome_str = payload.get('outcome') or None
         # Zetamac Totals: use verbatim outcome from frontend (includes 0.5 increments)
         elif pm == 'zetamac_totals' or mnorm == 'zetamac_totals' or pm == 'zetamac-totals' or mnorm == 'zetamac-totals':
+            outcome_str = payload.get('outcome') or None
+        # Poker: use verbatim outcome from frontend ("Poker Cash Game" or "Poker Tournament")
+        elif pm == 'poker' or mnorm == 'poker':
+            outcome_str = payload.get('outcome') or None
+        # Monopoly: use verbatim outcome from frontend
+        elif pm == 'monopoly' or mnorm == 'monopoly':
             outcome_str = payload.get('outcome') or None
         else:
             # Fallback: keep previous behavior but constructed safely. This covers other markets.
@@ -3857,14 +3861,14 @@ def pari_pool_settle(pool_id):
 
 @api_bp.route('/pari/pool/<int:pool_id>/void', methods=['POST', 'OPTIONS'])
 def pari_pool_void(pool_id):
-    """Host voids a pool — everyone gets stakes refunded, no winners or losers."""
+    """Host deletes a pool — wagers and sides are removed, pool is deleted entirely."""
     if request.method == 'OPTIONS':
         return ('', 200)
     user = _get_user_from_header(request)
     if not user:
         return jsonify({'error': 'unauthorized'}), 401
     if not _is_bookie(user):
-        return jsonify({'error': 'only host can void'}), 403
+        return jsonify({'error': 'only host can delete pools'}), 403
     client = _get_admin_client()
     if not client:
         return jsonify({'error': 'supabase client missing'}), 500
@@ -3872,14 +3876,10 @@ def pari_pool_void(pool_id):
         pc = client.table('pari_pools').select('*').eq('pool_id', pool_id).limit(1).execute()
         p_rows = (pc.data if hasattr(pc, 'data') else (pc.get('data') if isinstance(pc, dict) else None)) or []
         if not p_rows:
-            return jsonify({'error': 'pool not found'}), 404
+            return jsonify({'success': True, 'note': 'already deleted'}), 200
         pool = p_rows[0]
-        if pool.get('status') == 'voided':
-            return jsonify({'success': True, 'note': 'already voided'}), 200
         if pool.get('status') == 'settled':
-            return jsonify({'error': 'pool already settled, cannot void'}), 400
-        if pool.get('status') not in ('betting', 'closed'):
-            return jsonify({'error': 'pool cannot be voided in this state'}), 400
+            return jsonify({'error': 'pool already settled, cannot delete'}), 400
         session_id = pool['session_id']
 
         # Verify host
@@ -3888,26 +3888,14 @@ def pari_pool_void(pool_id):
         if not s_rows or str(s_rows[0].get('host_id')) != str(user):
             return jsonify({'error': 'not your session'}), 403
 
-        # Set all wagers pnl=0, payout=stake (refund)
-        wc = client.table('pari_wagers').select('wager_id,stake').eq('pool_id', pool_id).execute()
-        wagers = (wc.data if hasattr(wc, 'data') else (wc.get('data') if isinstance(wc, dict) else None)) or []
-        for w in wagers:
-            stake = float(w.get('stake', 0))
-            client.table('pari_wagers').update({
-                'payout': round(stake, 2),
-                'pnl': 0.0,
-            }).eq('wager_id', w['wager_id']).execute()
-
-        # Mark pool voided
-        now_str = datetime.now(timezone.utc).isoformat()
-        client.table('pari_pools').update({
-            'status': 'voided',
-            'settled_at': now_str,
-        }).eq('pool_id', pool_id).execute()
+        # Delete children first: wagers, then sides, then pool
+        client.table('pari_wagers').delete().eq('pool_id', pool_id).execute()
+        client.table('pari_pool_sides').delete().eq('pool_id', pool_id).execute()
+        client.table('pari_pools').delete().eq('pool_id', pool_id).execute()
 
         return jsonify({'success': True}), 200
     except Exception as e:
-        logging.exception('pari_pool_void error')
+        logging.exception('pari_pool_void/delete error')
         return jsonify({'error': str(e)}), 500
 
 
