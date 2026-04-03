@@ -3221,6 +3221,9 @@ def pari_session_create():
     if not client:
         return jsonify({'error': 'supabase client missing'}), 500
     try:
+        game_type = data.get('game_type', 'options')
+        if game_type not in ('options', 'fermi'):
+            game_type = 'options'
         row = {
             'name': name,
             'host_id': str(user),
@@ -3229,6 +3232,7 @@ def pari_session_create():
             'min_bet': float(data.get('min_bet', 1)),
             'max_bet': float(data.get('max_bet', 50)),
             'mode': data.get('mode', 'vibe'),
+            'game_type': game_type,
         }
         rc = client.table('pari_sessions').insert(row).execute()
         rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
@@ -3337,6 +3341,8 @@ def pari_session_detail(session_id):
         for w in all_wagers:
             wagers_by_pool.setdefault(w['pool_id'], []).append(w)
 
+        game_type = session.get('game_type', 'options')
+
         for pool in pools:
             pool['sides'] = sorted(sides_map.get(pool['pool_id'], []), key=lambda x: x.get('side_number', 0))
             pool_wagers = wagers_by_pool.get(pool['pool_id'], [])
@@ -3344,8 +3350,15 @@ def pari_session_detail(session_id):
                 for w in pool_wagers:
                     w['screenname'] = name_map.get(str(w.get('user_id', '')), '')
                 pool['wagers'] = pool_wagers
+            elif game_type == 'fermi' and pool['status'] == 'betting':
+                # Fermi during betting: non-host only sees own wager, no other answers
+                own = [w for w in pool_wagers if str(w.get('user_id', '')) == str(user)]
+                for w in own:
+                    w['screenname'] = name_map.get(str(w.get('user_id', '')), '')
+                pool['wagers'] = own
+                pool['wager_count'] = len(pool_wagers)
             else:
-                # During betting, non-host: only return own wager + total count
+                # Options during betting, non-host: only return own wager + total count
                 own = [w for w in pool_wagers if str(w.get('user_id', '')) == str(user)]
                 pool['wagers'] = own
                 pool['wager_count'] = len(pool_wagers)
@@ -3588,40 +3601,60 @@ def pari_pool_create(session_id):
             return jsonify({'error': 'close current pool before creating a new one'}), 400
 
         data = request.get_json(force=True) or {}
-        num_sides = int(data.get('num_sides', 2))
-        if num_sides < 2 or num_sides > 5:
-            return jsonify({'error': 'num_sides must be 2-5'}), 400
-        labels = data.get('labels', [])
 
         # Determine pool number
         existing = client.table('pari_pools').select('pool_number').eq('session_id', session_id).order('pool_number', desc=True).limit(1).execute()
         ex_rows = (existing.data if hasattr(existing, 'data') else (existing.get('data') if isinstance(existing, dict) else None)) or []
         next_num = (ex_rows[0]['pool_number'] + 1) if ex_rows else 1
 
-        # Create pool
-        pool_row = {
-            'session_id': session_id,
-            'pool_number': next_num,
-            'status': 'betting',
-            'num_sides': num_sides,
-        }
-        prc = client.table('pari_pools').insert(pool_row).execute()
-        p_rows = (prc.data if hasattr(prc, 'data') else (prc.get('data') if isinstance(prc, dict) else None)) or []
-        pool = p_rows[0]
-        pool_id = pool['pool_id']
+        game_type = sess.get('game_type', 'options')
 
-        # Create sides
-        colors = SIDE_COLORS.get(num_sides, SIDE_COLORS[2])
-        for i in range(num_sides):
-            side_row = {
-                'pool_id': pool_id,
-                'side_number': i + 1,
-                'color': colors[i],
-                'label': labels[i] if i < len(labels) else '',
+        if game_type == 'fermi':
+            # Fermi pool: question text, no sides
+            question = (data.get('question') or '').strip()
+            if not question:
+                return jsonify({'error': 'question is required for Fermi pools'}), 400
+            pool_row = {
+                'session_id': session_id,
+                'pool_number': next_num,
+                'status': 'betting',
+                'num_sides': 2,
+                'question': question,
             }
-            client.table('pari_pool_sides').insert(side_row).execute()
+            prc = client.table('pari_pools').insert(pool_row).execute()
+            p_rows = (prc.data if hasattr(prc, 'data') else (prc.get('data') if isinstance(prc, dict) else None)) or []
+            pool = p_rows[0]
+            return jsonify({'success': True, 'pool': pool}), 200
+        else:
+            # Options pool: standard MCQ sides
+            num_sides = int(data.get('num_sides', 2))
+            if num_sides < 2 or num_sides > 5:
+                return jsonify({'error': 'num_sides must be 2-5'}), 400
+            labels = data.get('labels', [])
 
-        return jsonify({'success': True, 'pool': pool}), 200
+            pool_row = {
+                'session_id': session_id,
+                'pool_number': next_num,
+                'status': 'betting',
+                'num_sides': num_sides,
+            }
+            prc = client.table('pari_pools').insert(pool_row).execute()
+            p_rows = (prc.data if hasattr(prc, 'data') else (prc.get('data') if isinstance(prc, dict) else None)) or []
+            pool = p_rows[0]
+            pool_id = pool['pool_id']
+
+            # Create sides
+            colors = SIDE_COLORS.get(num_sides, SIDE_COLORS[2])
+            for i in range(num_sides):
+                side_row = {
+                    'pool_id': pool_id,
+                    'side_number': i + 1,
+                    'color': colors[i],
+                    'label': labels[i] if i < len(labels) else '',
+                }
+                client.table('pari_pool_sides').insert(side_row).execute()
+
+            return jsonify({'success': True, 'pool': pool}), 200
     except Exception as e:
         logging.exception('pari_pool_create error')
         return jsonify({'error': str(e)}), 500
@@ -3685,11 +3718,8 @@ def pari_pool_wager(pool_id):
         balance = round(starting + pnl_sum - pending_stakes, 2)
 
         data = request.get_json(force=True) or {}
-        side_number = int(data.get('side_number', 0))
         stake = float(data.get('stake', 0))
 
-        if side_number < 1 or side_number > pool.get('num_sides', 2):
-            return jsonify({'error': f'invalid side_number (1-{pool.get("num_sides", 2)})'}), 400
         if stake < min_bet:
             return jsonify({'error': f'minimum bet is {min_bet}'}), 400
         if stake > max_bet:
@@ -3697,12 +3727,33 @@ def pari_pool_wager(pool_id):
         if stake > balance:
             return jsonify({'error': f'insufficient balance ({balance})'}), 400
 
-        wager_row = {
-            'pool_id': pool_id,
-            'user_id': str(user),
-            'side_number': side_number,
-            'stake': stake,
-        }
+        # Check game_type to determine fermi vs options
+        sess_type_rc = client.table('pari_sessions').select('game_type').eq('session_id', session_id).limit(1).execute()
+        sess_type_rows = (sess_type_rc.data if hasattr(sess_type_rc, 'data') else (sess_type_rc.get('data') if isinstance(sess_type_rc, dict) else None)) or []
+        game_type = (sess_type_rows[0].get('game_type', 'options') if sess_type_rows else 'options')
+
+        if game_type == 'fermi':
+            answer = (data.get('answer') or '').strip()
+            if not answer:
+                return jsonify({'error': 'answer is required for Fermi pools'}), 400
+            wager_row = {
+                'pool_id': pool_id,
+                'user_id': str(user),
+                'side_number': 1,  # dummy — fermi doesn't use sides
+                'stake': stake,
+                'answer': answer,
+            }
+        else:
+            side_number = int(data.get('side_number', 0))
+            if side_number < 1 or side_number > pool.get('num_sides', 2):
+                return jsonify({'error': f'invalid side_number (1-{pool.get("num_sides", 2)})'}), 400
+            wager_row = {
+                'pool_id': pool_id,
+                'user_id': str(user),
+                'side_number': side_number,
+                'stake': stake,
+            }
+
         client.table('pari_wagers').insert(wager_row).execute()
         return jsonify({'success': True}), 200
     except Exception as e:
@@ -3735,35 +3786,38 @@ def pari_pool_close(pool_id):
         if pool.get('status') != 'betting':
             return jsonify({'error': 'pool is not in betting status'}), 400
 
-        # Verify host
+        # Verify host + get game type
         session_id = pool['session_id']
-        sc = client.table('pari_sessions').select('host_id').eq('session_id', session_id).limit(1).execute()
+        sc = client.table('pari_sessions').select('host_id,game_type').eq('session_id', session_id).limit(1).execute()
         s_rows = (sc.data if hasattr(sc, 'data') else (sc.get('data') if isinstance(sc, dict) else None)) or []
         if not s_rows or str(s_rows[0].get('host_id')) != str(user):
             return jsonify({'error': 'not your session'}), 403
+        game_type = s_rows[0].get('game_type', 'options')
 
         # Fetch all wagers
         wc = client.table('pari_wagers').select('*').eq('pool_id', pool_id).execute()
         wagers = (wc.data if hasattr(wc, 'data') else (wc.get('data') if isinstance(wc, dict) else None)) or []
 
-        # Compute totalisator
         total_pool = sum(float(w.get('stake', 0)) for w in wagers)
         side_totals = {}
-        for w in wagers:
-            sn = w.get('side_number')
-            side_totals[sn] = side_totals.get(sn, 0) + float(w.get('stake', 0))
 
-        # Update implied odds per wager
-        for w in wagers:
-            sn = w.get('side_number')
-            st = side_totals.get(sn, 0)
-            if st > 0 and total_pool > 0:
-                implied_decimal = total_pool / st
-            else:
-                implied_decimal = 1.0
-            client.table('pari_wagers').update({
-                'implied_odds': round(implied_decimal, 4),
-            }).eq('wager_id', w['wager_id']).execute()
+        if game_type != 'fermi':
+            # Options: compute implied odds by side
+            for w in wagers:
+                sn = w.get('side_number')
+                side_totals[sn] = side_totals.get(sn, 0) + float(w.get('stake', 0))
+
+            for w in wagers:
+                sn = w.get('side_number')
+                st = side_totals.get(sn, 0)
+                if st > 0 and total_pool > 0:
+                    implied_decimal = total_pool / st
+                else:
+                    implied_decimal = 1.0
+                client.table('pari_wagers').update({
+                    'implied_odds': round(implied_decimal, 4),
+                }).eq('wager_id', w['wager_id']).execute()
+        # Fermi: implied odds computed at settle time, not close time
 
         # Close pool
         now_str = datetime.now(timezone.utc).isoformat()
@@ -3856,6 +3910,86 @@ def pari_pool_settle(pool_id):
         return jsonify({'success': True}), 200
     except Exception as e:
         logging.exception('pari_pool_settle error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/pari/pool/<int:pool_id>/settle-fermi', methods=['POST', 'OPTIONS'])
+def pari_pool_settle_fermi(pool_id):
+    """Host settles a Fermi pool. Body: { winner_wager_ids: [int] }. Marks selected wagers as winners."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can settle'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        data = request.get_json(force=True) or {}
+        winner_ids = data.get('winner_wager_ids', [])
+        if not winner_ids or not isinstance(winner_ids, list):
+            return jsonify({'error': 'winner_wager_ids is required (list of wager IDs)'}), 400
+
+        pc = client.table('pari_pools').select('*').eq('pool_id', pool_id).limit(1).execute()
+        p_rows = (pc.data if hasattr(pc, 'data') else (pc.get('data') if isinstance(pc, dict) else None)) or []
+        if not p_rows:
+            return jsonify({'error': 'pool not found'}), 404
+        pool = p_rows[0]
+        if pool.get('status') == 'settled':
+            return jsonify({'success': True, 'note': 'already settled'}), 200
+        if pool.get('status') != 'closed':
+            return jsonify({'error': 'pool must be closed before settling'}), 400
+        session_id = pool['session_id']
+
+        # Verify host
+        sc = client.table('pari_sessions').select('host_id').eq('session_id', session_id).limit(1).execute()
+        s_rows = (sc.data if hasattr(sc, 'data') else (sc.get('data') if isinstance(sc, dict) else None)) or []
+        if not s_rows or str(s_rows[0].get('host_id')) != str(user):
+            return jsonify({'error': 'not your session'}), 403
+
+        # Fetch all wagers
+        wc = client.table('pari_wagers').select('*').eq('pool_id', pool_id).execute()
+        wagers = (wc.data if hasattr(wc, 'data') else (wc.get('data') if isinstance(wc, dict) else None)) or []
+
+        winner_id_set = set(int(x) for x in winner_ids)
+        total_pool = sum(float(w.get('stake', 0)) for w in wagers)
+        winning_total = sum(float(w.get('stake', 0)) for w in wagers if w.get('wager_id') in winner_id_set)
+
+        # Edge case: nobody wins or everybody wins → push
+        is_push = (winning_total == 0) or (total_pool > 0 and winning_total == total_pool)
+
+        for w in wagers:
+            stake = float(w.get('stake', 0))
+            wid = w.get('wager_id')
+            is_w = wid in winner_id_set
+            if is_push:
+                payout = stake
+                pnl = 0.0
+            elif is_w:
+                payout = (stake / winning_total) * total_pool
+                pnl = payout - stake
+            else:
+                payout = 0
+                pnl = -stake
+
+            client.table('pari_wagers').update({
+                'payout': round(payout, 2),
+                'pnl': round(pnl, 2),
+                'is_winner': is_w,
+            }).eq('wager_id', wid).execute()
+
+        # Mark pool settled
+        now_str = datetime.now(timezone.utc).isoformat()
+        client.table('pari_pools').update({
+            'status': 'settled',
+            'settled_at': now_str,
+        }).eq('pool_id', pool_id).execute()
+
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('pari_pool_settle_fermi error')
         return jsonify({'error': str(e)}), 500
 
 

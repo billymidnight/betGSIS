@@ -23,9 +23,7 @@ export default function Login() {
     initAuth();
   }, []);
 
-  useEffect(() => {
-    console.log('isSignup state:', isSignup);
-  }, [isSignup]);
+  useEffect(() => {}, [isSignup]);
 
   const handleLogin = async () => {
     let inaugural = false;
@@ -258,7 +256,6 @@ export default function Login() {
           })()
         ) : (
           (() => {
-            console.log('Rendering login form');
             return (
               <>
                     <h1 className="auth-title">Sign in</h1>

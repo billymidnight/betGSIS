@@ -122,12 +122,13 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
       // subscribe to auth state changes so token stays current (helps magic-link flows)
       try {
+        let lastAuthToken: string | null = null;
         const { data: listener } = supabase.auth.onAuthStateChange((event, s) => {
           const newToken = (s as any)?.access_token ?? (s as any)?.session?.access_token ?? null;
-          if (import.meta.env.DEV) console.log('onAuthStateChange', event, !!newToken);
           set({ accessToken: newToken });
-          // if we have a token and a user, try to fetch user info from backend
-          if (newToken && (s as any)?.user) {
+          // Only fetch /api/auth/me when token actually changes (avoid duplicate calls)
+          if (newToken && newToken !== lastAuthToken && (s as any)?.user) {
+            lastAuthToken = newToken;
             (async () => {
               try {
                 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
@@ -140,10 +141,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
                     set({ user: { user_id: userObj2.user_id ?? userObj2.id, screen_name: userObj2.screen_name, email: (s as any)?.user?.email, username: userObj2.screenname, role: userObj2.role, avatar_url: userObj2.avatar_url }, isAuthenticated: true });
                   }
                 } catch (err) {
-                  if (import.meta.env.DEV) console.warn('onAuthStateChange /api/auth/me returned non-json');
+                  // non-json response
                 }
               } catch (err) {
-                if (import.meta.env.DEV) console.warn('onAuthStateChange fetch /api/auth/me failed', err);
+                // fetch failed
               }
             })();
           }
@@ -157,11 +158,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       // Call backend to fetch user's screen_name
     const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
     const reqUrl = `${apiBase}/auth/me`;
-    if (import.meta.env.DEV) console.log('authStore: fetching', reqUrl);
+    // auth fetch log removed
     const res = await fetch(reqUrl, { headers: { Authorization: `Bearer ${token}` } });
       // Read as text first in case the server returns HTML (e.g., a redirect to an HTML page)
       const raw = await res.text();
-      if (import.meta.env.DEV) console.log('/api/auth/me raw response (truncated):', raw?.slice?.(0, 200));
+      // response log removed
 
       try {
         const data = JSON.parse(raw);

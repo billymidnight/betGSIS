@@ -444,6 +444,7 @@
 }
 .pari-wager-input-row input {
   flex: 1;
+  min-width: 0;
   padding: 10px 14px;
   border-radius: 8px;
   border: 1px solid #475569;
@@ -452,9 +453,16 @@
   font-size: 1rem;
   font-weight: 600;
   outline: none;
+  box-sizing: border-box;
 }
 .pari-wager-input-row input:focus {
   border-color: #3b82f6;
+}
+.pari-wager-input-row input[type="text"] {
+  width: 100%;
+}
+.pari-wager-input-row input[type="number"] {
+  width: 100%;
 }
 
 .pari-wager-confirmed {
@@ -607,8 +615,9 @@
   gap: 8px;
 }
 .pari-sides-btn {
-  width: 44px;
-  height: 44px;
+  min-width: 44px;
+  height: 40px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -616,10 +625,11 @@
   border: 2px solid #475569;
   background: transparent;
   color: #94a3b8;
-  font-size: 1.1rem;
+  font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 .pari-sides-btn-active {
   background: #3b82f6;

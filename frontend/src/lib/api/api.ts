@@ -268,7 +268,7 @@ export async function fetchMyBets(mode: 'bettor' | 'layeur' = 'bettor') {
   const session = await supabase.auth.getSession();
   let token = (session as any)?.data?.session?.access_token;
   if (!token) token = useAuthStore.getState().accessToken ?? null;
-  if (import.meta.env.DEV) console.log('fetchMyBets token present?', !!token);
+  // token debug log removed to reduce console noise
   if (!token) return [];
   const headers = { Authorization: `Bearer ${token}` };
   const r = await api.get(`/bets/my?mode=${mode}`, { headers });
@@ -284,7 +284,7 @@ export async function fetchActiveBets(mode: 'bettor' | 'layeur' = 'bettor') {
   const session = await supabase.auth.getSession();
   let token = (session as any)?.data?.session?.access_token;
   if (!token) token = useAuthStore.getState().accessToken ?? null;
-  if (import.meta.env.DEV) console.log('fetchActiveBets token present?', !!token);
+  // token debug log removed to reduce console noise
   if (!token) return [];
   const headers = { Authorization: `Bearer ${token}` };
   const r = await api.get(`/bets/active?mode=${mode}`, { headers });
@@ -636,6 +636,7 @@ export async function pariCreateSession(payload: {
   min_bet?: number;
   max_bet?: number;
   mode?: string;
+  game_type?: string;
 }): Promise<any> {
   const headers = await _getAuthHeaders();
   const r = await api.post('/pari/session/create', payload, { headers });
@@ -681,17 +682,20 @@ export async function pariDeleteSession(sessionId: number): Promise<any> {
 }
 
 export async function pariCreatePool(sessionId: number, payload: {
-  num_sides: number;
+  num_sides?: number;
   labels?: string[];
+  question?: string;
 }): Promise<any> {
   const headers = await _getAuthHeaders();
   const r = await api.post(`/pari/session/${sessionId}/pool/create`, payload, { headers });
   return r.data;
 }
 
-export async function pariPlaceWager(poolId: number, sideNumber: number, stake: number): Promise<any> {
+export async function pariPlaceWager(poolId: number, sideNumber: number, stake: number, answer?: string): Promise<any> {
   const headers = await _getAuthHeaders();
-  const r = await api.post(`/pari/pool/${poolId}/wager`, { side_number: sideNumber, stake }, { headers });
+  const body: any = { side_number: sideNumber, stake };
+  if (answer !== undefined) body.answer = answer;
+  const r = await api.post(`/pari/pool/${poolId}/wager`, body, { headers });
   return r.data;
 }
 
@@ -704,6 +708,12 @@ export async function pariClosePool(poolId: number): Promise<any> {
 export async function pariSettlePool(poolId: number, winnerSide: number): Promise<any> {
   const headers = await _getAuthHeaders();
   const r = await api.post(`/pari/pool/${poolId}/settle`, { winner_side: winnerSide }, { headers });
+  return r.data;
+}
+
+export async function pariSettleFermiPool(poolId: number, winnerWagerIds: number[]): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/pari/pool/${poolId}/settle-fermi`, { winner_wager_ids: winnerWagerIds }, { headers });
   return r.data;
 }
 

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useBetsStore } from '../../lib/state/betsStore';
 import { useUIStore } from '../../lib/state/uiStore';
 import { Button } from '../Shared/Button';
 import BetslipItem from './BetslipItem';
-import { placeBet as apiPlaceBet, placeBetServer } from '../../lib/api/api';
+import { placeBetServer } from '../../lib/api/api';
 import { decimalToAmerican } from '../../lib/format';
 import { useAuthStore } from '../../lib/state/authStore';
 import './BetSlip.css';
@@ -162,13 +162,7 @@ export default function BetSlip() {
         };
         // Debugging: log payload for country-props to verify outcome value
         try {
-          if (payload.market === 'country-props') {
-            // eslint-disable-next-line no-console
-            console.debug('[BetSlip] placing country-props payload:', payload);
-          }
-          // Log ALL bets to debug moneyline issue
-          console.log('[BetSlip] Placing bet with payload:', JSON.stringify(payload, null, 2));
-          const resp = await placeBetServer(payload);
+          await placeBetServer(payload);
           placeBetAction(sel);
         } catch (e: any) {
           console.error('Place bet server error:', e?.response?.data ?? e?.message ?? e);

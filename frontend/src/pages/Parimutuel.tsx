@@ -11,6 +11,7 @@ import {
   pariPlaceWager,
   pariClosePool,
   pariSettlePool,
+  pariSettleFermiPool,
   pariVoidPool,
 } from '../lib/api/api';
 import { useAuthStore } from '../lib/state/authStore';
@@ -31,6 +32,7 @@ interface PariSession {
   min_bet: number;
   max_bet: number;
   mode: string;
+  game_type: 'options' | 'fermi';
   created_at: string;
   concluded_at?: string;
 }
@@ -61,6 +63,8 @@ interface PariWager {
   implied_odds?: number;
   payout?: number;
   pnl?: number;
+  answer?: string;
+  is_winner?: boolean;
 }
 
 interface PariPool {
@@ -70,6 +74,7 @@ interface PariPool {
   status: 'betting' | 'closed' | 'settled' | 'voided';
   num_sides: number;
   winner_side?: number;
+  question?: string;
   sides: PariSide[];
   wagers: PariWager[];
   wager_count?: number;
@@ -140,17 +145,23 @@ export default function Parimutuel() {
   const [cMinBet, setCMinBet] = useState('1');
   const [cMaxBet, setCMaxBet] = useState('50');
 
+  // Create session game type
+  const [cGameType, setCGameType] = useState<'options' | 'fermi'>('options');
+
   // Pool create form
   const [showPoolCreate, setShowPoolCreate] = useState(false);
   const [pNumSides, setPNumSides] = useState(2);
   const [pLabels, setPLabels] = useState<string[]>(['', '', '', '', '']);
+  const [pQuestion, setPQuestion] = useState('');
 
   // Wager form
   const [wagerSide, setWagerSide] = useState<number | null>(null);
   const [wagerStake, setWagerStake] = useState('');
+  const [wagerAnswer, setWagerAnswer] = useState('');
 
   // Settle form
   const [settleWinner, setSettleWinner] = useState<number | null>(null);
+  const [fermiWinnerIds, setFermiWinnerIds] = useState<Set<number>>(new Set());
 
   // Realtime subscription ref
   const channelRef = useRef<any>(null);
@@ -272,6 +283,7 @@ export default function Parimutuel() {
         min_bet: parseFloat(cMinBet) || 1,
         max_bet: parseFloat(cMaxBet) || 50,
         mode: 'vibe',
+        game_type: cGameType,
       });
       setShowCreate(false);
       setCName('');
@@ -314,15 +326,22 @@ export default function Parimutuel() {
 
   const handleCreatePool = async () => {
     if (!activeSessionId) return;
+    const isFermi = session?.game_type === 'fermi';
     setLoading(true);
     try {
-      const labels = pLabels.slice(0, pNumSides).filter(l => l.trim());
-      await pariCreatePool(activeSessionId, {
-        num_sides: pNumSides,
-        labels: labels.length > 0 ? pLabels.slice(0, pNumSides) : undefined,
-      });
+      if (isFermi) {
+        if (!pQuestion.trim()) { setError('Enter a question'); setLoading(false); return; }
+        await pariCreatePool(activeSessionId, { question: pQuestion.trim() });
+        setPQuestion('');
+      } else {
+        const labels = pLabels.slice(0, pNumSides).filter(l => l.trim());
+        await pariCreatePool(activeSessionId, {
+          num_sides: pNumSides,
+          labels: labels.length > 0 ? pLabels.slice(0, pNumSides) : undefined,
+        });
+        setPLabels(['', '', '', '', '']);
+      }
       setShowPoolCreate(false);
-      setPLabels(['', '', '', '', '']);
       setSuccessMsg('Pool created — wagering open!');
       loadSession(activeSessionId);
     } catch (err: any) {
@@ -332,13 +351,20 @@ export default function Parimutuel() {
   };
 
   const handlePlaceWager = async (poolId: number) => {
-    if (wagerSide === null) { setError('Pick a side'); return; }
+    const isFermi = session?.game_type === 'fermi';
+    if (!isFermi && wagerSide === null) { setError('Pick a side'); return; }
+    if (isFermi && !wagerAnswer.trim()) { setError('Enter your answer'); return; }
     const stake = parseFloat(wagerStake);
     if (!stake || stake <= 0) { setError('Enter a valid stake'); return; }
     setLoading(true);
     try {
-      await pariPlaceWager(poolId, wagerSide, stake);
-      setWagerSide(null);
+      if (isFermi) {
+        await pariPlaceWager(poolId, 1, stake, wagerAnswer.trim());
+        setWagerAnswer('');
+      } else {
+        await pariPlaceWager(poolId, wagerSide!, stake);
+        setWagerSide(null);
+      }
       setWagerStake('');
       setSuccessMsg('Wager placed!');
       loadSession(activeSessionId!);
@@ -374,6 +400,20 @@ export default function Parimutuel() {
     setLoading(false);
   };
 
+  const handleSettleFermi = async (poolId: number) => {
+    if (fermiWinnerIds.size === 0) { setError('Select at least one winning answer'); return; }
+    setLoading(true);
+    try {
+      await pariSettleFermiPool(poolId, Array.from(fermiWinnerIds));
+      setFermiWinnerIds(new Set());
+      setSuccessMsg('Pool settled!');
+      loadSession(activeSessionId!);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Settle failed');
+    }
+    setLoading(false);
+  };
+
   const handleVoidPool = async (poolId: number) => {
     if (!window.confirm('Delete this pool? All wagers will be removed.')) return;
     setLoading(true);
@@ -390,16 +430,22 @@ export default function Parimutuel() {
   const handleVoidAndCreateNext = async (poolId: number) => {
     if (!window.confirm('Delete this pool and create the next one?')) return;
     if (!activeSessionId) return;
+    const isFermi = session?.game_type === 'fermi';
     setLoading(true);
     try {
       await pariVoidPool(poolId);
-      const labels = pLabels.slice(0, pNumSides).filter(l => l.trim());
-      await pariCreatePool(activeSessionId, {
-        num_sides: pNumSides,
-        labels: labels.length > 0 ? pLabels.slice(0, pNumSides) : undefined,
-      });
-      setPLabels(['', '', '', '', '']);
-      setSuccessMsg('Pool deleted & next pool created!');
+      if (isFermi) {
+        // For fermi, can't auto-create next without a question — just delete and show create form
+        setShowPoolCreate(true);
+      } else {
+        const labels = pLabels.slice(0, pNumSides).filter(l => l.trim());
+        await pariCreatePool(activeSessionId, {
+          num_sides: pNumSides,
+          labels: labels.length > 0 ? pLabels.slice(0, pNumSides) : undefined,
+        });
+        setPLabels(['', '', '', '', '']);
+      }
+      setSuccessMsg(isFermi ? 'Pool deleted — create next pool' : 'Pool deleted & next pool created!');
       loadSession(activeSessionId);
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Delete & create failed');
@@ -460,6 +506,8 @@ export default function Parimutuel() {
   const myParticipant = participants.find(p => p.user_id === myUserId);
   const isInSession = !!myParticipant;
 
+  const isFermi = session?.game_type === 'fermi';
+
   // My wager on the current betting pool
   const myWagerOnCurrent = currentPool?.wagers?.find(w => w.user_id === myUserId) || null;
 
@@ -499,6 +547,9 @@ export default function Parimutuel() {
                     <div className="pari-session-card-header">
                       <span className="pari-session-name">{s.name}</span>
                       <span className="pari-badge pari-badge-lobby">LOBBY</span>
+                      <span className="pari-badge" style={{ backgroundColor: s.game_type === 'fermi' ? '#8b5cf6' : '#3b82f6', color: '#fff' }}>
+                        {(s.game_type || 'options').toUpperCase()}
+                      </span>
                       {amEnrolled && <span className="pari-badge pari-badge-enrolled">ENROLLED</span>}
                     </div>
                     <div className="pari-session-meta">
@@ -573,6 +624,23 @@ export default function Parimutuel() {
                   <label>Max Bet</label>
                   <input type="number" value={cMaxBet} onChange={e => setCMaxBet(e.target.value)} />
                 </div>
+                <div className="pari-form-row">
+                  <label>Game Type</label>
+                  <div className="pari-sides-picker">
+                    <button
+                      className={`pari-sides-btn ${cGameType === 'options' ? 'pari-sides-btn-active' : ''}`}
+                      onClick={() => setCGameType('options')}
+                    >
+                      Options
+                    </button>
+                    <button
+                      className={`pari-sides-btn ${cGameType === 'fermi' ? 'pari-sides-btn-active' : ''}`}
+                      onClick={() => setCGameType('fermi')}
+                    >
+                      Fermi
+                    </button>
+                  </div>
+                </div>
                 <div className="pari-form-actions">
                   <button className="pari-btn pari-btn-green" onClick={handleCreateSession} disabled={loading}>Create</button>
                   <button className="pari-btn pari-btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
@@ -607,6 +675,9 @@ export default function Parimutuel() {
           <h1>{session.name}</h1>
           <span className={`pari-badge ${session.status === 'active' ? 'pari-badge-active' : session.status === 'concluded' ? 'pari-badge-concluded' : 'pari-badge-lobby'}`}>
             {session.status.toUpperCase()}
+          </span>
+          <span className="pari-badge" style={{ backgroundColor: isFermi ? '#8b5cf6' : '#3b82f6', color: '#fff' }}>
+            {isFermi ? 'FERMI' : 'OPTIONS'}
           </span>
         </div>
         <button className="pari-refresh-btn pari-refresh-btn-topbar" onClick={handleRefreshSession} disabled={refreshing}>
@@ -711,187 +782,353 @@ export default function Parimutuel() {
                     </h2>
                   </div>
 
-                  {/* Sides display */}
-                  <div className="pari-sides-row">
-                    {displayPool.sides.map((side, idx) => {
-                      const sideWagers = displayPool.wagers?.filter(w => w.side_number === side.side_number) || [];
-                      const sideTotal = sideWagers.reduce((sum, w) => sum + (w.stake || 0), 0);
-                      const totalPool = displayPool.wagers?.reduce((sum, w) => sum + (w.stake || 0), 0) || 0;
-                      const isWinner = displayPool.winner_side === side.side_number;
-                      const impliedOdds = sideTotal > 0 && totalPool > 0 ? totalPool / sideTotal : 0;
-
-                      return (
-                        <div
-                          key={side.side_number}
-                          className={`pari-side-card ${wagerSide === side.side_number ? 'pari-side-selected' : ''} ${isWinner ? 'pari-side-winner' : ''} ${displayPool.status === 'settled' && !isWinner ? 'pari-side-loser' : ''}`}
-                          style={{ borderColor: side.color }}
-                          onClick={() => {
-                            if (displayPool.status === 'betting' && !myWagerOnCurrent) {
-                              setWagerSide(side.side_number);
-                            }
-                          }}
-                        >
-                          <div className="pari-side-color-bar" style={{ backgroundColor: side.color }} />
-                          <div className="pari-side-name">{sideName(side, idx)}</div>
-
-                          {/* During betting: hide all stats from non-host */}
-
-                          {/* Host during betting: show full details */}
-                          {displayPool.status === 'betting' && isHost && (
-                            <>
-                              <div className="pari-side-stat">
-                                <span className="pari-stat-label">Wagers</span>
-                                <span className="pari-stat-value">{sideWagers.length}</span>
-                              </div>
-                              <div className="pari-side-stat">
-                                <span className="pari-stat-label">Total</span>
-                                <span className="pari-stat-value">{fmtMoney(sideTotal)}</span>
-                              </div>
-                            </>
-                          )}
-
-                          {/* After close/settle: show full details to everyone */}
-                          {displayPool.status !== 'betting' && (
-                            <>
-                              <div className="pari-side-stat">
-                                <span className="pari-stat-label">Pool</span>
-                                <span className="pari-stat-value">{fmtMoney(sideTotal)}</span>
-                              </div>
-                              <div className="pari-side-stat">
-                                <span className="pari-stat-label">Odds</span>
-                                <span className="pari-stat-value">{fmtOdds(impliedOdds)}</span>
-                              </div>
-                              {isWinner && <div className="pari-winner-badge">WINNER</div>}
-                            </>
-                          )}
+                  {/* ════════ FERMI POOL ════════ */}
+                  {isFermi ? (
+                    <>
+                      {/* Question display */}
+                      {displayPool.question && (
+                        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '1rem 1.25rem', marginBottom: '1rem' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Question</div>
+                          <div style={{ fontSize: '1.15rem', fontWeight: 600, color: '#f1f5f9' }}>{displayPool.question}</div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      )}
 
-                  {/* Betting form (only during betting, for participants who haven't wagered) */}
-                  {displayPool.status === 'betting' && isInSession && !myWagerOnCurrent && (
-                    <div className="pari-wager-form">
-                      <div className="pari-wager-selected">
-                        {wagerSide
-                          ? <>Selected: <span style={{ color: displayPool.sides.find(s => s.side_number === wagerSide)?.color }}>
-                              {sideName(displayPool.sides.find(s => s.side_number === wagerSide)!, wagerSide - 1)}
-                            </span></>
-                          : <span className="pari-muted">← Click a side to select</span>
-                        }
-                      </div>
-                      <div className="pari-wager-input-row">
-                        <input
-                          type="number"
-                          placeholder={`Stake (${session.min_bet}–${session.max_bet})`}
-                          value={wagerStake}
-                          onChange={e => setWagerStake(e.target.value)}
-                          min={session.min_bet}
-                          max={Math.min(session.max_bet, myParticipant?.balance || 0)}
-                          step="0.01"
-                        />
-                        <button
-                          className="pari-btn pari-btn-blue pari-btn-lg"
-                          onClick={() => handlePlaceWager(displayPool.pool_id)}
-                          disabled={loading || wagerSide === null || !wagerStake}
-                        >
-                          Place Wager
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                      {/* During betting: wager count (non-host) */}
+                      {displayPool.status === 'betting' && !isHost && (
+                        <div style={{ color: '#94a3b8', marginBottom: '0.75rem' }}>
+                          {displayPool.wager_count ?? displayPool.wagers?.length ?? 0} answer(s) submitted
+                        </div>
+                      )}
 
-                  {/* Own wager confirmation (during betting) */}
-                  {displayPool.status === 'betting' && myWagerOnCurrent && (
-                    <div className="pari-wager-confirmed">
-                      Wager locked: <strong>{fmtMoney(myWagerOnCurrent.stake)}</strong> on{' '}
-                      <span style={{ color: displayPool.sides.find(s => s.side_number === myWagerOnCurrent.side_number)?.color }}>
-                        {sideName(displayPool.sides.find(s => s.side_number === myWagerOnCurrent.side_number)!, myWagerOnCurrent.side_number - 1)}
-                      </span>
-                    </div>
-                  )}
+                      {/* Fermi betting form */}
+                      {displayPool.status === 'betting' && isInSession && !myWagerOnCurrent && (
+                        <div className="pari-wager-form">
+                          <div className="pari-wager-input-row" style={{ flexDirection: 'column' }}>
+                            <input
+                              type="text"
+                              placeholder="Your answer (horse)..."
+                              value={wagerAnswer}
+                              onChange={e => setWagerAnswer(e.target.value)}
+                            />
+                            <input
+                              type="number"
+                              placeholder={`Stake (${session.min_bet}–${session.max_bet})`}
+                              value={wagerStake}
+                              onChange={e => setWagerStake(e.target.value)}
+                              min={session.min_bet}
+                              max={Math.min(session.max_bet, myParticipant?.balance || 0)}
+                              step="0.01"
+                            />
+                            <button
+                              className="pari-btn pari-btn-blue pari-btn-lg"
+                              onClick={() => handlePlaceWager(displayPool.pool_id)}
+                              disabled={loading || !wagerAnswer.trim() || !wagerStake}
+                            >
+                              Place Wager
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
-                  {/* Wager table (visible after close/settle, or host during betting) */}
-                  {(displayPool.status !== 'betting' || isHost) && displayPool.wagers && displayPool.wagers.length > 0 && (
-                    <div className="pari-wagers-table-wrap">
-                      <table className="pari-wagers-table">
-                        <thead>
-                          <tr>
-                            <th>Player</th>
-                            <th>Side</th>
-                            <th>Stake</th>
-                            {displayPool.status !== 'betting' && <th>Odds</th>}
-                            {displayPool.status === 'settled' && <th>Payout</th>}
-                            {displayPool.status === 'settled' && <th>P&L</th>}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {displayPool.wagers.map(w => {
-                            const wSide = displayPool.sides.find(s => s.side_number === w.side_number);
-                            return (
-                              <tr key={w.wager_id}>
-                                <td>
-                                  {w.screenname || w.user_id.slice(0, 8)}
-                                  {w.user_id === myUserId && <span className="pari-you-tag">YOU</span>}
-                                </td>
-                                <td>
-                                  <span className="pari-side-dot" style={{ backgroundColor: wSide?.color || '#888' }} />
-                                  {wSide ? sideName(wSide, w.side_number - 1) : `Side ${w.side_number}`}
-                                </td>
-                                <td>{fmtMoney(w.stake)}</td>
-                                {displayPool.status !== 'betting' && (
-                                  <td>{w.implied_odds ? fmtOdds(w.implied_odds) : '—'}</td>
-                                )}
-                                {displayPool.status === 'settled' && (
-                                  <td>{w.payout != null ? fmtMoney(w.payout) : '—'}</td>
-                                )}
-                                {displayPool.status === 'settled' && (
-                                  <td className={`pari-pnl ${(w.pnl || 0) >= 0 ? 'pari-pnl-pos' : 'pari-pnl-neg'}`}>
-                                    {w.pnl != null ? (w.pnl >= 0 ? '+' : '') + fmtMoney(w.pnl) : '—'}
-                                  </td>
-                                )}
+                      {/* Own wager confirmation (during betting) */}
+                      {displayPool.status === 'betting' && myWagerOnCurrent && (
+                        <div className="pari-wager-confirmed">
+                          Wager locked: <strong>{fmtMoney(myWagerOnCurrent.stake)}</strong> — your answer: <strong>{myWagerOnCurrent.answer}</strong>
+                        </div>
+                      )}
+
+                      {/* Host view during betting: see all answers + stakes */}
+                      {displayPool.status === 'betting' && isHost && displayPool.wagers && displayPool.wagers.length > 0 && (
+                        <div className="pari-wagers-table-wrap">
+                          <table className="pari-wagers-table">
+                            <thead><tr><th>Player</th><th>Answer</th><th>Stake</th></tr></thead>
+                            <tbody>
+                              {displayPool.wagers.map(w => (
+                                <tr key={w.wager_id}>
+                                  <td>{w.screenname || w.user_id.slice(0, 8)}</td>
+                                  <td style={{ fontWeight: 600 }}>{w.answer || '—'}</td>
+                                  <td>{fmtMoney(w.stake)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* After close: everyone sees all answers + stakes */}
+                      {displayPool.status !== 'betting' && displayPool.wagers && displayPool.wagers.length > 0 && (
+                        <div className="pari-wagers-table-wrap">
+                          <table className="pari-wagers-table">
+                            <thead>
+                              <tr>
+                                <th>Player</th>
+                                <th>Answer</th>
+                                <th>Stake</th>
+                                {displayPool.status === 'settled' && <th>Result</th>}
+                                {displayPool.status === 'settled' && <th>Payout</th>}
+                                {displayPool.status === 'settled' && <th>P&L</th>}
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                            </thead>
+                            <tbody>
+                              {displayPool.wagers.map(w => (
+                                <tr key={w.wager_id} style={w.is_winner ? { background: 'rgba(34,197,94,0.1)' } : {}}>
+                                  <td>
+                                    {w.screenname || w.user_id.slice(0, 8)}
+                                    {w.user_id === myUserId && <span className="pari-you-tag">YOU</span>}
+                                  </td>
+                                  <td style={{ fontWeight: 600 }}>{w.answer || '—'}</td>
+                                  <td>{fmtMoney(w.stake)}</td>
+                                  {displayPool.status === 'settled' && (
+                                    <td style={{ color: w.is_winner ? '#22c55e' : '#ef4444', fontWeight: 700 }}>
+                                      {w.is_winner ? 'CORRECT' : 'WRONG'}
+                                    </td>
+                                  )}
+                                  {displayPool.status === 'settled' && (
+                                    <td>{w.payout != null ? fmtMoney(w.payout) : '—'}</td>
+                                  )}
+                                  {displayPool.status === 'settled' && (
+                                    <td className={`pari-pnl ${(w.pnl || 0) >= 0 ? 'pari-pnl-pos' : 'pari-pnl-neg'}`}>
+                                      {w.pnl != null ? (w.pnl >= 0 ? '+' : '') + fmtMoney(w.pnl) : '—'}
+                                    </td>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
 
-                  {/* Host controls */}
-                  {isHost && displayPool.status === 'betting' && (
-                    <div className="pari-host-actions">
-                      <button className="pari-btn pari-btn-amber" onClick={() => handleClosePool(displayPool.pool_id)} disabled={loading}>
-                        Close Wagering
-                      </button>
-                      <button className="pari-btn pari-btn-void" onClick={() => handleVoidPool(displayPool.pool_id)} disabled={loading}>
-                        Delete Pool
-                      </button>
-                    </div>
-                  )}
-
-                  {isHost && displayPool.status === 'closed' && (
-                    <div className="pari-host-actions">
-                      <h3>Pick the Winner</h3>
-                      <div className="pari-settle-row">
-                        {displayPool.sides.map((side, idx) => (
-                          <button
-                            key={side.side_number}
-                            className={`pari-settle-btn ${settleWinner === side.side_number ? 'pari-settle-selected' : ''}`}
-                            style={{ borderColor: side.color, color: settleWinner === side.side_number ? '#fff' : side.color, backgroundColor: settleWinner === side.side_number ? side.color : 'transparent' }}
-                            onClick={() => setSettleWinner(side.side_number)}
-                          >
-                            {sideName(side, idx)}
+                      {/* Host controls: close */}
+                      {isHost && displayPool.status === 'betting' && (
+                        <div className="pari-host-actions">
+                          <button className="pari-btn pari-btn-amber" onClick={() => handleClosePool(displayPool.pool_id)} disabled={loading}>
+                            Close Wagering
                           </button>
-                        ))}
+                          <button className="pari-btn pari-btn-void" onClick={() => handleVoidPool(displayPool.pool_id)} disabled={loading}>
+                            Delete Pool
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Host controls: settle fermi */}
+                      {isHost && displayPool.status === 'closed' && (
+                        <div className="pari-host-actions">
+                          <h3>Select Correct Answer(s)</h3>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', margin: '0.75rem 0' }}>
+                            {(displayPool.wagers || []).map(w => (
+                              <label key={w.wager_id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', padding: '0.4rem 0.6rem', borderRadius: 6, background: fermiWinnerIds.has(w.wager_id) ? 'rgba(34,197,94,0.15)' : 'transparent', border: fermiWinnerIds.has(w.wager_id) ? '1px solid #22c55e' : '1px solid #334155' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={fermiWinnerIds.has(w.wager_id)}
+                                  onChange={() => {
+                                    setFermiWinnerIds(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(w.wager_id)) next.delete(w.wager_id);
+                                      else next.add(w.wager_id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <span style={{ fontWeight: 600 }}>{w.screenname || w.user_id.slice(0, 8)}</span>
+                                <span style={{ color: '#94a3b8' }}>—</span>
+                                <span style={{ color: '#e2e8f0' }}>{w.answer}</span>
+                                <span style={{ color: '#94a3b8', marginLeft: 'auto' }}>{fmtMoney(w.stake)}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <button className="pari-btn pari-btn-green pari-btn-lg" onClick={() => handleSettleFermi(displayPool.pool_id)} disabled={loading || fermiWinnerIds.size === 0}>
+                            Settle Pool ({fermiWinnerIds.size} winner{fermiWinnerIds.size !== 1 ? 's' : ''})
+                          </button>
+                          <button className="pari-btn pari-btn-void" onClick={() => handleVoidAndCreateNext(displayPool.pool_id)} disabled={loading}>
+                            Delete &amp; Create Next Pool
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {/* ════════ OPTIONS POOL (original) ════════ */}
+                      {/* Sides display */}
+                      <div className="pari-sides-row">
+                        {displayPool.sides.map((side, idx) => {
+                          const sideWagers = displayPool.wagers?.filter(w => w.side_number === side.side_number) || [];
+                          const sideTotal = sideWagers.reduce((sum, w) => sum + (w.stake || 0), 0);
+                          const totalPool = displayPool.wagers?.reduce((sum, w) => sum + (w.stake || 0), 0) || 0;
+                          const isWinner = displayPool.winner_side === side.side_number;
+                          const impliedOdds = sideTotal > 0 && totalPool > 0 ? totalPool / sideTotal : 0;
+
+                          return (
+                            <div
+                              key={side.side_number}
+                              className={`pari-side-card ${wagerSide === side.side_number ? 'pari-side-selected' : ''} ${isWinner ? 'pari-side-winner' : ''} ${displayPool.status === 'settled' && !isWinner ? 'pari-side-loser' : ''}`}
+                              style={{ borderColor: side.color }}
+                              onClick={() => {
+                                if (displayPool.status === 'betting' && !myWagerOnCurrent) {
+                                  setWagerSide(side.side_number);
+                                }
+                              }}
+                            >
+                              <div className="pari-side-color-bar" style={{ backgroundColor: side.color }} />
+                              <div className="pari-side-name">{sideName(side, idx)}</div>
+
+                              {/* Host during betting: show full details */}
+                              {displayPool.status === 'betting' && isHost && (
+                                <>
+                                  <div className="pari-side-stat">
+                                    <span className="pari-stat-label">Wagers</span>
+                                    <span className="pari-stat-value">{sideWagers.length}</span>
+                                  </div>
+                                  <div className="pari-side-stat">
+                                    <span className="pari-stat-label">Total</span>
+                                    <span className="pari-stat-value">{fmtMoney(sideTotal)}</span>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* After close/settle: show full details to everyone */}
+                              {displayPool.status !== 'betting' && (
+                                <>
+                                  <div className="pari-side-stat">
+                                    <span className="pari-stat-label">Pool</span>
+                                    <span className="pari-stat-value">{fmtMoney(sideTotal)}</span>
+                                  </div>
+                                  <div className="pari-side-stat">
+                                    <span className="pari-stat-label">Odds</span>
+                                    <span className="pari-stat-value">{fmtOdds(impliedOdds)}</span>
+                                  </div>
+                                  {isWinner && <div className="pari-winner-badge">WINNER</div>}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                      <button className="pari-btn pari-btn-green pari-btn-lg" onClick={() => handleSettlePool(displayPool.pool_id)} disabled={loading || settleWinner === null}>
-                        Settle Pool
-                      </button>
-                      <button className="pari-btn pari-btn-void" onClick={() => handleVoidAndCreateNext(displayPool.pool_id)} disabled={loading}>
-                        Delete &amp; Create Next Pool
-                      </button>
-                    </div>
+
+                      {/* Betting form (only during betting, for participants who haven't wagered) */}
+                      {displayPool.status === 'betting' && isInSession && !myWagerOnCurrent && (
+                        <div className="pari-wager-form">
+                          <div className="pari-wager-selected">
+                            {wagerSide
+                              ? <>Selected: <span style={{ color: displayPool.sides.find(s => s.side_number === wagerSide)?.color }}>
+                                  {sideName(displayPool.sides.find(s => s.side_number === wagerSide)!, wagerSide - 1)}
+                                </span></>
+                              : <span className="pari-muted">&larr; Click a side to select</span>
+                            }
+                          </div>
+                          <div className="pari-wager-input-row">
+                            <input
+                              type="number"
+                              placeholder={`Stake (${session.min_bet}–${session.max_bet})`}
+                              value={wagerStake}
+                              onChange={e => setWagerStake(e.target.value)}
+                              min={session.min_bet}
+                              max={Math.min(session.max_bet, myParticipant?.balance || 0)}
+                              step="0.01"
+                            />
+                            <button
+                              className="pari-btn pari-btn-blue pari-btn-lg"
+                              onClick={() => handlePlaceWager(displayPool.pool_id)}
+                              disabled={loading || wagerSide === null || !wagerStake}
+                            >
+                              Place Wager
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Own wager confirmation (during betting) */}
+                      {displayPool.status === 'betting' && myWagerOnCurrent && (
+                        <div className="pari-wager-confirmed">
+                          Wager locked: <strong>{fmtMoney(myWagerOnCurrent.stake)}</strong> on{' '}
+                          <span style={{ color: displayPool.sides.find(s => s.side_number === myWagerOnCurrent.side_number)?.color }}>
+                            {sideName(displayPool.sides.find(s => s.side_number === myWagerOnCurrent.side_number)!, myWagerOnCurrent.side_number - 1)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Wager table (visible after close/settle, or host during betting) */}
+                      {(displayPool.status !== 'betting' || isHost) && displayPool.wagers && displayPool.wagers.length > 0 && (
+                        <div className="pari-wagers-table-wrap">
+                          <table className="pari-wagers-table">
+                            <thead>
+                              <tr>
+                                <th>Player</th>
+                                <th>Side</th>
+                                <th>Stake</th>
+                                {displayPool.status !== 'betting' && <th>Odds</th>}
+                                {displayPool.status === 'settled' && <th>Payout</th>}
+                                {displayPool.status === 'settled' && <th>P&L</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {displayPool.wagers.map(w => {
+                                const wSide = displayPool.sides.find(s => s.side_number === w.side_number);
+                                return (
+                                  <tr key={w.wager_id}>
+                                    <td>
+                                      {w.screenname || w.user_id.slice(0, 8)}
+                                      {w.user_id === myUserId && <span className="pari-you-tag">YOU</span>}
+                                    </td>
+                                    <td>
+                                      <span className="pari-side-dot" style={{ backgroundColor: wSide?.color || '#888' }} />
+                                      {wSide ? sideName(wSide, w.side_number - 1) : `Side ${w.side_number}`}
+                                    </td>
+                                    <td>{fmtMoney(w.stake)}</td>
+                                    {displayPool.status !== 'betting' && (
+                                      <td>{w.implied_odds ? fmtOdds(w.implied_odds) : '—'}</td>
+                                    )}
+                                    {displayPool.status === 'settled' && (
+                                      <td>{w.payout != null ? fmtMoney(w.payout) : '—'}</td>
+                                    )}
+                                    {displayPool.status === 'settled' && (
+                                      <td className={`pari-pnl ${(w.pnl || 0) >= 0 ? 'pari-pnl-pos' : 'pari-pnl-neg'}`}>
+                                        {w.pnl != null ? (w.pnl >= 0 ? '+' : '') + fmtMoney(w.pnl) : '—'}
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Host controls */}
+                      {isHost && displayPool.status === 'betting' && (
+                        <div className="pari-host-actions">
+                          <button className="pari-btn pari-btn-amber" onClick={() => handleClosePool(displayPool.pool_id)} disabled={loading}>
+                            Close Wagering
+                          </button>
+                          <button className="pari-btn pari-btn-void" onClick={() => handleVoidPool(displayPool.pool_id)} disabled={loading}>
+                            Delete Pool
+                          </button>
+                        </div>
+                      )}
+
+                      {isHost && displayPool.status === 'closed' && (
+                        <div className="pari-host-actions">
+                          <h3>Pick the Winner</h3>
+                          <div className="pari-settle-row">
+                            {displayPool.sides.map((side, idx) => (
+                              <button
+                                key={side.side_number}
+                                className={`pari-settle-btn ${settleWinner === side.side_number ? 'pari-settle-selected' : ''}`}
+                                style={{ borderColor: side.color, color: settleWinner === side.side_number ? '#fff' : side.color, backgroundColor: settleWinner === side.side_number ? side.color : 'transparent' }}
+                                onClick={() => setSettleWinner(side.side_number)}
+                              >
+                                {sideName(side, idx)}
+                              </button>
+                            ))}
+                          </div>
+                          <button className="pari-btn pari-btn-green pari-btn-lg" onClick={() => handleSettlePool(displayPool.pool_id)} disabled={loading || settleWinner === null}>
+                            Settle Pool
+                          </button>
+                          <button className="pari-btn pari-btn-void" onClick={() => handleVoidAndCreateNext(displayPool.pool_id)} disabled={loading}>
+                            Delete &amp; Create Next Pool
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </section>
               ) : (
@@ -907,36 +1144,53 @@ export default function Parimutuel() {
               {isHost && !currentPool && !lastClosedPool && showPoolCreate && (
                 <section className="pari-section pari-create-pool-section">
                   <h3>New Pool</h3>
-                  <div className="pari-form-row">
-                    <label>Sides</label>
-                    <div className="pari-sides-picker">
-                      {[2, 3, 4, 5].map(n => (
-                        <button
-                          key={n}
-                          className={`pari-sides-btn ${pNumSides === n ? 'pari-sides-btn-active' : ''}`}
-                          onClick={() => setPNumSides(n)}
-                        >
-                          {n}
-                        </button>
+                  {isFermi ? (
+                    <>
+                      <div className="pari-form-row">
+                        <label>Question</label>
+                        <textarea
+                          value={pQuestion}
+                          onChange={e => setPQuestion(e.target.value)}
+                          placeholder="Enter the question for this pool..."
+                          rows={3}
+                          style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', fontSize: '1rem', resize: 'vertical' }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="pari-form-row">
+                        <label>Sides</label>
+                        <div className="pari-sides-picker">
+                          {[2, 3, 4, 5].map(n => (
+                            <button
+                              key={n}
+                              className={`pari-sides-btn ${pNumSides === n ? 'pari-sides-btn-active' : ''}`}
+                              onClick={() => setPNumSides(n)}
+                            >
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {Array.from({ length: pNumSides }).map((_, i) => (
+                        <div className="pari-form-row" key={i}>
+                          <label style={{ color: (['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6'])[i] }}>
+                            Side {i + 1} label (optional)
+                          </label>
+                          <input
+                            value={pLabels[i]}
+                            onChange={e => {
+                              const next = [...pLabels];
+                              next[i] = e.target.value;
+                              setPLabels(next);
+                            }}
+                            placeholder={`Side ${i + 1}`}
+                          />
+                        </div>
                       ))}
-                    </div>
-                  </div>
-                  {Array.from({ length: pNumSides }).map((_, i) => (
-                    <div className="pari-form-row" key={i}>
-                      <label style={{ color: (['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6'])[i] }}>
-                        Side {i + 1} label (optional)
-                      </label>
-                      <input
-                        value={pLabels[i]}
-                        onChange={e => {
-                          const next = [...pLabels];
-                          next[i] = e.target.value;
-                          setPLabels(next);
-                        }}
-                        placeholder={`Side ${i + 1}`}
-                      />
-                    </div>
-                  ))}
+                    </>
+                  )}
                   <div className="pari-form-actions">
                     <button className="pari-btn pari-btn-green" onClick={handleCreatePool} disabled={loading}>Create Pool</button>
                     <button className="pari-btn pari-btn-outline" onClick={() => setShowPoolCreate(false)}>Cancel</button>
@@ -969,14 +1223,15 @@ export default function Parimutuel() {
               {settledPools.map(pool => {
                 const totalPool = pool.wagers?.reduce((s, w) => s + (w.stake || 0), 0) || 0;
                 const winnerSide = pool.sides.find(s => s.side_number === pool.winner_side);
+                const poolIsFermi = isFermi || !!pool.question;
                 return (
                   <div className="pari-history-pool" key={pool.pool_id}>
                     <div className="pari-history-pool-header">
-                      <span>Pool #{pool.pool_number}</span>
+                      <span>Pool #{pool.pool_number}{pool.question ? ` — ${pool.question}` : ''}</span>
                       <span className="pari-history-total">Total Pool: {fmtMoney(totalPool)}</span>
                       {pool.status === 'voided' ? (
                         <span className="pari-history-voided">VOIDED</span>
-                      ) : winnerSide ? (
+                      ) : !poolIsFermi && winnerSide ? (
                         <span className="pari-history-winner" style={{ color: winnerSide.color }}>
                           Winner: {sideName(winnerSide, pool.winner_side! - 1)}
                         </span>
@@ -986,9 +1241,9 @@ export default function Parimutuel() {
                       <thead>
                         <tr>
                           <th>Player</th>
-                          <th>Side</th>
+                          {poolIsFermi ? <th>Answer</th> : <th>Side</th>}
                           <th>Stake</th>
-                          <th>Odds</th>
+                          {poolIsFermi ? <th>Result</th> : <th>Odds</th>}
                           <th>Payout</th>
                           <th>P&L</th>
                         </tr>
@@ -997,17 +1252,27 @@ export default function Parimutuel() {
                         {(pool.wagers || []).map(w => {
                           const wSide = pool.sides.find(s => s.side_number === w.side_number);
                           return (
-                            <tr key={w.wager_id}>
+                            <tr key={w.wager_id} style={poolIsFermi && w.is_winner ? { background: 'rgba(34,197,94,0.1)' } : {}}>
                               <td>
                                 {w.screenname || w.user_id.slice(0, 8)}
                                 {w.user_id === myUserId && <span className="pari-you-tag">YOU</span>}
                               </td>
-                              <td>
-                                <span className="pari-side-dot" style={{ backgroundColor: wSide?.color || '#888' }} />
-                                {wSide ? sideName(wSide, w.side_number - 1) : `Side ${w.side_number}`}
-                              </td>
+                              {poolIsFermi ? (
+                                <td style={{ fontWeight: 600 }}>{w.answer || '—'}</td>
+                              ) : (
+                                <td>
+                                  <span className="pari-side-dot" style={{ backgroundColor: wSide?.color || '#888' }} />
+                                  {wSide ? sideName(wSide, w.side_number - 1) : `Side ${w.side_number}`}
+                                </td>
+                              )}
                               <td>{fmtMoney(w.stake)}</td>
-                              <td>{w.implied_odds ? fmtOdds(w.implied_odds) : '—'}</td>
+                              {poolIsFermi ? (
+                                <td style={{ color: w.is_winner ? '#22c55e' : '#ef4444', fontWeight: 700 }}>
+                                  {w.is_winner ? 'CORRECT' : 'WRONG'}
+                                </td>
+                              ) : (
+                                <td>{w.implied_odds ? fmtOdds(w.implied_odds) : '—'}</td>
+                              )}
                               <td>{w.payout != null ? fmtMoney(w.payout) : '—'}</td>
                               <td className={`pari-pnl ${(w.pnl || 0) >= 0 ? 'pari-pnl-pos' : 'pari-pnl-neg'}`}>
                                 {w.pnl != null ? (w.pnl >= 0 ? '+' : '') + fmtMoney(w.pnl) : '—'}

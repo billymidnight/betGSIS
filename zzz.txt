@@ -1,6 +1,15 @@
-go through parimutuel code entirely
-i want a new game right underneath parimutuel, or actually put this also part of parimutuel only. but game style and interfacing and logic is slightly diferent
+next step is to design a leaderboard
 
-this game style is no longer mcqs but filling in an answer. and host picks right answer out of the 3. host can also pick 2 or all 3 correct answers so totalisator can handle these outcomes. totalisator is smart enough.
-so everything in current pari workflow from building a new session to setting min max is similar. when creating pool, instead of mcqs. a TEXT question box is presented to host to fill in and then Open Pool. and then players are given text box to answer question. host sees answers as they flow in. like how host used to see mcq answers before, now host should be able to see the user specific custom entered answers. anytime host can close or lock awagering.
-OHH also, user has two inputs. one is HORSE. one is BETSIZE. both needs to be taken in and showed to host BUT NO OTHER PLAYERS AS THEY COME IN. Once host clicks "Close Wgering" or whatgever, we return to regular pari. everyone sees each other's picks and bet sizes. host can settle the pool, click any winning side and settle it off. 
+on the left nav bar under above HELP section and below TRADING section, open a STATS section and then in that open one option: "Leaderboard"
+this shows some global stats across betgsis
+
+so in this some metadata styled rally well respecting gobal theme, navbars and environment, and showing global: "Total Wagered: $..., Total # Bets, Total Trading Sessions (count number of traidng market registered on bets table), Parimutuel sessions (dont just count bets where market = parimutuel as that will triple count when three players played a session. find a smart way to avoid the triple counting. like maybe can )
+
+and then do category wise: (Only for players that have atleast placed one bet)
+So do Specials: every player's pnl has to be calculated using the the cols referring to bet size, odds and result. whatever the cols are called on the bets table use supabase mcp
+then do for Poker: every player that has atleast one bet logged with market name as "Poker" show in red or green each guy's pnl, then also show House. which is the sum of everyones pnls REVERSED
+then do for Trading: same way
+for poker show no of bets too very critically.
+
+
+its all basically group bys by market. so come on now come on nwo come on now come on now come on then come on
