@@ -165,6 +165,7 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
 
   // All-in slow reveal: how many community cards to show (staggered)
   const [revealedCount, setRevealedCount] = useState(99); // 99 = show all (normal)
+  const [peelDone, setPeelDone] = useState(true); // false during slow peel + flip animation
   const revealTimerRef = useRef<any>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -222,6 +223,7 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
         if (isNewAllIn) {
           const alreadyRevealed = prev ? (prev.community_cards || prev.community || []).length : 0;
           setRevealedCount(alreadyRevealed);
+          setPeelDone(false);
           if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
           const totalCards = (newState.community_cards || newState.community || []).length;
           const cardsToReveal = totalCards - alreadyRevealed;
@@ -230,14 +232,16 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
             const delay = (i - alreadyRevealed + 1) * 5000;
             setTimeout(() => setRevealedCount(i + 1), delay);
           }
+          // Mark peel done AFTER final card flip completes (5s per card + 1.5s flip)
+          const peelDoneDelay = cardsToReveal * 5000 + 1500;
+          setTimeout(() => setPeelDone(true), peelDoneDelay);
           // Delay winner animation until after all cards revealed + 1.5s for flip
           if (isNewWinner) {
-            const winDelay = cardsToReveal * 5000 + 1500;
             setTimeout(() => {
               setWinnerPot((newState as any).pot_won || newState.pot || 0);
               setShowWinFloat(true);
               setTimeout(() => setShowWinFloat(false), 3000);
-            }, winDelay);
+            }, peelDoneDelay);
           }
         } else if (isNewWinner) {
           // Normal (non all-in) showdown: show winner immediately
@@ -249,6 +253,7 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
         // Reset reveal count on new hand
         if (prev && newState.hand_number !== prev.hand_number) {
           setRevealedCount(99);
+          setPeelDone(true);
         }
         return newState;
       });
@@ -425,8 +430,8 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
   // For all-in showdown, further limit by slow reveal counter
   const allCommunityCards = gs.community_cards || gs.community || [];
   const communityCards = gs.all_in_showdown ? allCommunityCards.slice(0, revealedCount) : allCommunityCards;
-  // During all-in slow peel, hide hand ranks until all cards are out
-  const peelInProgress = gs.all_in_showdown && revealedCount < allCommunityCards.length;
+  // During all-in slow peel, hide hand ranks until all cards are out AND flip animation finished
+  const peelInProgress = gs.all_in_showdown && !peelDone;
 
 
   return (
