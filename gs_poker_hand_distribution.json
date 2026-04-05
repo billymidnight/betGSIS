@@ -1,0 +1,53 @@
+{
+  "total_combos": 1820,
+  "hands": [
+    {
+      "rank": 1,
+      "name": "High Card",
+      "count": 250,
+      "percentage": 13.7363
+    },
+    {
+      "rank": 2,
+      "name": "One Pair",
+      "count": 831,
+      "percentage": 45.6593
+    },
+    {
+      "rank": 3,
+      "name": "Trips",
+      "count": 386,
+      "percentage": 21.2088
+    },
+    {
+      "rank": 4,
+      "name": "Boat",
+      "count": 190,
+      "percentage": 10.4396
+    },
+    {
+      "rank": 5,
+      "name": "Quads",
+      "count": 34,
+      "percentage": 1.8681
+    },
+    {
+      "rank": 6,
+      "name": "Flush",
+      "count": 16,
+      "percentage": 0.8791
+    },
+    {
+      "rank": 7,
+      "name": "Straight",
+      "count": 108,
+      "percentage": 5.9341
+    },
+    {
+      "rank": 8,
+      "name": "The 404",
+      "count": 5,
+      "percentage": 0.2747
+    }
+  ]
+}

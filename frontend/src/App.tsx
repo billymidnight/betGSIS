@@ -25,6 +25,7 @@ import Help from './pages/Help'
 import Exchange from './pages/Exchange'
 import ExchangePortfolio from './pages/ExchangePortfolio'
 import Parimutuel from './pages/Parimutuel'
+import GSPoker from './pages/GSPoker'
 import ChessTemplate from './pages/templates/Chess'
 import ZetamacTemplate from './pages/templates/Zetamac'
 import MonopolyTemplate from './pages/templates/Monopoly'
@@ -250,6 +251,17 @@ export default function App() {
             <ProtectedRoute>
               <AppShell>
                 <Parimutuel />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/gs-poker"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <GSPoker />
               </AppShell>
             </ProtectedRoute>
           }

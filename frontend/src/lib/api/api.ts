@@ -717,6 +717,92 @@ export async function pariSettleFermiPool(poolId: number, winnerWagerIds: number
   return r.data;
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  GS POKER
+// ═══════════════════════════════════════════════════════════════
+
+export async function gsPokerListSessions(): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const t = Date.now();
+  const r = await api.get(`/gs-poker/sessions?_t=${t}`, { headers });
+  return r.data;
+}
+
+export async function gsPokerCreateSession(payload: {
+  name: string;
+  starting_stack?: number;
+  small_blind?: number;
+  big_blind?: number;
+  max_players?: number;
+}): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/gs-poker/session/create', payload, { headers });
+  return r.data;
+}
+
+export async function gsPokerJoinSession(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/gs-poker/session/${sessionId}/join`, {}, { headers });
+  return r.data;
+}
+
+export async function gsPokerDeleteSession(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/gs-poker/session/${sessionId}/delete`, {}, { headers });
+  return r.data;
+}
+
+export async function gsPokerRebuyRequest(sessionId: number, amount: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/gs-poker/session/${sessionId}/rebuy-request`, { amount }, { headers });
+  return r.data;
+}
+
+export async function gsPokerRebuyApprove(sessionId: number, userId: string): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/gs-poker/session/${sessionId}/rebuy-approve`, { user_id: userId }, { headers });
+  return r.data;
+}
+
+export async function gsPokerConclude(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/gs-poker/session/${sessionId}/conclude`, {}, { headers });
+  return r.data;
+}
+
+export async function gsPokerLedger(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.get(`/gs-poker/session/${sessionId}/ledger`, { headers });
+  return r.data;
+}
+
+export async function gsPokerStartGame(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/gs-poker/session/${sessionId}/start`, {}, { headers });
+  return r.data;
+}
+
+export async function gsPokerGetState(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const t = Date.now();
+  const r = await api.get(`/gs-poker/game/${sessionId}/state?_t=${t}`, { headers });
+  return r.data;
+}
+
+export async function gsPokerAction(sessionId: number, actionType: string, amount?: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const body: any = { action_type: actionType };
+  if (amount !== undefined) body.amount = amount;
+  const r = await api.post(`/gs-poker/game/${sessionId}/action`, body, { headers });
+  return r.data;
+}
+
+export async function gsPokerNextHand(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/gs-poker/game/${sessionId}/next-hand`, {}, { headers });
+  return r.data;
+}
+
 export async function pariVoidPool(poolId: number): Promise<any> {
   const headers = await _getAuthHeaders();
   const r = await api.post(`/pari/pool/${poolId}/void`, {}, { headers });

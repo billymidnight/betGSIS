@@ -1,0 +1,1164 @@
+/* ═══════════════════════════════════════════════════════════════════
+   GS POKER — Good Shepherd Poker
+   ═══════════════════════════════════════════════════════════════════ */
+
+.gsp-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+  color: #e2e8f0;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* ── Header ── */
+.gsp-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.gsp-header h1 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #f8fafc;
+  margin: 0 0 6px;
+  letter-spacing: -0.02em;
+}
+.gsp-subtitle {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+/* ── Tabs ── */
+.gsp-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 4px;
+  border: 1px solid #334155;
+}
+.gsp-tab {
+  flex: 1;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.gsp-tab:hover {
+  color: #e2e8f0;
+}
+.gsp-tab-active {
+  background: #3b82f6;
+  color: #fff;
+}
+
+/* ── Help / Rules ── */
+.gsp-help {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.gsp-help h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0 0 12px;
+}
+.gsp-help h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin: 24px 0 10px;
+}
+.gsp-help p {
+  color: #cbd5e1;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+
+/* ── Hand ranking table ── */
+.gsp-rank-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0 24px;
+}
+.gsp-rank-table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  border-bottom: 2px solid #334155;
+  font-weight: 700;
+}
+.gsp-rank-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #1e293b;
+  color: #e2e8f0;
+  font-size: 0.88rem;
+  vertical-align: top;
+}
+.gsp-rank-table tr:hover td {
+  background: rgba(59, 130, 246, 0.05);
+}
+.gsp-rank-num {
+  font-weight: 800;
+  color: #64748b;
+  font-size: 0.85rem;
+  width: 30px;
+}
+.gsp-rank-name {
+  font-weight: 700;
+  color: #f8fafc;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+.gsp-rank-odds {
+  font-weight: 700;
+  color: #fbbf24;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+}
+.gsp-rank-404 {
+  background: rgba(239, 68, 68, 0.08);
+}
+.gsp-rank-404 .gsp-rank-name {
+  color: #f87171;
+}
+
+/* ── Example cards row ── */
+.gsp-example-cards {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 8px 0 12px;
+}
+
+/* ── Poker Card ── */
+.gsp-card {
+  width: 140px;
+  min-width: 140px;
+  background: #1e293b;
+  border: 2px solid #334155;
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  position: relative;
+}
+/* 404 card glow */
+.gsp-card-404 {
+  border-color: #a78bfa;
+  box-shadow: 0 0 10px rgba(167,139,250,0.35), inset 0 0 8px rgba(167,139,250,0.1);
+}
+.gsp-card-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: #0f172a;
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+.gsp-card-sport {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.gsp-card-height {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+.gsp-card-house-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+.gsp-card-img {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  display: block;
+}
+.gsp-card-name {
+  padding: 4px 6px 0;
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: #f1f5f9;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gsp-card-year-chip {
+  text-align: center;
+  padding: 3px 0 5px;
+  font-weight: 800;
+  font-size: 0.72rem;
+  color: #fbbf24;
+  letter-spacing: 0.04em;
+}
+
+/* ── Distribution tables ── */
+.gsp-dist-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+.gsp-dist-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #1e293b;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.gsp-dist-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  border-bottom: 1px solid #334155;
+  font-weight: 700;
+}
+.gsp-dist-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid #0f172a;
+  color: #e2e8f0;
+  font-size: 0.85rem;
+}
+.gsp-dist-table td:last-child {
+  font-weight: 700;
+  text-align: right;
+}
+
+@media (max-width: 600px) {
+  .gsp-dist-grid {
+    grid-template-columns: 1fr;
+  }
+  .gsp-example-cards {
+    gap: 6px;
+  }
+  .gsp-card {
+    width: 120px;
+    min-width: 120px;
+  }
+}
+
+/* ── Session cards (reuse pari patterns) ── */
+.gsp-session-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.gsp-session-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.15s;
+}
+.gsp-session-card:hover {
+  border-color: #475569;
+}
+.gsp-session-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.gsp-session-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+.gsp-session-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+.gsp-session-meta strong {
+  color: #e2e8f0;
+}
+
+/* Reuse pari badge and button styles */
+.gsp-section {
+  margin-bottom: 28px;
+}
+.gsp-section h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0 0 14px;
+}
+.gsp-muted {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+.gsp-create-form {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 420px;
+}
+
+/* Sort toggle */
+.gsp-sort-toggle {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 8px;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 3px;
+  border: 1px solid #334155;
+}
+.gsp-sort-btn {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.gsp-sort-btn-active {
+  background: #334155;
+  color: #f1f5f9;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   GS POKER TABLE — In-game poker table UI
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Page wrapper ── */
+.gsp-table-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 16px 32px;
+  color: #e2e8f0;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* ── Top bar ── */
+.gsp-table-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0 14px;
+}
+.gsp-back-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.gsp-back-btn:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+.gsp-table-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f8fafc;
+  flex: 1;
+}
+.gsp-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.gsp-blinds-label {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── Settings ── */
+.gsp-settings-wrap {
+  position: relative;
+}
+.gsp-settings-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.gsp-settings-btn:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+.gsp-settings-dropdown {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 12px 14px;
+  z-index: 50;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.gsp-settings-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+.gsp-felt-picker {
+  display: flex;
+  gap: 8px;
+}
+.gsp-felt-swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.gsp-felt-swatch:hover {
+  transform: scale(1.15);
+}
+.gsp-felt-swatch-active {
+  border-color: #f8fafc;
+  box-shadow: 0 0 0 2px rgba(248,250,252,0.3);
+}
+
+/* ── Felt (the table) ── */
+.gsp-felt {
+  position: relative;
+  min-height: 520px;
+  border-radius: 140px;
+  border: 8px solid #1a1a1a;
+  box-shadow:
+    0 0 0 4px #0d0d0d,
+    0 0 40px rgba(0,0,0,0.5),
+    inset 0 0 60px rgba(0,0,0,0.25);
+  margin: 0 auto 20px;
+  overflow: visible;
+}
+.gsp-loading-msg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255,255,255,0.4);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* ── Community area ── */
+.gsp-community-area {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  z-index: 5;
+}
+.gsp-pot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,0,0,0.4);
+  padding: 5px 14px;
+  border-radius: 20px;
+}
+.gsp-pot-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fbbf24;
+  text-transform: uppercase;
+}
+.gsp-pot-amount {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fbbf24;
+  font-family: 'JetBrains Mono', monospace;
+}
+.gsp-community-cards {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.gsp-community-card-wrap {
+  /* flip animation applied via class */
+}
+.gsp-community-card-placeholder {
+  width: 100px;
+  height: 130px;
+  border-radius: 8px;
+  border: 2px dashed rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.15);
+}
+
+/* ── Table cards (game-sized) ── */
+.gsp-table-card {
+  width: 100px !important;
+  min-width: 100px !important;
+  transition: transform 0.2s ease, z-index 0s;
+  position: relative;
+  z-index: 1;
+}
+.gsp-table-card:hover {
+  transform: scale(1.8) translateY(-20px);
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+}
+.gsp-table-card .gsp-card-strip {
+  padding: 4px 6px;
+  font-size: 0.62rem;
+}
+.gsp-table-card .gsp-card-sport {
+  font-size: 0.85rem;
+}
+.gsp-table-card .gsp-card-height {
+  font-size: 0.62rem;
+}
+.gsp-table-card .gsp-card-house-dot {
+  width: 10px;
+  height: 10px;
+}
+.gsp-table-card .gsp-card-name {
+  font-size: 0.56rem;
+  padding: 2px 4px 0;
+}
+.gsp-table-card .gsp-card-year-chip {
+  font-size: 0.56rem;
+  padding: 1px 0 3px;
+}
+.gsp-table-card-sm {
+  width: 85px !important;
+  min-width: 85px !important;
+}
+.gsp-table-card-sm .gsp-card-img {
+  aspect-ratio: 4/3;
+}
+/* Hero's hole cards slightly bigger */
+.gsp-seat-bottom .gsp-table-card {
+  width: 115px !important;
+  min-width: 115px !important;
+}
+
+/* ── Card back ── */
+.gsp-card-back {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+}
+.gsp-card-back .gsp-card-strip,
+.gsp-card-back .gsp-card-name {
+  display: none;
+}
+.gsp-card-back-inner {
+  width: 100%;
+  height: 100%;
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-radius: 6px;
+}
+.gsp-card-back-pattern {
+  width: 50%;
+  height: 70%;
+  min-height: 50px;
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 3px,
+      rgba(59,130,246,0.15) 3px,
+      rgba(59,130,246,0.15) 4px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 3px,
+      rgba(59,130,246,0.1) 3px,
+      rgba(59,130,246,0.1) 4px
+    );
+  border: 1px solid rgba(59,130,246,0.2);
+}
+
+/* ── Seats ── */
+.gsp-seat {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+  transition: all 0.25s ease;
+}
+.gsp-seat-bottom {
+  bottom: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.gsp-seat-top {
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.gsp-seat-left {
+  left: -30px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.gsp-seat-right {
+  right: -30px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Name+Stack+Avatar horizontal group */
+.gsp-seat-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Active turn glow */
+.gsp-seat-active {
+  filter: drop-shadow(0 0 12px rgba(251,191,36,0.6));
+}
+.gsp-seat-active .gsp-seat-avatar {
+  border-color: #fbbf24;
+  box-shadow: 0 0 16px rgba(251,191,36,0.5);
+}
+
+/* Winner glow */
+.gsp-seat-winner .gsp-seat-avatar {
+  border-color: #22c55e;
+  box-shadow: 0 0 20px rgba(34,197,94,0.6);
+}
+
+/* Folded */
+.gsp-seat-folded {
+  opacity: 0.4;
+}
+
+/* All-in pulse */
+.gsp-seat-allin .gsp-seat-avatar {
+  animation: gsp-pulse-gold 1.5s ease-in-out infinite;
+}
+
+/* ── Avatar ── */
+.gsp-seat-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #334155;
+  overflow: hidden;
+  background: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.25s;
+}
+.gsp-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gsp-avatar-initial {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #64748b;
+}
+.gsp-dealer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fbbf24;
+  color: #0f172a;
+  font-size: 0.55rem;
+  font-weight: 900;
+  margin-left: 3px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* ── Seat info ── */
+.gsp-seat-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(15,23,42,0.85);
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  min-width: 70px;
+}
+.gsp-seat-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 120px;
+}
+.gsp-seat-stack {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fbbf24;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── Blind badges ── */
+.gsp-blind-badge {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  font-size: 0.55rem;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+}
+.gsp-blind-sb {
+  background: #3b82f6;
+  color: #fff;
+}
+.gsp-blind-bb {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* ── Street bet (chip display) ── */
+.gsp-street-bet {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0,0,0,0.5);
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-top: -2px;
+}
+.gsp-chip-icon {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  border: 1.5px solid #d97706;
+}
+.gsp-chip-amount {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fbbf24;
+  font-family: 'JetBrains Mono', monospace;
+}
+.gsp-action-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(15,23,42,0.7);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 2px;
+}
+
+/* ── Hole cards ── */
+.gsp-hole-cards {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+.gsp-hole-card-wrap {
+  /* animation applied via class */
+}
+
+/* ── Hand rank label (showdown) ── */
+.gsp-hand-rank {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #22c55e;
+  background: rgba(0,0,0,0.6);
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+/* ── Winner floating text ── */
+.gsp-win-float {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: #22c55e;
+  text-shadow: 0 0 10px rgba(34,197,94,0.6);
+  animation: gsp-float-up 2.5s ease-out forwards;
+  pointer-events: none;
+  z-index: 30;
+}
+
+/* ── Empty seat ── */
+.gsp-seat-empty {
+  opacity: 0.3;
+}
+.gsp-empty-chair {
+  font-size: 0.75rem;
+  color: #64748b;
+  background: rgba(15,23,42,0.6);
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px dashed #334155;
+  font-weight: 600;
+}
+
+/* ── Action bar ── */
+.gsp-action-bar {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid #334155;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  z-index: 200;
+}
+.gsp-action-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.gsp-action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.gsp-action-fold {
+  background: #dc2626;
+  color: #fff;
+}
+.gsp-action-fold:not(:disabled):hover {
+  background: #b91c1c;
+}
+.gsp-action-check {
+  background: #3b82f6;
+  color: #fff;
+}
+.gsp-action-check:not(:disabled):hover {
+  background: #2563eb;
+}
+.gsp-action-call {
+  background: #3b82f6;
+  color: #fff;
+}
+.gsp-action-call:not(:disabled):hover {
+  background: #2563eb;
+}
+.gsp-action-raise,
+.gsp-action-raise-confirm {
+  background: #f59e0b;
+  color: #0f172a;
+}
+.gsp-action-raise:not(:disabled):hover,
+.gsp-action-raise-confirm:not(:disabled):hover {
+  background: #d97706;
+}
+.gsp-action-allin {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #0f172a;
+  font-weight: 800;
+}
+.gsp-action-allin:not(:disabled):hover {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+.gsp-action-next {
+  background: #22c55e;
+  color: #fff;
+  font-size: 1.05rem;
+  padding: 14px 40px;
+  border-radius: 12px;
+}
+.gsp-action-next:not(:disabled):hover {
+  background: #16a34a;
+}
+
+/* ── Raise controls ── */
+.gsp-raise-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+.gsp-raise-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15,23,42,0.95);
+  border: 1px solid #334155;
+  padding: 8px 12px;
+  border-radius: 10px;
+  position: absolute;
+  bottom: 52px;
+  right: 0;
+  white-space: nowrap;
+  z-index: 210;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+}
+.gsp-raise-slider {
+  width: 100px;
+  accent-color: #f59e0b;
+}
+.gsp-raise-input {
+  width: 65px;
+  padding: 4px 6px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 0.82rem;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: center;
+}
+.gsp-raise-input:focus {
+  outline: none;
+  border-color: #f59e0b;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Card deal in: slide from center + fade */
+@keyframes gsp-deal-in {
+  0% {
+    opacity: 0;
+    transform: translate(0, -40px) scale(0.7);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+.gsp-card-deal-in {
+  animation: gsp-deal-in 0.35s ease-out both;
+}
+
+/* Community card flip */
+@keyframes gsp-flip-in {
+  0% {
+    opacity: 0;
+    transform: rotateY(90deg) scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: rotateY(0deg) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: rotateY(0deg) scale(1);
+  }
+}
+.gsp-card-flip-in {
+  animation: gsp-flip-in 0.45s ease-out both;
+}
+
+/* Winner float up */
+@keyframes gsp-float-up {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-25px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-50px);
+  }
+}
+
+/* All-in gold pulse */
+@keyframes gsp-pulse-gold {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(251,191,36,0.3);
+    border-color: #fbbf24;
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(251,191,36,0.7);
+    border-color: #f59e0b;
+  }
+}
+
+/* Pot grow */
+@keyframes gsp-pot-grow {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* ── Ledger modal ── */
+.gsp-ledger-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gsp-ledger-modal {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 20px 24px;
+  min-width: 320px;
+  max-width: 450px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.gsp-ledger-modal h3 {
+  color: #f1f5f9;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+
+/* ── Rebuy requests (host) ── */
+.gsp-rebuy-requests {
+  position: fixed;
+  top: 80px;
+  left: 20px;
+  z-index: 200;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 10px 14px;
+  min-width: 220px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.gsp-rebuy-icon {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fbbf24;
+  display: block;
+  margin-bottom: 8px;
+}
+.gsp-rebuy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gsp-rebuy-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #e2e8f0;
+}
+
+/* Hero hand rank tag (river) */
+.gsp-hand-rank-hero {
+  background: rgba(59, 130, 246, 0.2) !important;
+  color: #93c5fd !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+}
+.gsp-hand-rank-winner {
+  background: rgba(34, 197, 94, 0.2) !important;
+  color: #6ee7b7 !important;
+  border: 1px solid rgba(34, 197, 94, 0.3) !important;
+}
+
+/* Pot preset buttons */
+.gsp-pot-presets {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.gsp-pot-preset-btn {
+  padding: 3px 10px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.gsp-pot-preset-btn:hover {
+  background: #334155;
+  color: #e2e8f0;
+  border-color: #3b82f6;
+}
+
+/* All-in slow card flip */
+@keyframes gsp-flip-slow {
+  0% { transform: rotateY(90deg); opacity: 0; }
+  30% { transform: rotateY(90deg); opacity: 0; }
+  100% { transform: rotateY(0deg); opacity: 1; }
+}
+.gsp-card-flip-slow {
+  animation: gsp-flip-slow 1.5s ease-out forwards;
+}
