@@ -692,7 +692,7 @@ export default function GSPoker() {
           <div className="gsp-sort-toggle" style={{ marginBottom: 20 }}>
             <button className={`gsp-sort-btn ${calcMode === 'trainer' ? 'gsp-sort-btn-active' : ''}`} onClick={() => setCalcMode('trainer')}>Trainer</button>
             <button className={`gsp-sort-btn ${calcMode === 'calculator' ? 'gsp-sort-btn-active' : ''}`} onClick={() => setCalcMode('calculator')}>Hand Calculator</button>
-            <button className={`gsp-sort-btn ${calcMode === 'stats' ? 'gsp-sort-btn-active' : ''}`} onClick={() => setCalcMode('stats')}>Stats</button>
+            <button className={`gsp-sort-btn ${calcMode === 'stats' ? 'gsp-sort-btn-active' : ''}`} onClick={() => setCalcMode('stats')}>Stats {!isBookie && '🔒'}</button>
           </div>
 
           {/* ── Trainer ── */}
@@ -904,8 +904,15 @@ export default function GSPoker() {
             </>
           )}
 
-          {/* ── Stats ── */}
-          {calcMode === 'stats' && allCards.length > 0 && (() => {
+          {/* ── Stats (BOOKIE only) ── */}
+          {calcMode === 'stats' && !isBookie && (
+            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <div style={{ fontSize: '3rem', marginBottom: 12 }}>🔒</div>
+              <h3 style={{ color: '#e2e8f0', marginBottom: 8 }}>Locked</h3>
+              <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Sorry, betGSIS traders have locked this market for now.</p>
+            </div>
+          )}
+          {calcMode === 'stats' && isBookie && allCards.length > 0 && (() => {
             // Load hole card power rankings and match to actual card objects
             const POWER_DATA: { card1_roll: number; card2_roll: number; win_pct: number }[] = [
               {card1_roll:6521,card2_roll:6438,win_pct:88.78},{card1_roll:6521,card2_roll:6353,win_pct:88.13},
