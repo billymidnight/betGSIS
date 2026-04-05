@@ -425,6 +425,8 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
   // For all-in showdown, further limit by slow reveal counter
   const allCommunityCards = gs.community_cards || gs.community || [];
   const communityCards = gs.all_in_showdown ? allCommunityCards.slice(0, revealedCount) : allCommunityCards;
+  // During all-in slow peel, hide hand ranks until all cards are out
+  const peelInProgress = gs.all_in_showdown && revealedCount < allCommunityCards.length;
 
 
   return (
@@ -436,6 +438,9 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
           Hand #{gs.hand_number} — {gs.street.toUpperCase()}
         </span>
         <div className="gsp-topbar-right">
+          <span className="gsp-blinds-label" style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', padding: '4px 10px', borderRadius: 6, marginRight: 8 }}>
+            {gs.hand_number} hands
+          </span>
           <span className="gsp-blinds-label">
             Blinds {gs.small_blind}/{gs.big_blind}
           </span>
@@ -719,12 +724,12 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
               </div>
 
               {/* Hero hand rank on river (only visible to self) */}
-              {!isShowdown && seatNum === gs.my_seat && (data as any).my_hand_name && (
+              {!isShowdown && !peelInProgress && seatNum === gs.my_seat && (data as any).my_hand_name && (
                 <div className="gsp-hand-rank gsp-hand-rank-hero">{(data as any).my_hand_name}</div>
               )}
 
-              {/* Showdown hand rank — show for all non-folded players */}
-              {isShowdown && !isFolded && (data as any).hand_name && (
+              {/* Showdown hand rank — show for all non-folded players (hide during slow peel) */}
+              {isShowdown && !peelInProgress && !isFolded && (data as any).hand_name && (
                 <div className={`gsp-hand-rank ${isWinner ? 'gsp-hand-rank-winner' : ''}`}>{(data as any).hand_name}</div>
               )}
 

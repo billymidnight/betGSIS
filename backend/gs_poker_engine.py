@@ -33,8 +33,8 @@ def evaluate_hand(cards: list[dict]) -> tuple[int, list]:
     Evaluate a 4-card hand.
 
     Returns (rank, tiebreaker_list).
-      rank: 1=high card, 2=pair, 3=trips, 4=boat(two-pair), 5=quads,
-            6=flush, 7=straight, 8=the404
+      rank: 1=high card, 2=pair, 3=trips, 4=boat(two-pair), 5=straight,
+            6=flush, 7=quads, 8=the404
       tiebreaker_list: heights sorted descending (details vary per rank).
 
     Card dict must have: sport, house, height (numeric), was_404, year_joined.
@@ -45,46 +45,42 @@ def evaluate_hand(cards: list[dict]) -> tuple[int, list]:
     if all(c.get('was_404') for c in cards):
         return (8, heights)
 
-    # --- Straight (4 consecutive year_joined, no wrap) ---
-    years = sorted(int(c['year_joined']) for c in cards)
-    is_straight = (len(set(years)) == 4 and years[-1] - years[0] == 3)
-    if is_straight:
-        # tiebreaker: max year first, then heights desc
-        return (7, [years[-1]] + heights)
+    # --- Sport counts first (needed for Quads check) ---
+    sports = [c.get('sport') for c in cards]
+    sport_counts = Counter(sports)
+    counts_sorted = sorted(sport_counts.values(), reverse=True)
+
+    # --- Quads (checked BEFORE straight — quads beats straight) ---
+    if counts_sorted[0] == 4:
+        return (7, heights)
 
     # --- Flush (all 4 same house) ---
     houses = [c.get('house') for c in cards]
     if len(set(houses)) == 1:
         return (6, heights)
 
-    # --- Sport-based groupings (pair / trips / quads / boat) ---
-    sports = [c.get('sport') for c in cards]
-    sport_counts = Counter(sports)
-    counts_sorted = sorted(sport_counts.values(), reverse=True)
+    # --- Straight (4 consecutive year_joined, no wrap) ---
+    years = sorted(int(c['year_joined']) for c in cards)
+    is_straight = (len(set(years)) == 4 and years[-1] - years[0] == 3)
+    if is_straight:
+        return (5, [years[-1]] + heights)
 
-    if counts_sorted[0] == 4:
-        # Quads
-        return (5, heights)
-
+    # --- Boat (two-pair) ---
     if counts_sorted == [2, 2]:
-        # Boat (two-pair)
         return (4, heights)
 
+    # --- Trips ---
     if counts_sorted[0] == 3:
-        # Trips
-        return (3, heights)
+        tripped_sport = [s for s, c in sport_counts.items() if c == 3][0]
+        trip_heights = sorted([float(c['height']) for c in cards if c.get('sport') == tripped_sport], reverse=True)
+        kicker_heights = sorted([float(c['height']) for c in cards if c.get('sport') != tripped_sport], reverse=True)
+        return (3, trip_heights + kicker_heights)
 
+    # --- One Pair ---
     if counts_sorted[0] == 2:
-        # One Pair — put paired-card heights first, then kickers
         paired_sport = [s for s, c in sport_counts.items() if c == 2][0]
-        pair_heights = sorted(
-            [float(c['height']) for c in cards if c.get('sport') == paired_sport],
-            reverse=True,
-        )
-        kicker_heights = sorted(
-            [float(c['height']) for c in cards if c.get('sport') != paired_sport],
-            reverse=True,
-        )
+        pair_heights = sorted([float(c['height']) for c in cards if c.get('sport') == paired_sport], reverse=True)
+        kicker_heights = sorted([float(c['height']) for c in cards if c.get('sport') != paired_sport], reverse=True)
         return (2, pair_heights + kicker_heights)
 
     # --- High Card ---
@@ -116,9 +112,9 @@ def rank_name(rank: int) -> str:
         2: 'One Pair',
         3: 'Trips',
         4: 'Boat',
-        5: 'Quads',
+        5: 'Straight',
         6: 'Flush',
-        7: 'Straight',
+        7: 'Quads',
         8: 'The 404',
     }
     return names.get(rank, 'Unknown')

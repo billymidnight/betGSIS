@@ -5102,17 +5102,16 @@ def gs_poker_game_action(session_id):
                     sd2['current_street_bet'] = 0
                     sd2['has_acted'] = False
 
-            # First actor post-flop: left of dealer (or BB in heads-up)
-            seat_nums = sorted(int(k) for k, v in seats.items() if v['status'] in ('active', 'all_in'))
+            # First actor post-flop: first ACTIVE player clockwise from dealer (skipping folded)
+            all_seat_nums = sorted(int(k) for k in seats.keys())
             dealer_seat = state.get('dealer_seat', 1)
-            if dealer_seat in seat_nums:
-                didx = seat_nums.index(dealer_seat)
+            if dealer_seat in all_seat_nums:
+                didx = all_seat_nums.index(dealer_seat)
             else:
                 didx = 0
-            # Find first active player left of dealer
             first_post = None
-            for i in range(1, len(seat_nums) + 1):
-                candidate = seat_nums[(didx + i) % len(seat_nums)]
+            for i in range(1, len(all_seat_nums) + 1):
+                candidate = all_seat_nums[(didx + i) % len(all_seat_nums)]
                 if seats[str(candidate)]['status'] == 'active':
                     first_post = candidate
                     break

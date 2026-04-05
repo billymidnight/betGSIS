@@ -148,17 +148,18 @@ export default function GSPoker() {
     if (cards.length !== 4) return 'High Card';
     // The 404
     if (cards.every(c => c.was_404)) return 'The 404';
+    // Sport counts (needed for Quads check first)
+    const sportCounts: Record<string, number> = {};
+    cards.forEach(c => { sportCounts[c.sport || ''] = (sportCounts[c.sport || ''] || 0) + 1; });
+    const counts = Object.values(sportCounts).sort((a, b) => b - a);
+    // Quads (checked BEFORE straight — quads beats straight)
+    if (counts[0] === 4) return 'Quads';
+    // Flush: all same house
+    if (new Set(cards.map(c => c.house)).size === 1) return 'Flush';
     // Straight: 4 consecutive year_joined
     const years = cards.map(c => c.year_joined).sort((a, b) => a - b);
     const isStraight = years[3] - years[0] === 3 && new Set(years).size === 4;
     if (isStraight) return 'Straight';
-    // Flush: all same house
-    if (new Set(cards.map(c => c.house)).size === 1) return 'Flush';
-    // Sport counting
-    const sportCounts: Record<string, number> = {};
-    cards.forEach(c => { sportCounts[c.sport || ''] = (sportCounts[c.sport || ''] || 0) + 1; });
-    const counts = Object.values(sportCounts).sort((a, b) => b - a);
-    if (counts[0] === 4) return 'Quads';
     if (counts[0] === 2 && counts[1] === 2) return 'Boat';
     if (counts[0] === 3) return 'Trips';
     if (counts[0] === 2) return 'One Pair';
@@ -183,8 +184,8 @@ export default function GSPoker() {
     setTrainerScore(prev => ({ correct: prev.correct + (correct ? 1 : 0), total: prev.total + 1 }));
   };
 
-  const RANK_OPTIONS = ['High Card', 'One Pair', 'Trips', 'Boat', 'Quads', 'Flush', 'Straight', 'The 404'];
-  const RANK_NUM: Record<string, number> = { 'High Card': 1, 'One Pair': 2, 'Trips': 3, 'Boat': 4, 'Quads': 5, 'Flush': 6, 'Straight': 7, 'The 404': 8 };
+  const RANK_OPTIONS = ['High Card', 'One Pair', 'Trips', 'Boat', 'Straight', 'Flush', 'Quads', 'The 404'];
+  const RANK_NUM: Record<string, number> = { 'High Card': 1, 'One Pair': 2, 'Trips': 3, 'Boat': 4, 'Straight': 5, 'Flush': 6, 'Quads': 7, 'The 404': 8 };
 
   // Full evaluator returning [rank, tiebreaker] — mirrors backend gs_poker_engine.py exactly
   const evalFull = (cards: GSCard[]): [number, number[]] => {
@@ -301,7 +302,7 @@ export default function GSPoker() {
         const w = cmp > 0 ? 'A' : cmp < 0 ? 'B' : 'Tie';
         if (cmp > 0) aWins++; else if (cmp < 0) bWins++; else ties++;
         total++;
-        const rankNames: Record<number, string> = { 1: 'High Card', 2: 'One Pair', 3: 'Trips', 4: 'Boat', 5: 'Quads', 6: 'Flush', 7: 'Straight', 8: 'The 404' };
+        const rankNames: Record<number, string> = { 1: 'High Card', 2: 'One Pair', 3: 'Trips', 4: 'Boat', 5: 'Straight', 6: 'Flush', 7: 'Quads', 8: 'The 404' };
         boards.push({ card1: remaining2[i], card2: remaining2[j], rankA: rankNames[handA[0]] || '?', rankB: rankNames[handB[0]] || '?', winner: w });
       }
     }
