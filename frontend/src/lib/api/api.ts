@@ -764,6 +764,20 @@ export async function gsPokerRebuyApprove(sessionId: number, userId: string): Pr
   return r.data;
 }
 
+export async function gsPokerReveal(sessionId: number, seat?: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const body: any = {};
+  if (seat !== undefined) body.seat = seat;
+  const r = await api.post(`/gs-poker/game/${sessionId}/reveal`, body, { headers });
+  return r.data;
+}
+
+export async function gsPokerChangeBlinds(sessionId: number, smallBlind: number, bigBlind: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/gs-poker/session/${sessionId}/blinds`, { small_blind: smallBlind, big_blind: bigBlind }, { headers });
+  return r.data;
+}
+
 export async function gsPokerConclude(sessionId: number): Promise<any> {
   const headers = await _getAuthHeaders();
   const r = await api.post(`/gs-poker/session/${sessionId}/conclude`, {}, { headers });
@@ -773,6 +787,12 @@ export async function gsPokerConclude(sessionId: number): Promise<any> {
 export async function gsPokerLedger(sessionId: number): Promise<any> {
   const headers = await _getAuthHeaders();
   const r = await api.get(`/gs-poker/session/${sessionId}/ledger`, { headers });
+  return r.data;
+}
+
+export async function gsPokerBotCreate(payload: { starting_stack?: number; small_blind?: number; big_blind?: number }): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/gs-poker/bot/create', payload, { headers });
   return r.data;
 }
 

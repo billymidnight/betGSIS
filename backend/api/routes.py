@@ -4357,6 +4357,63 @@ def gs_poker_session_delete(session_id):
         return jsonify({'error': str(e)}), 500
 
 
+@api_bp.route('/gs-poker/bot/create', methods=['POST', 'OPTIONS'])
+def gs_poker_bot_create():
+    """Create a heads-up session with the bot. BOOKIE only. Body: { starting_stack?, small_blind?, big_blind? }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only BOOKIE can play vs bot'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        data = request.get_json(force=True) or {}
+        starting_stack = float(data.get('starting_stack', 200))
+        sb = float(data.get('small_blind', 1))
+        bb = float(data.get('big_blind', 2))
+
+        # Create session
+        sess_row = {
+            'name': f'vs {BOT_SCREENNAME}',
+            'host_id': str(user),
+            'status': 'playing',
+            'starting_stack': starting_stack,
+            'small_blind': sb,
+            'big_blind': bb,
+            'max_players': 2,
+        }
+        rc = client.table('gs_poker_sessions').insert(sess_row).execute()
+        rows = _gs_poker_extract(rc)
+        if not rows:
+            return jsonify({'error': 'failed to create session'}), 500
+        sid = rows[0]['session_id']
+
+        # Seat human at 1, bot at 2
+        client.table('gs_poker_players').insert({
+            'session_id': sid, 'user_id': str(user), 'seat_number': 1,
+            'stack': starting_stack, 'total_buy_in': starting_stack, 'status': 'seated',
+        }).execute()
+        client.table('gs_poker_players').insert({
+            'session_id': sid, 'user_id': BOT_USER_ID, 'seat_number': 2,
+            'stack': starting_stack, 'total_buy_in': starting_stack, 'status': 'seated',
+        }).execute()
+
+        # Deal first hand
+        players_rc = client.table('gs_poker_players').select('*').eq('session_id', sid).order('seat_number').execute()
+        players = _gs_poker_extract(players_rc)
+        sess = rows[0]
+        _gs_poker_deal_hand(client, sid, sess, players)
+
+        return jsonify({'success': True, 'session_id': sid}), 200
+    except Exception as e:
+        logging.exception('gs_poker_bot_create error')
+        return jsonify({'error': str(e)}), 500
+
+
 @api_bp.route('/gs-poker/session/<int:session_id>/rebuy-request', methods=['POST', 'OPTIONS'])
 def gs_poker_rebuy_request(session_id):
     """Player requests a rebuy. Body: { amount }. Stored as pending for host approval."""
@@ -4501,6 +4558,98 @@ def gs_poker_conclude(session_id):
         return jsonify({'error': str(e)}), 500
 
 
+@api_bp.route('/gs-poker/game/<int:session_id>/reveal', methods=['POST', 'OPTIONS'])
+def gs_poker_reveal(session_id):
+    """Player reveals their hole cards after a fold-out. Body: { seat?: number (for bot reveal) }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        import json as _json
+        rc = client.table('gs_poker_hands').select('*').eq('session_id', session_id).order('hand_id', desc=True).limit(1).execute()
+        rows = _gs_poker_extract(rc)
+        if not rows:
+            return jsonify({'error': 'no hand found'}), 404
+        hand_row = rows[0]
+        state = hand_row.get('state')
+        if isinstance(state, str):
+            state = _json.loads(state)
+
+        # Only allow reveal after hand is over (fold-out or showdown)
+        if state.get('street') not in ('complete', 'showdown'):
+            return jsonify({'error': 'hand is still in progress'}), 400
+
+        seats = state.get('seats', {})
+        data = request.get_json(force=True) or {}
+        reveal_seat = data.get('seat')
+
+        if reveal_seat is not None:
+            # Reveal a specific seat (for bot reveal — BOOKIE only)
+            reveal_seat = int(reveal_seat)
+            sd = seats.get(str(reveal_seat))
+            if not sd:
+                return jsonify({'error': 'seat not found'}), 404
+            # Only BOOKIE can reveal bot or other seats
+            if sd.get('user_id') != str(user) and not _is_bookie(user):
+                return jsonify({'error': 'cannot reveal other players cards'}), 403
+        else:
+            # Reveal own cards
+            reveal_seat = None
+            for sn, sd in seats.items():
+                if str(sd.get('user_id')) == str(user):
+                    reveal_seat = int(sn)
+                    break
+            if reveal_seat is None:
+                return jsonify({'error': 'you are not in this hand'}), 403
+
+        # Mark this seat's cards as revealed
+        revealed = state.get('revealed_seats', [])
+        if reveal_seat not in revealed:
+            revealed.append(reveal_seat)
+        state['revealed_seats'] = revealed
+        client.table('gs_poker_hands').update({'state': _json.dumps(state)}).eq('hand_id', hand_row['hand_id']).execute()
+        return jsonify({'success': True, 'revealed_seat': reveal_seat}), 200
+    except Exception as e:
+        logging.exception('gs_poker_reveal error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/gs-poker/session/<int:session_id>/blinds', methods=['POST', 'OPTIONS'])
+def gs_poker_change_blinds(session_id):
+    """Change blinds for a session. BOOKIE only. Body: { small_blind, big_blind }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only BOOKIE can change blinds'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        data = request.get_json(force=True) or {}
+        sb = float(data.get('small_blind', 1))
+        bb_val = float(data.get('big_blind', 2))
+        if bb_val <= sb:
+            return jsonify({'error': 'big blind must be greater than small blind'}), 400
+        if sb <= 0 or bb_val <= 0:
+            return jsonify({'error': 'blinds must be positive'}), 400
+        client.table('gs_poker_sessions').update({
+            'small_blind': sb,
+            'big_blind': bb_val,
+        }).eq('session_id', session_id).execute()
+        return jsonify({'success': True, 'small_blind': sb, 'big_blind': bb_val}), 200
+    except Exception as e:
+        logging.exception('gs_poker_change_blinds error')
+        return jsonify({'error': str(e)}), 500
+
+
 @api_bp.route('/gs-poker/session/<int:session_id>/ledger', methods=['GET', 'OPTIONS'])
 def gs_poker_ledger(session_id):
     """Return ledger: each player's stack, total_buy_in, and P&L."""
@@ -4541,6 +4690,7 @@ def gs_poker_ledger(session_id):
 # ═══════════════════════════════════════════════════════════════════
 
 from gs_poker_engine import evaluate_hand, rank_name, shuffle_deck, get_next_actor, determine_winner  # noqa: E402
+from gs_poker_bot import bot_decide, BOT_USER_ID, BOT_SCREENNAME  # noqa: E402
 import random as _random  # noqa: E402
 
 
@@ -4816,12 +4966,15 @@ def gs_poker_game_state(session_id):
                 'total_hand_bet': sd.get('total_hand_bet', 0),
             }
             # Hole cards visibility
+            revealed_seats = state.get('revealed_seats', [])
             show_cards = False
             if int(sn) == my_seat:
                 show_cards = True
             elif is_showdown and sd.get('status') != 'folded':
                 show_cards = True
             elif is_all_in_showdown and sd.get('status') != 'folded':
+                show_cards = True
+            elif int(sn) in revealed_seats:
                 show_cards = True
 
             if show_cards:
@@ -4849,6 +5002,250 @@ def gs_poker_game_state(session_id):
         if is_all_in_showdown:
             community_cards = [card_map.get(cid) for cid in state.get('community', []) if card_map.get(cid)]
 
+        # ── Bot auto-play: if current actor is the bot, compute and apply action ──
+        current_actor = state.get('current_actor_seat')
+        if current_actor is not None and street not in ('showdown', 'complete'):
+            actor_data = seats.get(str(current_actor), {})
+            if actor_data.get('user_id') == BOT_USER_ID and actor_data.get('status') == 'active':
+                try:
+                    bot_action = bot_decide(state, all_cards)
+                    # Apply bot action via internal POST (reuse the action handler logic)
+                    # We'll directly call the action logic inline to avoid HTTP overhead
+                    import requests as _bot_req
+                except Exception:
+                    pass
+                # Simpler: redirect to the action endpoint with bot credentials
+                # Actually, let's just apply the action directly to state
+                try:
+                    bot_action = bot_decide(state, all_cards)
+                    act_type = bot_action.get('action_type', 'check')
+                    act_amount = bot_action.get('amount')
+
+                    bot_sd = seats[str(current_actor)]
+                    bot_stack = bot_sd['stack']
+                    bot_street_bet = bot_sd.get('current_street_bet', 0)
+                    c_bet = state.get('current_bet', 0)
+                    bot_to_call = c_bet - bot_street_bet
+                    actions = state.get('actions', [])
+
+                    if act_type == 'fold':
+                        bot_sd['status'] = 'folded'
+                        bot_sd['has_acted'] = True
+                        actions.append({'seat': current_actor, 'type': 'fold', 'amount': 0, 'street': street})
+                    elif act_type == 'check':
+                        bot_sd['has_acted'] = True
+                        actions.append({'seat': current_actor, 'type': 'check', 'amount': 0, 'street': street})
+                    elif act_type == 'call':
+                        call_amt = min(bot_to_call, bot_stack)
+                        bot_sd['stack'] -= call_amt
+                        bot_sd['current_street_bet'] += call_amt
+                        bot_sd['total_hand_bet'] += call_amt
+                        state['pot'] += call_amt
+                        bot_sd['has_acted'] = True
+                        if bot_sd['stack'] == 0:
+                            bot_sd['status'] = 'all_in'
+                        actions.append({'seat': current_actor, 'type': 'call', 'amount': call_amt, 'street': street})
+                    elif act_type == 'raise' and act_amount is not None:
+                        raise_to = int(act_amount)
+                        total_put = raise_to - bot_street_bet
+                        if total_put > bot_stack:
+                            total_put = bot_stack
+                            raise_to = bot_street_bet + total_put
+                        bot_sd['stack'] -= total_put
+                        bot_sd['current_street_bet'] = raise_to
+                        bot_sd['total_hand_bet'] += total_put
+                        state['pot'] += total_put
+                        state['current_bet'] = raise_to
+                        state['min_raise'] = max(raise_to - c_bet, state.get('big_blind', 2))
+                        state['last_raiser_seat'] = current_actor
+                        bot_sd['has_acted'] = True
+                        if bot_sd['stack'] == 0:
+                            bot_sd['status'] = 'all_in'
+                        for sn2, sd2 in seats.items():
+                            if int(sn2) != current_actor and sd2['status'] == 'active':
+                                sd2['has_acted'] = False
+                        actions.append({'seat': current_actor, 'type': 'raise', 'amount': total_put, 'street': street})
+                    elif act_type == 'all_in':
+                        ai_amt = bot_stack
+                        new_sb = bot_street_bet + ai_amt
+                        bot_sd['stack'] = 0
+                        bot_sd['current_street_bet'] = new_sb
+                        bot_sd['total_hand_bet'] += ai_amt
+                        state['pot'] += ai_amt
+                        bot_sd['status'] = 'all_in'
+                        bot_sd['has_acted'] = True
+                        if new_sb > c_bet:
+                            state['current_bet'] = new_sb
+                            state['last_raiser_seat'] = current_actor
+                            for sn2, sd2 in seats.items():
+                                if int(sn2) != current_actor and sd2['status'] == 'active':
+                                    sd2['has_acted'] = False
+                        actions.append({'seat': current_actor, 'type': 'all_in', 'amount': ai_amt, 'street': street})
+
+                    state['actions'] = actions
+                    state['seats'] = seats
+
+                    # Find next actor after bot
+                    seat_list = [{'seat_number': int(k), **v} for k, v in seats.items()]
+                    active_players = [s for s in seat_list if s['status'] == 'active']
+                    non_folded = [s for s in seat_list if s['status'] != 'folded']
+
+                    # Fold-out check
+                    if len(non_folded) == 1:
+                        w = non_folded[0]['seat_number']
+                        state['street'] = 'complete'
+                        state['fold_out'] = True
+                        state['current_actor_seat'] = None
+                        state['winner_seats'] = [w]
+                        state['winner_hand_name'] = 'Last player standing'
+                        state['pot_won'] = state['pot']
+                        seats[str(w)]['stack'] += state['pot']
+                        state['pot'] = 0
+                        state['seats'] = seats
+                        for sn_u, sd_u in seats.items():
+                            client.table('gs_poker_players').update({'stack': sd_u['stack']}).eq('session_id', session_id).eq('seat_number', int(sn_u)).execute()
+                    else:
+                        if len(active_players) == 0:
+                            state['all_in_showdown'] = True
+                        na = get_next_actor(seat_list, current_actor, state.get('dealer_seat', 1))
+                        if na is not None and not state.get('all_in_showdown'):
+                            state['current_actor_seat'] = na
+                        elif state.get('all_in_showdown'):
+                            # All-in: skip directly to showdown
+                            state['street'] = 'showdown'
+                            state['community_revealed'] = 2
+                            state['current_actor_seat'] = None
+                        else:
+                            # Street transition (simplified — advance and reset)
+                            if street == 'preflop':
+                                state['street'] = 'flop'
+                                state['community_revealed'] = 1
+                            elif street == 'flop':
+                                state['street'] = 'river'
+                                state['community_revealed'] = 2
+                            else:
+                                state['street'] = 'showdown'
+                                state['community_revealed'] = 2
+
+                            if state['street'] in ('flop', 'river'):
+                                state['current_bet'] = 0
+                                state['min_raise'] = state.get('big_blind', 2)
+                                state['last_raiser_seat'] = None
+                                for sn2, sd2 in seats.items():
+                                    if sd2['status'] != 'folded':
+                                        sd2['current_street_bet'] = 0
+                                    if sd2['status'] == 'active':
+                                        sd2['has_acted'] = False
+                                all_sn = sorted(int(k) for k in seats.keys())
+                                ds = state.get('dealer_seat', 1)
+                                didx = all_sn.index(ds) if ds in all_sn else 0
+                                fp = None
+                                for i in range(1, len(all_sn) + 1):
+                                    c2 = all_sn[(didx + i) % len(all_sn)]
+                                    if seats[str(c2)]['status'] == 'active':
+                                        fp = c2
+                                        break
+                                state['current_actor_seat'] = fp
+
+                        if state['street'] == 'showdown':
+                                state['community_revealed'] = 2
+                                comm_ids = state.get('community', [])
+                                comm_cards = [card_map[cid] for cid in comm_ids if cid in card_map]
+                                ph = []
+                                for sn3, sd3 in seats.items():
+                                    if sd3['status'] == 'folded':
+                                        continue
+                                    hole = [card_map[cid] for cid in sd3.get('hole_cards', []) if cid in card_map]
+                                    hc = hole + comm_cards
+                                    if len(hc) == 4:
+                                        ev = evaluate_hand(hc)
+                                        ph.append((int(sn3), ev))
+                                ws = determine_winner(ph)
+                                bhn = ''
+                                if ws:
+                                    for s_num, ev in ph:
+                                        if s_num == ws[0]:
+                                            bhn = rank_name(ev[0])
+                                            break
+                                state['winner_seats'] = ws
+                                state['winner_hand_name'] = bhn
+                                state['current_actor_seat'] = None
+                                nfb = []
+                                for sn4, sd4 in seats.items():
+                                    if sd4['status'] != 'folded':
+                                        nfb.append(sd4.get('total_hand_bet', 0))
+                                mnfb = min(nfb) if nfb else 0
+                                cp = 0
+                                for sn4, sd4 in seats.items():
+                                    bt = sd4.get('total_hand_bet', 0)
+                                    if sd4['status'] == 'folded':
+                                        cp += bt
+                                    else:
+                                        c_v = min(bt, mnfb)
+                                        cp += c_v
+                                        ex = bt - c_v
+                                        if ex > 0:
+                                            seats[sn4]['stack'] += ex
+                                state['pot_won'] = cp
+                                if ws and cp > 0:
+                                    sh = cp // len(ws)
+                                    rm = cp % len(ws)
+                                    for i, ww in enumerate(ws):
+                                        seats[str(ww)]['stack'] += sh + (1 if i < rm else 0)
+                                state['pot'] = 0
+                                state['seats'] = seats
+                                for sn_u, sd_u in seats.items():
+                                    client.table('gs_poker_players').update({'stack': sd_u['stack']}).eq('session_id', session_id).eq('seat_number', int(sn_u)).execute()
+
+                    # Save updated state
+                    client.table('gs_poker_hands').update({'state': _json.dumps(state)}).eq('hand_id', hand_row['hand_id']).execute()
+
+                    # Refresh local vars for building the response
+                    street = state.get('street', '')
+                    is_fold_out = state.get('fold_out', False)
+                    is_showdown = street in ('showdown', 'complete') and not is_fold_out
+                    is_all_in_showdown = state.get('all_in_showdown', False)
+                    community_revealed = state.get('community_revealed', 0)
+                    community_ids = state.get('community', [])[:community_revealed]
+                    community_cards = [card_map.get(cid) for cid in community_ids if card_map.get(cid)]
+                    if is_all_in_showdown:
+                        community_cards = [card_map.get(cid) for cid in state.get('community', []) if card_map.get(cid)]
+                    # Rebuild client seats
+                    client_seats = {}
+                    for sn, sd_v in seats.items():
+                        uid = str(sd_v.get('user_id'))
+                        so = {
+                            'seat_number': int(sn), 'user_id': uid,
+                            'screenname': name_map.get(uid, BOT_SCREENNAME if uid == BOT_USER_ID else ''),
+                            'avatar_url': avatar_map.get(uid, ''),
+                            'stack': sd_v.get('stack', 0), 'status': sd_v.get('status', ''),
+                            'current_street_bet': sd_v.get('current_street_bet', 0),
+                            'total_hand_bet': sd_v.get('total_hand_bet', 0),
+                        }
+                        show = False
+                        if int(sn) == my_seat:
+                            show = True
+                        elif (is_showdown or is_all_in_showdown) and sd_v.get('status') != 'folded':
+                            show = True
+                        if show:
+                            so['hole_cards'] = [card_map.get(cid) for cid in sd_v.get('hole_cards', []) if card_map.get(cid)]
+                            if (is_showdown or is_all_in_showdown) and sd_v.get('status') != 'folded':
+                                hc2 = so['hole_cards'] + community_cards
+                                if len(hc2) == 4:
+                                    ev2 = evaluate_hand(hc2)
+                                    so['hand_rank'] = ev2[0]
+                                    so['hand_name'] = rank_name(ev2[0])
+                            elif int(sn) == my_seat and community_revealed >= 2 and sd_v.get('status') != 'folded':
+                                hc2 = so['hole_cards'] + community_cards
+                                if len(hc2) == 4:
+                                    ev2 = evaluate_hand(hc2)
+                                    so['my_hand_name'] = rank_name(ev2[0])
+                        else:
+                            so['hole_cards'] = None
+                        client_seats[sn] = so
+                except Exception as bot_err:
+                    logging.exception(f'Bot auto-play error: {bot_err}')
+
         resp_data = {
             'session_id': session_id,
             'hand_id': hand_row.get('hand_id'),
@@ -4870,6 +5267,8 @@ def gs_poker_game_state(session_id):
             'winner_seats': state.get('winner_seats', []),
             'winner_hand_name': state.get('winner_hand_name', ''),
             'pot_won': state.get('pot_won', 0),
+            'fold_out': state.get('fold_out', False),
+            'revealed_seats': state.get('revealed_seats', []),
             'actions': state.get('actions', []),
         }
 
@@ -5098,8 +5497,11 @@ def gs_poker_game_action(session_id):
             state['min_raise'] = state.get('big_blind', 2)
             state['last_raiser_seat'] = None
             for sn2, sd2 in seats.items():
-                if sd2['status'] == 'active':
+                # Reset street_bet for everyone not folded (all_in too, so their preflop bet doesn't carry over)
+                if sd2['status'] != 'folded':
                     sd2['current_street_bet'] = 0
+                # Reset has_acted only for active players (all_in players don't act)
+                if sd2['status'] == 'active':
                     sd2['has_acted'] = False
 
             # First actor post-flop: first ACTIVE player clockwise from dealer (skipping folded)

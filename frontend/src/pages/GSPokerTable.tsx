@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuthStore } from '../lib/state/authStore';
+import { soundCheck, soundBet, soundCall, soundCard, soundFold, soundAllIn, soundWin } from '../lib/pokerSounds';
 import {
   gsPokerGetState,
   gsPokerAction,
@@ -8,6 +9,8 @@ import {
   gsPokerRebuyRequest,
   gsPokerRebuyApprove,
   gsPokerConclude,
+  gsPokerReveal,
+  gsPokerChangeBlinds,
   gsPokerLedger,
 } from '../lib/api/api';
 import supabase from '../lib/supabaseClient';
@@ -166,7 +169,9 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
   // All-in slow reveal: how many community cards to show (staggered)
   const [revealedCount, setRevealedCount] = useState(99); // 99 = show all (normal)
   const [peelDone, setPeelDone] = useState(true); // false during slow peel + flip animation
+  const [prePeelStacks, setPrePeelStacks] = useState<Record<string, number> | null>(null);
   const revealTimerRef = useRef<any>(null);
+  const lastActionCountRef = useRef(0);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Raise controls
@@ -219,11 +224,47 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
         const isNewWinner = prev && newState.winner_seats.length > 0 && prev.winner_seats.length === 0;
         const isNewAllIn = newState.all_in_showdown && (!prev || !prev.all_in_showdown);
 
+        // ── Sound effects based on new actions ──
+        const actions = newState.actions || [];
+        if (actions.length > lastActionCountRef.current) {
+          const newActions = actions.slice(lastActionCountRef.current);
+          for (const a of newActions) {
+            const t = a.type;
+            if (t === 'check') soundCheck();
+            else if (t === 'call') soundCall();
+            else if (t === 'raise') soundBet();
+            else if (t === 'fold') soundFold();
+            else if (t === 'all_in') soundAllIn();
+          }
+          lastActionCountRef.current = actions.length;
+        }
+        // New street = card dealt
+        if (prev && newState.street !== prev.street && ['flop', 'river'].includes(newState.street)) {
+          soundCard();
+        }
+        // New hand = cards dealt
+        if (prev && newState.hand_number !== prev.hand_number) {
+          lastActionCountRef.current = 0;
+          setTimeout(() => soundCard(), 300);
+        }
+        // Winner sound
+        if (isNewWinner && !isNewAllIn) {
+          soundWin();
+        }
+
         // Detect all-in showdown transition → slow reveal
         if (isNewAllIn) {
           const alreadyRevealed = prev ? (prev.community_cards || prev.community || []).length : 0;
           setRevealedCount(alreadyRevealed);
           setPeelDone(false);
+          // Snapshot stacks from the PREVIOUS state (before the all-in pot was awarded)
+          if (prev) {
+            const snap: Record<string, number> = {};
+            Object.entries(prev.seats || {}).forEach(([sn, sd]) => {
+              snap[sn] = (sd as any).stack;
+            });
+            setPrePeelStacks(snap);
+          }
           if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
           const totalCards = (newState.community_cards || newState.community || []).length;
           const cardsToReveal = totalCards - alreadyRevealed;
@@ -234,10 +275,15 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
           }
           // Mark peel done AFTER final card flip completes (5s per card + 1.5s flip)
           const peelDoneDelay = cardsToReveal * 5000 + 1500;
-          setTimeout(() => setPeelDone(true), peelDoneDelay);
-          // Delay winner animation until after all cards revealed + 1.5s for flip
+          setTimeout(() => { setPeelDone(true); setPrePeelStacks(null); }, peelDoneDelay);
+          // Delay winner animation + sound until after all cards revealed + 1.5s for flip
           if (isNewWinner) {
+            // Card sounds during slow peel
+            for (let ci = 0; ci < cardsToReveal; ci++) {
+              setTimeout(() => soundCard(), (ci + 1) * 5000);
+            }
             setTimeout(() => {
+              soundWin();
               setWinnerPot((newState as any).pot_won || newState.pot || 0);
               setShowWinFloat(true);
               setTimeout(() => setShowWinFloat(false), 3000);
@@ -254,6 +300,7 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
         if (prev && newState.hand_number !== prev.hand_number) {
           setRevealedCount(99);
           setPeelDone(true);
+          setPrePeelStacks(null);
         }
         return newState;
       });
@@ -469,11 +516,50 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
                       key={fp.color}
                       className={`gsp-felt-swatch ${feltColor === fp.color ? 'gsp-felt-swatch-active' : ''}`}
                       style={{ background: fp.color }}
-                      onClick={() => { setFeltColor(fp.color); setShowSettings(false); }}
+                      onClick={() => { setFeltColor(fp.color); }}
                       title={fp.label}
                     />
                   ))}
                 </div>
+                {isBookie && (
+                  <>
+                    <div className="gsp-settings-label" style={{ marginTop: 10 }}>Blinds</div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        type="number" min="1" placeholder="SB"
+                        defaultValue={gs?.small_blind || 1}
+                        id="gsp-sb-input"
+                        style={{ width: 50, padding: '4px 6px', borderRadius: 6, border: '1px solid #475569', background: '#0f172a', color: '#e2e8f0', fontSize: '0.8rem' }}
+                      />
+                      <span style={{ color: '#64748b' }}>/</span>
+                      <input
+                        type="number" min="1" placeholder="BB"
+                        defaultValue={gs?.big_blind || 2}
+                        id="gsp-bb-input"
+                        style={{ width: 50, padding: '4px 6px', borderRadius: 6, border: '1px solid #475569', background: '#0f172a', color: '#e2e8f0', fontSize: '0.8rem' }}
+                      />
+                      <button
+                        className="pari-btn pari-btn-blue pari-btn-sm"
+                        style={{ padding: '4px 10px', fontSize: '0.7rem' }}
+                        onClick={async () => {
+                          const sbEl = document.getElementById('gsp-sb-input') as HTMLInputElement;
+                          const bbEl = document.getElementById('gsp-bb-input') as HTMLInputElement;
+                          const sb = parseFloat(sbEl?.value || '1');
+                          const bb = parseFloat(bbEl?.value || '2');
+                          try {
+                            await gsPokerChangeBlinds(sessionId, sb, bb);
+                            setShowSettings(false);
+                            loadState();
+                          } catch (err: any) {
+                            setError(err?.response?.data?.error || 'Failed to change blinds');
+                          }
+                        }}
+                      >
+                        Set
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -677,7 +763,7 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
               <div className="gsp-seat-header">
                 <div className="gsp-seat-info">
                   <span className="gsp-seat-name">{data.screenname}{isDealer && <span className="gsp-dealer-btn">D</span>}</span>
-                  <span className="gsp-seat-stack">{data.stack}</span>
+                  <span className="gsp-seat-stack">{peelInProgress && prePeelStacks?.[String(seatNum)] !== undefined ? prePeelStacks[String(seatNum)] : data.stack}</span>
                 </div>
                 <div className="gsp-seat-avatar">
                   {data.avatar_url ? (
@@ -741,6 +827,34 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
               {/* Winner float */}
               {isWinner && showWinFloat && winnerPot !== null && (
                 <div className="gsp-win-float">+{winnerPot}</div>
+              )}
+
+              {/* Reveal buttons — only after fold-out */}
+              {isComplete && (gs as any).fold_out && (
+                <>
+                  {/* Reveal own cards (show button even though you can see them — reveals to others) */}
+                  {seatNum === gs.my_seat && !((gs as any).revealed_seats || []).includes(seatNum) && (
+                    <button
+                      className="gsp-reveal-btn"
+                      onClick={async () => {
+                        try { await gsPokerReveal(sessionId); loadState(); } catch {}
+                      }}
+                    >
+                      Show Cards
+                    </button>
+                  )}
+                  {/* Reveal bot cards (BOOKIE only) */}
+                  {!data.hole_cards && isBookie && data.user_id === '00000000-0000-0000-0000-0000000000b0' && (
+                    <button
+                      className="gsp-reveal-btn"
+                      onClick={async () => {
+                        try { await gsPokerReveal(sessionId, seatNum); loadState(); } catch {}
+                      }}
+                    >
+                      Reveal
+                    </button>
+                  )}
+                </>
               )}
             </div>
           );

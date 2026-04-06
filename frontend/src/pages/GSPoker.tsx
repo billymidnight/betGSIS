@@ -6,6 +6,7 @@ import {
   gsPokerJoinSession,
   gsPokerDeleteSession,
   gsPokerStartGame,
+  gsPokerBotCreate,
 } from '../lib/api/api';
 import GSPokerTable from './GSPokerTable';
 import './GSPoker.css';
@@ -452,6 +453,44 @@ export default function GSPoker() {
       {/* ════════ PLAY TAB ════════ */}
       {tab === 'play' && (
         <>
+          {/* Play vs Bot (BOOKIE only) */}
+          {isBookie && (
+            <section className="gsp-section">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <h2 style={{ margin: 0 }}>Play vs Bot</h2>
+                <span style={{ fontSize: '0.75rem', color: '#64748b', background: '#1e293b', padding: '2px 8px', borderRadius: 6 }}>Heads-Up</span>
+              </div>
+              <p className="gsp-muted" style={{ marginBottom: 12 }}>
+                Practice heads-up against the GS Bot. It computes exact equity on every decision.
+              </p>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  className="pari-btn pari-btn-green"
+                  disabled={loading}
+                  onClick={async () => {
+                    setLoading(true);
+                    try {
+                      const res = await gsPokerBotCreate({
+                        starting_stack: parseFloat(cStack) || 200,
+                        small_blind: parseFloat(cSB) || 1,
+                        big_blind: parseFloat(cBB) || 2,
+                      });
+                      setActiveSessionId(res.session_id);
+                    } catch (err: any) {
+                      setError(err?.response?.data?.error || 'Failed to create bot game');
+                    }
+                    setLoading(false);
+                  }}
+                >
+                  Start vs Bot
+                </button>
+                <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                  Stack: {cStack} · Blinds: {cSB}/{cBB}
+                </span>
+              </div>
+            </section>
+          )}
+
           <section className="gsp-section">
             <h2>Open Tables</h2>
             {sessions.filter(s => s.status === 'lobby').length === 0 ? (
