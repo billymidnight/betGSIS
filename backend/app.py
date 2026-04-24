@@ -20,7 +20,7 @@ def create_app():
                 "https://betgsis-backend.onrender.com"
             ],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Name", "X-User-Role", "ngrok-skip-browser-warning"],
+            "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Name", "X-User-Role", "X-Access-Key", "ngrok-skip-browser-warning"],
             "supports_credentials": True
         },
         r"/sopranos/*": {
@@ -149,6 +149,10 @@ def create_app():
     # Register good shepherd trading blueprint
     from routes.goodshepherd import goodshepherd_bp
     app.register_blueprint(goodshepherd_bp)
+
+    # Register leaderboard blueprint (access-key gated stats pages)
+    from routes.leaderboard import leaderboard_bp
+    app.register_blueprint(leaderboard_bp)
     
     # Serve Sopranos character images
     @app.route('/sopranos/<path:filename>')

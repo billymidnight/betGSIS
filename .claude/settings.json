@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(node -e ':*)",
-      "Bash(python -c ':*)"
+      "Bash(python -c ':*)",
+      "Bash(ls \"c:\\\\Users\\\\pritesh\\\\Documents\\\\Project Hub\\\\geo_book\\\\backend\\\\harrypotter\\\\snape\"*)"
     ]
   }
 }

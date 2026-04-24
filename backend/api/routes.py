@@ -4958,8 +4958,8 @@ def gs_poker_game_state(session_id):
             seat_out = {
                 'seat_number': int(sn),
                 'user_id': uid,
-                'screenname': name_map.get(uid, ''),
-                'avatar_url': avatar_map.get(uid, ''),
+                'screenname': name_map.get(uid, '') if uid != BOT_USER_ID else BOT_SCREENNAME,
+                'avatar_url': avatar_map.get(uid, '') if uid != BOT_USER_ID else '/harrypotter/snape_severus.png',
                 'stack': sd.get('stack', 0),
                 'status': sd.get('status', ''),
                 'current_street_bet': sd.get('current_street_bet', 0),
@@ -5216,8 +5216,8 @@ def gs_poker_game_state(session_id):
                         uid = str(sd_v.get('user_id'))
                         so = {
                             'seat_number': int(sn), 'user_id': uid,
-                            'screenname': name_map.get(uid, BOT_SCREENNAME if uid == BOT_USER_ID else ''),
-                            'avatar_url': avatar_map.get(uid, ''),
+                            'screenname': name_map.get(uid, '') if uid != BOT_USER_ID else BOT_SCREENNAME,
+                            'avatar_url': avatar_map.get(uid, '') if uid != BOT_USER_ID else '/harrypotter/snape_severus.png',
                             'stack': sd_v.get('stack', 0), 'status': sd_v.get('status', ''),
                             'current_street_bet': sd_v.get('current_street_bet', 0),
                             'total_hand_bet': sd_v.get('total_hand_bet', 0),

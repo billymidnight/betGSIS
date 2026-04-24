@@ -22,6 +22,7 @@ import BetGSISPortfolio from './pages/BetGSISPortfolio'
 import MarketLocker from './pages/MarketLocker'
 import BookieMasterLocker from './pages/BookieMasterLocker'
 import Help from './pages/Help'
+import Leaderboard from './pages/Leaderboard'
 import Exchange from './pages/Exchange'
 import ExchangePortfolio from './pages/ExchangePortfolio'
 import Parimutuel from './pages/Parimutuel'
@@ -273,6 +274,17 @@ export default function App() {
             <ProtectedRoute>
               <AppShell>
                 <Help />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/leaderboard"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <Leaderboard />
               </AppShell>
             </ProtectedRoute>
           }

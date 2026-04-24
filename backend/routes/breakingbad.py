@@ -3,6 +3,7 @@ Breaking Bad trading game routes
 """
 from flask import Blueprint, jsonify, request
 from database.supabase_client import get_supabase_client
+from utils.chop import build_session_bet_rows  # type: ignore
 import random
 from typing import List, Dict
 import math
@@ -686,34 +687,44 @@ def end_session():
         # Extract user_id from JWT token in Authorization header
         from api.routes import _get_user_from_header
         user_id = _get_user_from_header(request)
-        
+
         if not user_id:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 401
-        
-        data = request.json
+
+        data = request.json or {}
         num_bets = data.get('num_bets', 0)
         net_pnl = float(data.get('net_pnl', 0))
-        
-        # Insert bet record into bets table
-        bet_data = {
-            'user_id': user_id,
-            'market': 'Trading',
-            'outcome': f'Breaking Bad Session {num_bets} Bets',
-            'point': None,
-            'bet_size': abs(net_pnl),
-            'odds_american': '+100',
-            'result': 'Win' if net_pnl >= 0 else 'Loss',
-            'bet_pnl': net_pnl,
-            'game_id': 11
-        }
-        
-        supabase.table('bets').insert(bet_data).execute()
-        
+        player_chops = data.get('player_chops') or []
+        house_chops = data.get('house_chops') or []
+        player_screenname = data.get('player_screenname')
+
+        if not player_screenname:
+            try:
+                urow = supabase.table('users').select('screenname').eq('user_id', user_id).limit(1).execute()
+                if urow.data:
+                    player_screenname = urow.data[0].get('screenname') or ''
+            except Exception:
+                player_screenname = ''
+
+        rows = build_session_bet_rows(
+            player_user_id=user_id,
+            player_screenname=player_screenname,
+            player_market='Trading',
+            outcome=f'Breaking Bad Session {num_bets} Bets',
+            game_id=11,
+            net_pnl=net_pnl,
+            player_chops=player_chops,
+            house_chops=house_chops,
+        )
+
+        supabase.table('bets').insert(rows).execute()
+
         return jsonify({
             'success': True,
-            'message': 'Session recorded'
+            'message': 'Session recorded',
+            'rows_inserted': len(rows),
         }), 200
-        
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

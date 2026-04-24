@@ -13,6 +13,8 @@ import {
   settleHarryPotterBets,
   endHarryPotterSession
 } from '../lib/api/api';
+import { useAuthStore } from '../lib/state/authStore';
+import ChopModal, { ChopEntry } from '../components/Shared/ChopModal';
 import './HarryPotterTrading.css';
 
 // Get backend base URL for serving images (not the /api endpoint)
@@ -192,6 +194,13 @@ export default function HarryPotterTrading() {
   const [stats, setStats] = useState({ sessions_played: 0, total_pnl: 0 });
   const [locks, setLocks] = useState({ master: false, sopranos: false, breaking_bad: false });
 
+  // Chop state (session-scoped; not persisted)
+  const [showChopModal, setShowChopModal] = useState(false);
+  const [playerChops, setPlayerChops] = useState<ChopEntry[]>([]);
+  const [houseChops, setHouseChops] = useState<ChopEntry[]>([]);
+  const authUser = useAuthStore((s) => s.user);
+  const playerScreenname = authUser?.username || (authUser as any)?.screen_name || '';
+
   useEffect(() => {
     loadCharacters();
     loadStats();
@@ -248,6 +257,8 @@ export default function HarryPotterTrading() {
     setBalance(selectedBankroll);
     setSessionBetsPlaced(0);
     setSessionAmountWagered(0);
+    setPlayerChops([]);
+    setHouseChops([]);
     setShowBankrollPopup(false);
     setView('session');
     await startNewDraw();
@@ -395,9 +406,9 @@ export default function HarryPotterTrading() {
         if (newBalance > 0) {
           setShowNextDrawButton(true);
         } else {
-          // Busted - pass true flag to endSession
+          // Busted — pass the post-settlement pnl explicitly; stale closure on `balance` would read pre-bet value.
           setTimeout(() => {
-            endSession(true);
+            endSession(newBalance - bankroll);
           }, 1500);
         }
       }
@@ -406,17 +417,19 @@ export default function HarryPotterTrading() {
     }
   };
 
-  const endSession = async (isBust: boolean = false) => {
-    // Always use the exact P&L shown in the popup: balance - bankroll
-    const finalPnl = balance - bankroll;
-    
+  const endSession = async (explicitFinalPnl?: number) => {
+    const useExplicit = typeof explicitFinalPnl === 'number' && !Number.isNaN(explicitFinalPnl);
+    const finalPnl = useExplicit ? (explicitFinalPnl as number) : (balance - bankroll);
+
     try {
-      // Insert bet record into bets table
       await endHarryPotterSession({
         num_bets: sessionBetsPlaced,
-        net_pnl: finalPnl
+        net_pnl: finalPnl,
+        player_chops: playerChops.map(({ user_id, percentage }) => ({ user_id, percentage })),
+        house_chops: houseChops.map(({ user_id, percentage }) => ({ user_id, percentage })),
+        player_screenname: playerScreenname,
       });
-      
+
       setShowEndSessionModal(true);
     } catch (error) {
       console.error('Failed to record session:', error);
@@ -701,7 +714,18 @@ export default function HarryPotterTrading() {
           </div>
           <div className="session-controls">
             <div className={timerClass}>{Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')}</div>
-            <button onClick={endSession} className="btn-end-session">End Session</button>
+            <button
+              type="button"
+              onClick={() => setShowChopModal(true)}
+              className={`btn-chop-trigger ${playerChops.length + houseChops.length > 0 ? 'has-chops' : ''}`}
+              title="Chop this session's P&L with other users"
+            >
+              Chop
+              {playerChops.length + houseChops.length > 0 && (
+                <span className="chop-badge">{playerChops.length + houseChops.length}</span>
+              )}
+            </button>
+            <button onClick={() => endSession()} className="btn-end-session">End Session</button>
           </div>
         </div>
 
@@ -740,7 +764,7 @@ export default function HarryPotterTrading() {
                   <button onClick={startNewDraw} className="btn-next-draw">
                     NEXT DRAW
                   </button>
-                  <button onClick={endSession} className="btn-end-session-bottom">
+                  <button onClick={() => endSession()} className="btn-end-session-bottom">
                     END SESSION
                   </button>
                 </div>
@@ -1098,6 +1122,17 @@ export default function HarryPotterTrading() {
           </div>
         </div>
       )}
+
+      <ChopModal
+        isOpen={showChopModal}
+        onClose={() => setShowChopModal(false)}
+        playerChops={playerChops}
+        houseChops={houseChops}
+        onSave={({ playerChops: p, houseChops: h }) => {
+          setPlayerChops(p);
+          setHouseChops(h);
+        }}
+      />
     </div>
   );
 }

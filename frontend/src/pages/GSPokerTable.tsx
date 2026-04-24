@@ -199,6 +199,10 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
   // Hand rankings modal
   const [showRankings, setShowRankings] = useState(false);
 
+  // Bot game detection + bust popup
+  const BOT_UUID = '00000000-0000-0000-0000-0000000000b0';
+  const [botGameOver, setBotGameOver] = useState<'won' | 'lost' | null>(null);
+
   // Polling sequence guard
   const seqRef = useRef(0);
   const channelRef = useRef<any>(null);
@@ -302,6 +306,17 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
           setPeelDone(true);
           setPrePeelStacks(null);
         }
+
+        // Bot game bust detection
+        const seatValues = Object.values(newState.seats || {}) as any[];
+        const isBotGame = seatValues.some((s: any) => s.user_id === BOT_UUID);
+        if (isBotGame && (newState.street === 'showdown' || newState.street === 'complete')) {
+          const botSeat = seatValues.find((s: any) => s.user_id === BOT_UUID);
+          const mySeatData = seatValues.find((s: any) => s.user_id !== BOT_UUID);
+          if (botSeat && botSeat.stack <= 0) setBotGameOver('won');
+          else if (mySeatData && mySeatData.stack <= 0) setBotGameOver('lost');
+        }
+
         return newState;
       });
     } catch (err: any) {
@@ -583,23 +598,35 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
           >
             🃏
           </button>
-          {isComplete && gs.is_host && (
-            <button
-              className="gsp-action-btn gsp-action-fold"
-              style={{ padding: '5px 12px', fontSize: '0.75rem' }}
-              onClick={async () => {
-                if (!window.confirm('Conclude session? P&L will be written to the book.')) return;
-                try {
-                  await gsPokerConclude(sessionId);
-                  onLeave();
-                } catch (err: any) {
-                  setError(err?.response?.data?.error || 'Conclude failed');
-                }
-              }}
-            >
-              End Session
-            </button>
-          )}
+          {isComplete && gs.is_host && (() => {
+            const seatVals = Object.values(seats) as any[];
+            const isBotGame = seatVals.some((s: any) => s.user_id === BOT_UUID);
+            return isBotGame ? (
+              <button
+                className="gsp-action-btn gsp-action-fold"
+                style={{ padding: '5px 12px', fontSize: '0.75rem' }}
+                onClick={onLeave}
+              >
+                Leave
+              </button>
+            ) : (
+              <button
+                className="gsp-action-btn gsp-action-fold"
+                style={{ padding: '5px 12px', fontSize: '0.75rem' }}
+                onClick={async () => {
+                  if (!window.confirm('Conclude session? P&L will be written to the book.')) return;
+                  try {
+                    await gsPokerConclude(sessionId);
+                    onLeave();
+                  } catch (err: any) {
+                    setError(err?.response?.data?.error || 'Conclude failed');
+                  }
+                }}
+              >
+                End Session
+              </button>
+            );
+          })()}
         </div>
       </div>
 
@@ -867,6 +894,54 @@ export default function GSPokerTable({ sessionId, onLeave }: GSPokerTableProps) 
           </div>
         ))}
       </div>
+
+      {/* Bot game over popup */}
+      {botGameOver && (
+        <div className="gsp-ledger-overlay" onClick={() => {}}>
+          <div className="gsp-ledger-modal" style={{ textAlign: 'center', maxWidth: 400 }}>
+            {botGameOver === 'won' ? (
+              <>
+                <div style={{ fontSize: '3rem', marginBottom: 8 }}>🏆</div>
+                <h3 style={{ color: '#22c55e', margin: '0 0 8px' }}>You liquidated the bot!</h3>
+                <p style={{ color: '#94a3b8', marginBottom: 16 }}>Every single chip. Ruthless.</p>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '3rem', marginBottom: 8 }}>💀</div>
+                <h3 style={{ color: '#f87171', margin: '0 0 8px' }}>The bot liquidated you.</h3>
+                <p style={{ color: '#94a3b8', marginBottom: 16 }}>Number 1 hilarious guy.</p>
+              </>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button
+                className="pari-btn pari-btn-green"
+                onClick={async () => {
+                  setBotGameOver(null);
+                  try {
+                    const { gsPokerBotCreate } = await import('../lib/api/api');
+                    const res = await gsPokerBotCreate({
+                      starting_stack: gs?.small_blind ? gs.small_blind * 100 : 200,
+                      small_blind: gs?.small_blind || 1,
+                      big_blind: gs?.big_blind || 2,
+                    });
+                    // Navigate to new session
+                    onLeave();
+                    // Small hack: set activeSessionId via callback
+                    setTimeout(() => {
+                      window.location.reload();
+                    }, 200);
+                  } catch {}
+                }}
+              >
+                Restart
+              </button>
+              <button className="pari-btn pari-btn-outline" onClick={onLeave}>
+                Return to Lobby
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Action bar ── */}
       <div className="gsp-action-bar">

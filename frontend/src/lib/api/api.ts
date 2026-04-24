@@ -352,15 +352,44 @@ export async function settleSopranosBets(drawnCharacters: any[], bets: any[]) {
   return r.data;
 }
 
-export async function endSopranosSession(sessionData: any) {
+// ─── Chop (session P&L splitting) ──────────────────────────────────────────
+export interface ChopPayload {
+  user_id: string;
+  percentage: number;
+}
+
+export interface EndSessionPayload {
+  num_bets: number;
+  net_pnl: number;
+  player_chops?: ChopPayload[];
+  house_chops?: ChopPayload[];
+  player_screenname?: string;
+}
+
+export interface ChopUser {
+  user_id: string;
+  screenname: string;
+  display_name: string;
+}
+
+export async function fetchChopUsers(): Promise<{ users: ChopUser[] }> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  const r = await api.get('/trading/chop-users', {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return r.data;
+}
+
+export async function endSopranosSession(sessionData: EndSessionPayload) {
   // Get JWT token from Supabase session
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
-  
+
   if (!token) {
     throw new Error('No authentication token found');
   }
-  
+
   const r = await api.post('/trading/sopranos/end-session', sessionData, {
     headers: {
       'Authorization': `Bearer ${token}`
@@ -413,7 +442,7 @@ export async function settleBreakingBadBets(drawnCharacters: any[], bets: any[])
   return r.data;
 }
 
-export async function endBreakingBadSession(data: { num_bets: number; net_pnl: number }) {
+export async function endBreakingBadSession(data: EndSessionPayload) {
   // Get JWT token from Supabase session
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -474,7 +503,7 @@ export async function settleHarryPotterBets(drawnCharacters: any[], bets: any[])
   return r.data;
 }
 
-export async function endHarryPotterSession(data: { num_bets: number; net_pnl: number }) {
+export async function endHarryPotterSession(data: EndSessionPayload) {
   // Get JWT token from Supabase session
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -525,7 +554,7 @@ export async function settleGoodShepherdBets(drawnCharacters: any[], bets: any[]
   return r.data;
 }
 
-export async function endGoodShepherdSession(data: { num_bets: number; net_pnl: number }) {
+export async function endGoodShepherdSession(data: EndSessionPayload) {
   // Get JWT token from Supabase session
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -540,6 +569,66 @@ export async function endGoodShepherdSession(data: { num_bets: number; net_pnl: 
     }
   });
   return r.data;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Leaderboard (access-key gated)
+// ═══════════════════════════════════════════════════════════════════
+
+export interface LeaderboardStats {
+  net_wagered: number;
+  total_bets: number;
+  betgsis_pnl: number;
+  top_market: { market: string; volume: number; bet_count: number } | null;
+}
+
+export interface LeaderboardPlayer {
+  user_id: string;
+  screenname: string;
+  avatar_url?: string | null;
+  pnl: number;
+  cash_pnl: number;
+  tournament_pnl: number;
+  bets: number;
+  stake: number;
+}
+
+export async function verifyLeaderboardKey(key: string): Promise<boolean> {
+  try {
+    const r = await api.post('/leaderboard/verify-key', { key });
+    return !!r.data?.valid;
+  } catch {
+    return false;
+  }
+}
+
+function _leaderboardHeaders(key: string): Record<string, string> {
+  return { 'X-Access-Key': key };
+}
+
+export async function fetchLeaderboardStats(key: string): Promise<LeaderboardStats> {
+  const r = await api.get('/leaderboard/stats', { headers: _leaderboardHeaders(key) });
+  return r.data;
+}
+
+export async function fetchPokerLeaderboard(key: string): Promise<LeaderboardPlayer[]> {
+  const r = await api.get('/leaderboard/poker', { headers: _leaderboardHeaders(key) });
+  return r.data?.players || [];
+}
+
+export async function fetchGsPokerLeaderboard(key: string): Promise<LeaderboardPlayer[]> {
+  const r = await api.get('/leaderboard/gs-poker', { headers: _leaderboardHeaders(key) });
+  return r.data?.players || [];
+}
+
+export async function fetchTradingLeaderboard(key: string): Promise<LeaderboardPlayer[]> {
+  const r = await api.get('/leaderboard/trading', { headers: _leaderboardHeaders(key) });
+  return r.data?.players || [];
+}
+
+export async function fetchSpecialsLeaderboard(key: string): Promise<LeaderboardPlayer[]> {
+  const r = await api.get('/leaderboard/specials', { headers: _leaderboardHeaders(key) });
+  return r.data?.players || [];
 }
 
 // ═══════════════════════════════════════════════════════════════════

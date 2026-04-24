@@ -505,6 +505,7 @@ export default function GSPoker() {
                       <div className="gsp-session-card-header">
                         <span className="gsp-session-name">{s.name}</span>
                         <span className="pari-badge pari-badge-lobby">LOBBY</span>
+                        {amHost && <button onClick={() => handleDelete(s.session_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.5, marginLeft: 'auto' }} title="Delete">🗑️</button>}
                       </div>
                       <div className="gsp-session-meta">
                         <span>Host: <strong>{s.host_screenname || '—'}</strong></span>
@@ -546,6 +547,7 @@ export default function GSPoker() {
                       <span className={`pari-badge ${s.status === 'playing' ? 'pari-badge-active' : 'pari-badge-concluded'}`}>
                         {s.status.toUpperCase()}
                       </span>
+                      {s.host_id === myUserId && <button onClick={() => handleDelete(s.session_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.5, marginLeft: 'auto' }} title="Delete">🗑️</button>}
                     </div>
                     <div className="gsp-session-meta">
                       <span>Host: <strong>{s.host_screenname || '—'}</strong></span>
