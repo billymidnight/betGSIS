@@ -722,16 +722,23 @@ function CurrentRace({
           chelSettleRace when the last horse crosses, which flips race
           status → 'settled' and lands the SettleView for everyone. */}
       {current_race.status === 'racing' && current_race.trajectory_json && (
-        <RaceAnimation
-          field={current_race.field_json || []}
-          trajectory={current_race.trajectory_json}
-          eyebrow={`Cheltenham · Race ${current_race.race_number} · ${current_race.distance.toLocaleString()} lengths`}
-          onFinished={async () => {
-            if (!is_host) return;          // bettors don't fire settle
-            try { await chelSettleRace(current_race.race_id); onAction(); }
-            catch (e: any) { setError(e?.response?.data?.error || 'Settle failed'); }
-          }}
-        />
+        <>
+          <RaceAnimation
+            field={current_race.field_json || []}
+            trajectory={current_race.trajectory_json}
+            eyebrow={`Cheltenham · Race ${current_race.race_number} · ${current_race.distance.toLocaleString()} lengths`}
+            onFinished={async () => {
+              if (!is_host) return;          // bettors don't fire settle
+              try { await chelSettleRace(current_race.race_id); onAction(); }
+              catch (e: any) { setError(e?.response?.data?.error || 'Settle failed'); }
+            }}
+          />
+          <LiveRacePoolsPanel
+            pools={pools}
+            fieldByHorseId={fieldByHorseId}
+            myUid={myUid}
+          />
+        </>
       )}
 
       {/* SETTLED — settlement view. */}
@@ -1058,12 +1065,72 @@ function PickLabel({
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// (The legacy RaceAnim + RaceInProgressForBettor were removed — race
-// playback now uses the shared Churchill-Downs RaceAnimation component
-// on both host and bettor screens. The host's onFinished callback fires
-// chelSettleRace, which flips race.status to 'settled' and lands the
-// SettleView for everyone via the existing realtime/poll subscriptions.)
+// Race playback now uses the shared Churchill-Downs RaceAnimation
+// component on both host and bettor screens. Below it during a 'racing'
+// status we render LiveRacePoolsPanel so everyone can flip through the
+// pools and re-read the wagers (own + others, since the reveal phase
+// already happened) while the horses run.
 // ═══════════════════════════════════════════════════════════════════════
+function LiveRacePoolsPanel({
+  pools, fieldByHorseId, myUid,
+}: {
+  pools: CheltenhamPool[];
+  fieldByHorseId: Record<number, HorseInField>;
+  myUid: string;
+}) {
+  const [activeTab, setActiveTab] = useState<number>(pools[0]?.pool_id ?? -1);
+  const activePool = pools.find((p) => p.pool_id === activeTab) || pools[0];
+  if (!activePool) return null;
+  const wagers = activePool.wagers || [];
+  const total = wagers.reduce((s, w) => s + Number(w.stake), 0);
+
+  return (
+    <div className="chel-live-pools">
+      <div className="chel-live-pools-tabs">
+        {pools.map((p) => (
+          <button
+            key={p.pool_id}
+            className={`chel-live-pools-tab ${activeTab === p.pool_id ? 'is-active' : ''}`}
+            onClick={() => setActiveTab(p.pool_id)}
+          >
+            {POOL_KIND_LABELS[p.pool_kind] || p.pool_kind}
+            <em>({(p.wagers || []).length})</em>
+          </button>
+        ))}
+      </div>
+      <div className="chel-live-pools-meta">
+        Pool total <strong>{fmtUsd(total)}</strong> · {wagers.length} bettor{wagers.length === 1 ? '' : 's'}
+      </div>
+      {wagers.length === 0 ? (
+        <div className="chel-reveal-empty">No bets in this pool.</div>
+      ) : (
+        <table className="chel-reveal-table">
+          <thead>
+            <tr>
+              <th>Bettor</th>
+              <th>Pick</th>
+              <th className="chel-num">Stake</th>
+              <th className="chel-num">Implied Odds</th>
+            </tr>
+          </thead>
+          <tbody>
+            {wagers.map((w) => (
+              <tr key={w.wager_id} className={w.user_id === myUid ? 'is-me' : ''}>
+                <td>
+                  {w.screenname || '—'}
+                  {w.user_id === myUid && <span className="chel-you-tag">YOU</span>}
+                </td>
+                <td><PickLabel pool={activePool} selKey={w.selection_key} fieldByHorseId={fieldByHorseId} /></td>
+                <td className="chel-num">{fmtUsd(Number(w.stake))}</td>
+                <td className="chel-num"><ImpliedOdds value={w.implied_odds} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // Settle view (status === 'settled')

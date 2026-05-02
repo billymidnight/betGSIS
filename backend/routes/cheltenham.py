@@ -1186,6 +1186,7 @@ def race_settle(race_id: int):
     Idempotent — re-running on a settled race is a no-op."""
     if request.method == 'OPTIONS':
         return ('', 200)
+    print(f'[cheltenham] race_settle race_id={race_id} (hardened build)')
     user = _auth_uid(request)
     if not user:
         return jsonify({'error': 'unauthorized'}), 401

@@ -1006,3 +1006,46 @@
   color: var(--chel-muted, #94a3b8);
   font-size: 11px;
 }
+
+/* ─── Live pools panel (during the race animation) ─────────────────── */
+.chel-live-pools {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--chel-border, rgba(255,255,255,0.08));
+  border-radius: 10px;
+  background: rgba(8, 18, 12, 0.78);
+}
+.chel-live-pools-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.chel-live-pools-tab {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(228, 168, 48, 0.2);
+  background: rgba(8, 18, 12, 0.65);
+  color: var(--chel-muted, #94a3b8);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.chel-live-pools-tab em {
+  font-style: normal;
+  margin-left: 4px;
+  opacity: 0.7;
+  font-size: 11px;
+}
+.chel-live-pools-tab:hover { border-color: rgba(228, 168, 48, 0.4); }
+.chel-live-pools-tab.is-active {
+  background: rgba(228, 168, 48, 0.15);
+  border-color: var(--chel-amber, #e4a830);
+  color: #f5e8c2;
+}
+.chel-live-pools-meta {
+  font-size: 12px;
+  color: var(--chel-muted, #94a3b8);
+  margin-bottom: 10px;
+}
+.chel-live-pools-meta strong { color: #f5e8c2; }
