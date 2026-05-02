@@ -3,7 +3,7 @@ import {
   chelBeginSession, chelCloseWagering, chelConcludeSession, chelCreateSession,
   chelDraftRace, chelJoinSession, chelListSessions, chelReleasePools,
   chelSendOff, chelSessionDetail, chelSettleRace, chelWager,
-  fetchHorses,
+  fetchHorses, chelDeleteAllSessions,
   CheltenhamSession, CheltenhamSessionState, CheltenhamPool, CheltenhamRace,
   Horse, HorseInField,
 } from '../lib/api/api';
@@ -191,6 +191,18 @@ export default function Cheltenham() {
         loading={loading}
         error={error}
         onRefresh={reloadSessions}
+        onDeleteAll={async () => {
+          if (!window.confirm(
+            'Delete ALL Cheltenham sessions, races, pools, and wagers? Bets already written to the book stay. This cannot be undone.'
+          )) return;
+          try {
+            const r = await chelDeleteAllSessions();
+            await reloadSessions();
+            window.alert(`Wiped ${r.deleted} session(s).`);
+          } catch (e: any) {
+            setError(e?.response?.data?.error || 'Delete-all failed');
+          }
+        }}
       />
     );
   }
@@ -225,6 +237,9 @@ function Lobby(p: any) {
         </div>
         <div className="chel-lobby-actions">
           <button className="chel-btn-secondary" onClick={p.onRefresh}>Refresh</button>
+          {p.canHost && (
+            <button className="chel-btn-conclude" onClick={p.onDeleteAll}>Delete All Sessions</button>
+          )}
           {p.canHost && !p.showCreate && (
             <button className="chel-btn-primary" onClick={() => p.setShowCreate(true)}>+ Host a Session</button>
           )}

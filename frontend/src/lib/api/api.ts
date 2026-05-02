@@ -998,6 +998,12 @@ export async function chelConcludeSession(sessionId: number) {
   return r.data;
 }
 
+export async function chelDeleteAllSessions(): Promise<{ deleted: number }> {
+  const headers = await _authHeader();
+  const r = await api.post('/cheltenham/sessions/delete-all', {}, { headers });
+  return r.data;
+}
+
 export async function chelDraftRace(args: {
   session_id:    number;
   field_size:    3 | 5 | 7;

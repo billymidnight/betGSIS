@@ -657,12 +657,13 @@ function HorseFancyCard({ horse, onBack }: { horse: Horse; onBack: () => void })
 // ═══════════════════════════════════════════════════════════════════════
 
 function VenueView({
-  onChurchill, onCheltenham, onHelp, onStats,
+  onChurchill, onCheltenham, onHelp, onStats, churchillLocked,
 }: {
   onChurchill: () => void;
   onCheltenham: () => void;
   onHelp: () => void;
   onStats: () => void;
+  churchillLocked?: boolean;
 }) {
   const churchillStyle: React.CSSProperties = {
     backgroundImage:
@@ -692,11 +693,27 @@ function VenueView({
       </header>
 
       <div className="hr-venue-grid">
-        <button className="hr-venue-card" onClick={onChurchill} style={churchillStyle}>
+        <button
+          className={`hr-venue-card ${churchillLocked ? 'is-locked' : ''}`}
+          onClick={onChurchill}
+          style={churchillStyle}
+          title={churchillLocked ? 'Locked — bookies only' : undefined}
+        >
           <span className="hr-venue-flag" aria-hidden>🇺🇸</span>
-          <div className="hr-venue-card-title">Churchill Downs</div>
+          <div className="hr-venue-card-title">
+            Churchill Downs
+            {churchillLocked && <span className="hr-venue-lock-icon" aria-hidden> 🔒</span>}
+          </div>
           <div className="hr-venue-card-meta">Offline · Solo · Instant settle</div>
-          <div className="hr-venue-card-tag hr-tag-open">Open</div>
+          <div className={`hr-venue-card-tag ${churchillLocked ? 'hr-tag-locked' : 'hr-tag-open'}`}>
+            {churchillLocked ? '🔒 Locked' : 'Open'}
+          </div>
+          {churchillLocked && (
+            <div className="hr-venue-lock-overlay" aria-hidden>
+              <span className="hr-venue-lock-overlay-icon">🔒</span>
+              <span className="hr-venue-lock-overlay-text">LOCKED</span>
+            </div>
+          )}
         </button>
 
         <button className="hr-venue-card" onClick={onCheltenham} style={cheltenhamStyle}>
@@ -4682,6 +4699,7 @@ export default function HorseRacing() {
           onCheltenham={() => navigate('/racing/cheltenham')}
           onHelp={() => setHelpOpen(true)}
           onStats={() => setView('stats')}
+          churchillLocked={churchillLocked && !isBookie}
         />
       )}
       {view === 'stats' && (

@@ -4256,6 +4256,51 @@
   letter-spacing: 0.3px;
 }
 
+/* ─── Churchill Downs lock — venue card badge + overlay ─────────────── */
+.hr-venue-card.is-locked {
+  cursor: not-allowed;
+  filter: grayscale(0.55) brightness(0.7);
+  position: relative;
+}
+.hr-venue-card.is-locked:hover {
+  transform: none;
+}
+.hr-venue-lock-icon {
+  margin-left: 6px;
+  font-size: 0.85em;
+  vertical-align: middle;
+}
+.hr-tag-locked {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+.hr-venue-lock-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(8, 14, 10, 0.55);
+  backdrop-filter: blur(1px);
+  pointer-events: none;
+  border-radius: inherit;
+}
+.hr-venue-lock-overlay-icon {
+  font-size: 56px;
+  line-height: 1;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.6));
+}
+.hr-venue-lock-overlay-text {
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: #fca5a5;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  font-size: 18px;
+}
+
 /* ─── Churchill Downs lock screen ────────────────────────────────────── */
 .hr-locked {
   display: flex;

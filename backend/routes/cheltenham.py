@@ -572,6 +572,39 @@ def join_session(session_id: int):
         return jsonify({'error': err}), 500
 
 
+@cheltenham_bp.route('/sessions/delete-all', methods=['POST', 'OPTIONS'])
+def delete_all_sessions():
+    """BOOKIE-only nuke. Deletes every cheltenham session (and via the
+    ON DELETE CASCADE FKs, every participant / race / pool / wager too).
+    Does NOT touch the canonical `bets` table — concluded P&L stays on
+    the book."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _auth_uid(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only BOOKIE can wipe Cheltenham sessions'}), 403
+    client = _admin_client()
+    if client is None:
+        return jsonify({'error': 'supabase admin client unavailable'}), 500
+    try:
+        rc = client.table('cheltenham_sessions').select('session_id').execute()
+        rows = rc.data or []
+        ids = [r['session_id'] for r in rows]
+        if not ids:
+            return jsonify({'success': True, 'deleted': 0}), 200
+        # Cascading deletes handle participants/races/pools/wagers.
+        client.table('cheltenham_sessions').delete().in_('session_id', ids).execute()
+        # Drop the in-memory enabled_pools fallback for those races too.
+        for rid in list(_ENABLED_POOLS_FALLBACK.keys()):
+            _ENABLED_POOLS_FALLBACK.pop(rid, None)
+        return jsonify({'success': True, 'deleted': len(ids)}), 200
+    except Exception as e:
+        logging.exception('cheltenham delete_all_sessions error')
+        return jsonify({'error': str(e)}), 500
+
+
 @cheltenham_bp.route('/session/<int:session_id>/begin', methods=['POST', 'OPTIONS'])
 def begin_session(session_id: int):
     if request.method == 'OPTIONS':
