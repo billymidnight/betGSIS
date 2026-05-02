@@ -115,3 +115,50 @@ def update_trading_lock_by_id(lock_id: int, locked: bool) -> Dict:
         raise Exception('trading lock not found')
     except Exception:
         raise
+
+
+def fetch_racing_locks_rows() -> List[Dict]:
+    """Return list of racing-lock rows (lock_id, lock_name, locked) ordered by lock_id."""
+    client = get_supabase_client()
+    try:
+        rc = client.table('racing_locks').select('lock_id,lock_name,locked').order('lock_id').execute()
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        return rows or []
+    except Exception:
+        return []
+
+
+def is_racing_lock_locked(lock_name: str) -> bool:
+    """True if the named racing-lock row exists and is currently locked."""
+    client = get_supabase_client()
+    try:
+        rc = (
+            client.table('racing_locks')
+            .select('locked')
+            .eq('lock_name', str(lock_name))
+            .limit(1)
+            .execute()
+        )
+        rows = rc.data if hasattr(rc, 'data') else (rc.get('data') if isinstance(rc, dict) else None)
+        if rows and len(rows) > 0:
+            return bool(rows[0].get('locked'))
+    except Exception:
+        pass
+    return False
+
+
+def update_racing_lock_by_id(lock_id: int, locked: bool) -> Dict:
+    """Update a racing-lock row by lock_id; return the updated row or raise."""
+    client = get_supabase_client()
+    try:
+        upd = client.table('racing_locks').update({'locked': bool(locked)}).eq('lock_id', int(lock_id)).execute()
+        rows = upd.data if hasattr(upd, 'data') else (upd.get('data') if isinstance(upd, dict) else None)
+        if rows and len(rows) > 0:
+            return rows[0]
+        refreshed = client.table('racing_locks').select('lock_id,lock_name,locked').eq('lock_id', int(lock_id)).limit(1).execute()
+        ref_rows = refreshed.data if hasattr(refreshed, 'data') else (refreshed.get('data') if isinstance(refreshed, dict) else None)
+        if ref_rows and len(ref_rows) > 0:
+            return ref_rows[0]
+        raise Exception('racing lock not found')
+    except Exception:
+        raise

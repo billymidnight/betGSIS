@@ -153,7 +153,16 @@ def create_app():
     # Register leaderboard blueprint (access-key gated stats pages)
     from routes.leaderboard import leaderboard_bp
     app.register_blueprint(leaderboard_bp)
-    
+
+    # Register racing blueprint (Horse Racing — offline / Churchill Downs)
+    from routes.racing import racing_bp
+    app.register_blueprint(racing_bp)
+
+    # Register Cheltenham blueprint (pari-mutuel sessions on the same horses)
+    from routes.cheltenham import cheltenham_bp
+    app.register_blueprint(cheltenham_bp)
+
+
     # Serve Sopranos character images
     @app.route('/sopranos/<path:filename>')
     def serve_sopranos_image(filename):
@@ -177,6 +186,12 @@ def create_app():
     def serve_goodshepherd_image(filename):
         goodshepherd_dir = os.path.join(os.path.dirname(__file__), 'goodshepherd')
         return send_from_directory(goodshepherd_dir, filename)
+
+    # Serve Horse Racing assets (track bg + venue thumbnails + horse art)
+    @app.route('/horses/<path:filename>')
+    def serve_horse_image(filename):
+        horses_dir = os.path.join(os.path.dirname(__file__), 'horses')
+        return send_from_directory(horses_dir, filename)
 
     @app.route('/health', methods=['GET'])
     def health():

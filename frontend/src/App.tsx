@@ -23,6 +23,8 @@ import MarketLocker from './pages/MarketLocker'
 import BookieMasterLocker from './pages/BookieMasterLocker'
 import Help from './pages/Help'
 import Leaderboard from './pages/Leaderboard'
+import HorseRacing from './pages/HorseRacing'
+import Cheltenham from './pages/Cheltenham'
 import Exchange from './pages/Exchange'
 import ExchangePortfolio from './pages/ExchangePortfolio'
 import Parimutuel from './pages/Parimutuel'
@@ -285,6 +287,28 @@ export default function App() {
             <ProtectedRoute>
               <AppShell>
                 <Leaderboard />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/racing/horses"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <HorseRacing />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/racing/cheltenham"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <Cheltenham />
               </AppShell>
             </ProtectedRoute>
           }

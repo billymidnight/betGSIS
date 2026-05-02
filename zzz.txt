@@ -1,11 +1,1 @@
-and finally i want thius beautiful feature built
-
-within trainer i want two pages, on default land on trainer which is what is there now, but then also have another option hand calculator
-
-allow user to pick any two cards from the 16 (without replacement obviously lmao)
-and then iterate all 14choose2 possible community cards configs for flop and river and check in how many each hand won and show percentages
-basically evaluating str3ength of startign hand a against starting hand b by checking all 14choose2 boards very simple
-
-write me that Hand Calculator feature now come on
-
-also for cricket can you just find an emoji again of just the leather ball just ball no bat.
+v

@@ -1017,6 +1017,50 @@ def trading_locks_update():
         return jsonify({'error': str(e)}), 500
 
 
+@api_bp.route('/racing-locks', methods=['GET', 'OPTIONS'])
+def racing_locks_status():
+    """Return current lock status for racing games (e.g. Cheltenham).
+
+    Returns JSON: { locks: [{ lock_id, lock_name, locked }] }
+    """
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    try:
+        from database.geo_repo import fetch_racing_locks_rows  # type: ignore
+        rows = fetch_racing_locks_rows()
+        locks = []
+        for r in rows:
+            lid = r.get('lock_id')
+            locks.append({
+                'lock_id':   int(lid) if lid is not None else None,
+                'lock_name': r.get('lock_name') or '',
+                'locked':    bool(r.get('locked')),
+            })
+        locks_sorted = sorted(locks, key=lambda x: (x.get('lock_id') is None, x.get('lock_id') or 0))
+        return jsonify({'locks': locks_sorted}), 200
+    except Exception as e:
+        logging.exception('racing_locks_status error')
+        return jsonify({'locks': [], 'error': str(e)}), 500
+
+
+@api_bp.route('/racing-locks/update', methods=['POST', 'OPTIONS'])
+def racing_locks_update():
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    data = request.get_json(force=True) or {}
+    lock_id = data.get('lock_id')
+    locked = data.get('locked')
+    if lock_id is None or locked is None:
+        return jsonify({'error': 'lock_id and locked required'}), 400
+    try:
+        from database.geo_repo import update_racing_lock_by_id  # type: ignore
+        updated = update_racing_lock_by_id(int(lock_id), bool(locked))
+        return jsonify({'lock': updated}), 200
+    except Exception as e:
+        logging.exception('racing_locks_update error')
+        return jsonify({'error': str(e)}), 500
+
+
 @api_bp.route('/bookkeeping/summary', methods=['GET', 'OPTIONS'])
 def bookkeeping_summary():
     if request.method == 'OPTIONS':

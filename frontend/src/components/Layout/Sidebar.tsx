@@ -25,6 +25,9 @@ export default function Sidebar() {
         <Link to="/gs-poker">GS Poker</Link>
         <Link to="/trading">Trading Games</Link>
         <div style={{height:12}} />
+        <div className="sidebar-section-title">Racing</div>
+        <Link to="/racing/horses">Horse Racing</Link>
+        <div style={{height:12}} />
         <div className="sidebar-section-title">Stats</div>
         <Link to="/leaderboard">Leaderboard</Link>
         <div style={{height:8}} />

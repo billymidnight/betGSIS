@@ -170,6 +170,22 @@ export async function updateTradingLock(lock_id: number, locked: boolean) {
   return r.data;
 }
 
+export interface RacingLock {
+  lock_id: number;
+  lock_name: string;
+  locked: boolean;
+}
+
+export async function fetchRacingLocks(): Promise<{ locks: RacingLock[] }> {
+  const r = await api.get('/racing-locks');
+  return r.data;
+}
+
+export async function updateRacingLock(lock_id: number, locked: boolean) {
+  const r = await api.post('/racing-locks/update', { lock_id, locked });
+  return r.data;
+}
+
 export async function fetchBookkeepingSummary() {
   const r = await api.get('/bookkeeping/summary');
   return r.data;
@@ -569,6 +585,555 @@ export async function endGoodShepherdSession(data: EndSessionPayload) {
     }
   });
   return r.data;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Horse Racing — Churchill Downs (offline)
+// ═══════════════════════════════════════════════════════════════════
+
+export interface HorseRaceResultRow {
+  year: number;
+  finish_position: number;
+  finish_seconds: number;
+}
+
+export interface HorseCareerStats {
+  participations: number;
+  wins: number;
+  places: number;             // top-2 finishes
+  shows: number;              // top-3 finishes
+  best_seconds:  number | null;
+  worst_seconds?: number | null;
+  best_year?:     number | null;
+  worst_year?:    number | null;
+  // Most-recent-first slices of the result history. The fancy single-
+  // horse card in the catalogue uses last_5_results + all_results; the
+  // pre-/post-race commentary path still leans on last_3_results.
+  last_3_results?: HorseRaceResultRow[];
+  last_5_results?: HorseRaceResultRow[];
+  all_results?:    HorseRaceResultRow[];
+  // Optional separate arrays preserved for back-compat (commentary still
+  // reads these). Frontend should prefer last_3_results.
+  last_3_years?:     number[];
+  last_3_positions?: number[];
+  last_3_seconds?:   number[];
+}
+
+export interface Horse {
+  horse_id: number;
+  full_name: string;
+  saddle_name: string;
+  description: string | null;
+  country: string | null;        // ISO 3166-1 alpha-2 code (e.g. 'US', 'GB')
+  mean_speed: number;
+  speed_volatility: number;
+  pace_stickiness: number;
+  early_pace: number;
+  late_kick: number;
+  silks_color: string;
+  stats?: HorseCareerStats;      // present on /horses response (decorated server-side)
+}
+
+export interface HorseInField extends Horse {
+  post_position: number;
+}
+
+export interface OddsQuote {
+  probability: number;
+  decimal: number | null;       // null when the market is locked
+  american: number | null;      // null when the market is locked
+  locked: boolean;              // true → market won't be offered (too short, or absurd longshot)
+}
+
+export interface OverUnderPick {
+  horse_id: number;
+  line_seconds: number;       // the over/under line, set to the rounded mean
+  mean_seconds: number;       // raw mean across sims, useful for tooltip / dev
+  over: OddsQuote;            // pays if horse finishes in > line_seconds
+  under: OddsQuote;           // pays if horse finishes in < line_seconds
+}
+
+export interface RaceParlays {
+  midpoint_distance: number;          // N/2 — same units as race distance
+  // Favorite (most-likely-winner from this field) needs to lead at N/2 AND win
+  favorite_id: number;
+  favorite_p_lead_half: number;       // info only — prob favorite leads at midpoint
+  favorite_p_win: number;             // info only — prob favorite wins
+  favorite_quote: OddsQuote;          // priced parlay (joint prob with vig)
+  // Underdog (most-likely-back-marker from this field) needs to be last at N/2 AND finish last
+  underdog_id: number;
+  underdog_p_back_half: number;
+  underdog_p_last: number;
+  underdog_quote: OddsQuote;
+}
+
+export interface RaceOdds {
+  placeholder: boolean;
+  note: string;
+  distance: number;
+  year_counter: number;            // year of THIS race (also passed through on RaceTrajectory)
+  win: Record<string, OddsQuote>;
+  place: Record<string, OddsQuote>;
+  show: Record<string, OddsQuote>;
+  duel: Record<string, OddsQuote>;        // key = `${a_id}_before_${b_id}`
+  top2_exact: Record<string, OddsQuote>;  // key = `${a_id}_${b_id}` (a=1st, b=2nd)
+  finish_last: Record<string, OddsQuote>;
+  bottom_3: Record<string, OddsQuote>;
+  // Time-based prop markets — keys are stable, but the *threshold values* used
+  // to compute each probability scale linearly with race distance. Read the
+  // actual seconds-thresholds out of `prop_thresholds` to render labels.
+  props: {
+    first_place_margin: OddsQuote;        // winner ahead of 2nd by > winby_seconds
+    last_place_margin: OddsQuote;         // last behind 2nd-last by > loseby_seconds
+    any_under_threshold: OddsQuote;       // any horse finishes in < fast_seconds
+    any_over_threshold: OddsQuote;        // any horse finishes in > slow_seconds
+  };
+  prop_thresholds: {
+    winby_seconds: number;
+    loseby_seconds: number;
+    fast_seconds: number;
+    slow_seconds: number;
+  };
+  // Three random horses get an over/under finish-time market each, line set
+  // at the rounded mean of their simulated finish time. The trio is re-rolled
+  // every /odds call.
+  over_under_picks: OverUnderPick[];
+  // Parlay-style markets pinned to the field's favorite / underdog.
+  parlays: RaceParlays;
+}
+
+export async function fetchHorses(): Promise<Horse[]> {
+  const r = await api.get('/racing/horses');
+  return r.data?.horses || [];
+}
+
+export async function setupRace(numHorses: 5 | 7): Promise<HorseInField[]> {
+  const r = await api.post('/racing/setup-race', { num_horses: numHorses });
+  return r.data?.field || [];
+}
+
+export async function fetchRaceOdds(field: HorseInField[]): Promise<RaceOdds> {
+  // 25k Monte Carlo sims + midpoint tracking + parlay computation can run
+  // ~3-5 s on a warm path, more on first call. The default 10 s axios timeout
+  // is too aggressive for this endpoint specifically — bump per-call.
+  const r = await api.post('/racing/odds', { field }, { timeout: 60000 });
+  return r.data?.odds;
+}
+
+// ─── Race playback (one seeded realisation) ──────────────────────────────
+
+export interface RaceFinish {
+  horse_id: number;
+  finish_ms: number;       // wall-clock time to cross the wire (race start = 0)
+  finish_position: number; // 1 = winner, N = back-marker
+  dq?: boolean;            // true = horse didn't actually cross by the 60s deadline
+}
+
+export interface RaceTrajectory {
+  duration_ms: number;             // last horse's finish time
+  sample_dt_ms: number;            // cadence between samples
+  sample_times_ms: number[];       // length S — absolute t for each sample
+  horse_ids: number[];             // length N — column order in `positions`
+  positions: number[][];           // shape [S][N] — normalised 0..1 (1 == finish line)
+  finishes: RaceFinish[];          // one per horse, ordered by finish_ms
+  finish_order: number[];          // horse_ids 1st..Nth
+  distance: number;
+  year_counter: number;
+  midpoint_distance: number;
+  midpoint_leader_id: number;          // who hit N/2 first in THIS run — used to grade favorite parlay
+  midpoint_backmarker_id: number;      // who hit N/2 last in THIS run — used to grade underdog parlay
+  thresholds: {
+    winby_ms: number;              // 1st-2nd gap threshold for prop_first_margin
+    loseby_ms: number;             // last vs 2nd-last gap threshold for prop_last_margin
+    fast_ms: number;               // any-horse-under threshold for prop_any_under
+    slow_ms: number;               // any-horse-over threshold for prop_any_over
+  };
+  seed: number;
+}
+
+export async function runRace(field: HorseInField[], seed?: number): Promise<RaceTrajectory> {
+  const payload: any = { field };
+  if (seed != null) payload.seed = seed;
+  // Single seeded race — fast, but matches /odds timeout for safety.
+  const r = await api.post('/racing/run-race', payload, { timeout: 60000 });
+  return r.data?.race;
+}
+
+export interface RaceFinishPayload {
+  field_size: number;
+  distance: number;
+  finishes: { horse_id: number; finish_position: number; finish_seconds: number }[];
+}
+
+/** Persist the official result to horse_results + bump year_counter. Idempotent
+ *  on the backend (uniq-on-(year, horse_id)), so re-submitting is harmless. */
+export async function finishRace(payload: RaceFinishPayload): Promise<{ year: number; next_year: number }> {
+  const r = await api.post('/racing/finish-race', payload, { timeout: 30000 });
+  return { year: r.data?.year, next_year: r.data?.next_year };
+}
+
+// ─── AI Commentary ────────────────────────────────────────────────────────
+
+export type CommentaryPhase = 'pre' | 'post' | 'fan';
+export type FanAccent = 'indian' | 'american' | 'chinese' | 'japanese';
+
+export interface CommentaryClip {
+  phase: CommentaryPhase;
+  text: string;
+  audio_b64: string;
+  audio_mime: string;            // 'audio/mpeg'
+  tts_voice?: string;
+  tts_speed?: number;
+  text_model?: string;
+  tts_model?: string;
+  // Only populated for phase === 'fan' — used by the CC bar to label
+  // the speaker ("Fan in the stands — Vikram (Indian)") instead of the
+  // default "Track Announcer".
+  fan_accent?: FanAccent | null;
+  fan_name?:   string  | null;
+}
+
+export async function fetchCommentary(args: {
+  phase: CommentaryPhase;
+  field: HorseInField[];
+  odds?: RaceOdds | null;
+  trajectory?: RaceTrajectory | null;
+  year_counter?: number;
+  distance?: number;
+  is_continuation?: boolean;     // true → backend skips the greeting intro
+  accent?: FanAccent;            // fan-phase override; otherwise backend rolls 33/33/33
+}): Promise<CommentaryClip> {
+  const r = await api.post('/racing/commentary', args, { timeout: 90000 });
+  return r.data as CommentaryClip;
+}
+
+// ─── Bookie multi-user betting ────────────────────────────────────────────
+
+export interface BettorOption {
+  user_id:     string;
+  // The canonical column on the `users` table is `screenname` (one word).
+  // The backend mirrors it under `screen_name` for back-compat — UIs
+  // should prefer `screenname`.
+  screenname:  string;
+  screen_name?: string;
+  role:        string | null;
+  email?:      string | null;
+  avatar_url?: string | null;
+}
+
+async function _authHeader(): Promise<{ Authorization: string }> {
+  const session = await supabase.auth.getSession();
+  let token = (session as any)?.data?.session?.access_token;
+  if (!token) token = useAuthStore.getState().accessToken ?? null;
+  if (!token) throw new Error('Not authenticated');
+  return { Authorization: `Bearer ${token}` };
+}
+
+/** List candidate bettors a BOOKIE-role user can place bets on behalf of.
+ *  Returns 403 if the caller isn't a bookie. */
+export async function fetchBettors(): Promise<BettorOption[]> {
+  const headers = await _authHeader();
+  const r = await api.get('/racing/bettors', { headers });
+  return (r.data?.bettors ?? []) as BettorOption[];
+}
+
+export interface PersistMultiBet {
+  selection:     string;     // human-readable bet selection (becomes outcome)
+  market_kind:   string;     // 'win' | 'place' | 'show' | 'duel' | 'top2_exact' | etc.
+  stake:         number;
+  odds_american: string;     // already-formatted ('+222' / '-180')
+  decimal:       number;
+  won?:          boolean;    // optional — pre-settled
+  pnl?:          number;     // optional — pre-settled
+}
+
+export interface PersistMultiSession {
+  user_id:       string;
+  screen_name?:  string | null;
+  bets:          PersistMultiBet[];
+}
+
+export async function persistMultiBets(args: {
+  year:     number;
+  sessions: PersistMultiSession[];
+}): Promise<{ rows_inserted: number }> {
+  const headers = await _authHeader();
+  const r = await api.post('/racing/persist-multi-bets', args, { headers });
+  return { rows_inserted: r.data?.rows_inserted ?? 0 };
+}
+
+// ─── Cheltenham — pari-mutuel sessions ───────────────────────────────────
+
+export type CheltenhamSessionStatus = 'lobby' | 'active' | 'concluded';
+export type CheltenhamRaceStatus    = 'drafting' | 'betting' | 'closed' | 'racing' | 'settled';
+export type CheltenhamPoolStatus    = 'betting' | 'closed' | 'settled';
+export type CheltenhamPoolKind =
+  | 'winner'
+  | 'bridesmaid'
+  | 'backer'
+  | 'winner_nationality'
+  | 'time_bucket_horse';
+
+export interface CheltenhamSession {
+  session_id:        number;
+  name:              string;
+  host_id:           string;
+  host_screenname?:  string;
+  status:            CheltenhamSessionStatus;
+  starting_balance:  number;
+  min_bet:           number;
+  max_bet:           number;
+  enable_time_pools: boolean;
+  default_distance:  number;
+  default_dilation:  number;
+  created_at:        string;
+  concluded_at?:     string | null;
+}
+
+export interface CheltenhamParticipant {
+  id:                  number;
+  session_id:          number;
+  user_id:             string;
+  screenname?:         string;
+  balance:             number;
+  joined_at:           string;
+  has_bet_all_pools?:  boolean;
+  pools_bet_count?:    number;
+  pools_total?:        number;
+  computed_pnl?:       number;
+}
+
+export interface CheltenhamRace {
+  race_id:           number;
+  session_id:        number;
+  race_number:       number;
+  status:            CheltenhamRaceStatus;
+  field_size:        number;
+  distance:          number;
+  dilation:          number;
+  field_json:        HorseInField[];
+  trajectory_json?:  RaceTrajectory | null;
+  enabled_pools?:    string[] | null;
+  created_at:        string;
+  sent_off_at?:      string | null;
+  settled_at?:       string | null;
+}
+
+export interface CheltenhamWager {
+  wager_id:       number;
+  pool_id:        number;
+  user_id:        string;
+  screenname?:    string;
+  selection_key:  string;
+  stake:          number;
+  implied_odds?:  number | null;
+  payout?:        number | null;
+  pnl?:           number | null;
+  created_at:     string;
+}
+
+export interface CheltenhamPool {
+  pool_id:        number;
+  race_id:        number;
+  pool_kind:      CheltenhamPoolKind;
+  status:         CheltenhamPoolStatus;
+  payload_json:   any;
+  winner_key?:    string | null;
+  wagers?:        CheltenhamWager[];
+  wager_count?:   number;
+  created_at:     string;
+}
+
+export interface CheltenhamSessionState {
+  session:        CheltenhamSession;
+  participants:   CheltenhamParticipant[];
+  is_host:        boolean;
+  current_race?:  CheltenhamRace | null;
+  pools:          CheltenhamPool[];
+}
+
+export async function chelCreateSession(args: {
+  name:               string;
+  starting_balance?:  number;
+  min_bet?:           number;
+  max_bet?:           number;
+  enable_time_pools?: boolean;
+  default_distance?:  number;
+  default_dilation?:  number;
+}): Promise<{ session: CheltenhamSession }> {
+  const headers = await _authHeader();
+  const r = await api.post('/cheltenham/session/create', args, { headers });
+  return r.data;
+}
+
+export async function chelListSessions(status: 'lobby' | 'active' | 'all' = 'lobby'):
+  Promise<{ sessions: CheltenhamSession[]; enrolled_session_ids: number[] }>
+{
+  const headers = await _authHeader();
+  const r = await api.get(`/cheltenham/sessions?status=${status}`, { headers });
+  return r.data;
+}
+
+export async function chelSessionDetail(sessionId: number): Promise<CheltenhamSessionState> {
+  const headers = await _authHeader();
+  const r = await api.get(`/cheltenham/session/${sessionId}`, { headers });
+  return r.data;
+}
+
+export async function chelJoinSession(sessionId: number) {
+  const headers = await _authHeader();
+  const r = await api.post(`/cheltenham/session/${sessionId}/join`, {}, { headers });
+  return r.data;
+}
+
+export async function chelBeginSession(sessionId: number) {
+  const headers = await _authHeader();
+  const r = await api.post(`/cheltenham/session/${sessionId}/begin`, {}, { headers });
+  return r.data;
+}
+
+export async function chelConcludeSession(sessionId: number) {
+  const headers = await _authHeader();
+  const r = await api.post(`/cheltenham/session/${sessionId}/conclude`, {}, { headers });
+  return r.data;
+}
+
+export async function chelDraftRace(args: {
+  session_id:    number;
+  field_size:    3 | 5 | 7;
+  mode:          'random' | 'manual';
+  horse_ids?:    number[];
+  distance?:     number;
+  dilation?:     number;
+  enabled_pools?: string[];
+}): Promise<{ race: CheltenhamRace }> {
+  const headers = await _authHeader();
+  const { session_id, ...body } = args;
+  const r = await api.post(`/cheltenham/session/${session_id}/race/draft`, body, { headers });
+  return r.data;
+}
+
+export async function chelReleasePools(raceId: number, enabled_pools?: string[]) {
+  const headers = await _authHeader();
+  const body = enabled_pools && enabled_pools.length > 0 ? { enabled_pools } : {};
+  const r = await api.post(`/cheltenham/race/${raceId}/release-pools`, body, { headers });
+  return r.data;
+}
+
+export async function chelWager(args: {
+  pool_id:       number;
+  selection_key: string;
+  stake:         number;
+}) {
+  const headers = await _authHeader();
+  const { pool_id, ...body } = args;
+  const r = await api.post(`/cheltenham/pool/${pool_id}/wager`, body, { headers });
+  return r.data;
+}
+
+export async function chelCloseWagering(raceId: number) {
+  const headers = await _authHeader();
+  const r = await api.post(`/cheltenham/race/${raceId}/close-wagering`, {}, { headers });
+  return r.data;
+}
+
+export async function chelSendOff(raceId: number): Promise<{ trajectory: RaceTrajectory }> {
+  const headers = await _authHeader();
+  const r = await api.post(`/cheltenham/race/${raceId}/send-off`, {}, { headers });
+  return r.data;
+}
+
+export async function chelSettleRace(raceId: number) {
+  const headers = await _authHeader();
+  const r = await api.post(`/cheltenham/race/${raceId}/settle`, {}, { headers });
+  return r.data;
+}
+
+// ─── Stats menu ───────────────────────────────────────────────────────────
+
+export interface StatsLeaderEntry {
+  horse_id: number;
+  full_name: string;
+  saddle_name?: string;
+  country?: string;
+  value: number;
+}
+
+export interface StatsRecordEntry {
+  distance: number;
+  finish_seconds: number;
+  horse_id: number;
+  full_name: string;
+  saddle_name?: string;
+  country?: string;
+  year: number;
+}
+
+export interface StatsYearResultRow {
+  horse_id: number;
+  full_name: string;
+  saddle_name?: string;
+  country?: string;
+  finish_position: number;
+  finish_seconds: number;
+}
+
+export interface StatsYearSlot {
+  year: number;
+  distance: number;
+  field_size: number;
+  results: StatsYearResultRow[];
+}
+
+export interface StatsCountryEntry {
+  country:         string;       // ISO-2
+  participations:  number;
+  wins:            number;
+  places:          number;
+  shows:           number;
+  win_rate:        number;       // 0..1
+  place_rate:      number;
+  show_rate:       number;
+  win_rate_pct:    number;       // 0..100 rounded
+  place_rate_pct:  number;
+  show_rate_pct:   number;
+}
+
+export interface StatsYearTimeEntry {
+  year:           number;
+  distance:       number;
+  field_size:     number;
+  avg_seconds:    number;
+  min_seconds:    number;
+  max_seconds:    number;
+  winner_seconds: number;
+}
+
+export interface StatsResponse {
+  current_year: number;
+  total_races: number;
+  leaderboards: {
+    most_wins:          StatsLeaderEntry[];
+    most_places:        StatsLeaderEntry[];
+    most_shows:         StatsLeaderEntry[];
+    most_participations:StatsLeaderEntry[];
+    best_time_per_distance: StatsRecordEntry[];
+  };
+  countries?: {
+    participations_by_country:  StatsCountryEntry[];
+    wins_by_country:            StatsCountryEntry[];
+    best_win_rate_by_country:   StatsCountryEntry[];
+  };
+  year_analysis?: {
+    fastest_avg_years: StatsYearTimeEntry[];
+    slowest_avg_years: StatsYearTimeEntry[];
+  };
+  per_year: StatsYearSlot[];
+}
+
+export async function fetchRacingStats(): Promise<StatsResponse> {
+  const r = await api.get('/racing/stats');
+  return r.data as StatsResponse;
 }
 
 // ═══════════════════════════════════════════════════════════════════
