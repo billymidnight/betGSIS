@@ -1004,6 +1004,16 @@ export async function chelDeleteAllSessions(): Promise<{ deleted: number }> {
   return r.data;
 }
 
+export async function chelCommentary(field: HorseInField[]): Promise<{
+  text: string; audio_b64: string; audio_mime: string;
+}> {
+  const headers = await _authHeader();
+  const r = await api.post('/cheltenham/commentary', { field }, {
+    headers, timeout: 90000,
+  });
+  return r.data;
+}
+
 export async function chelDraftRace(args: {
   session_id:    number;
   field_size:    3 | 5 | 7;

@@ -3,7 +3,7 @@ import {
   chelBeginSession, chelCloseWagering, chelConcludeSession, chelCreateSession,
   chelDraftRace, chelJoinSession, chelListSessions, chelReleasePools,
   chelSendOff, chelSessionDetail, chelSettleRace, chelWager,
-  fetchHorses, chelDeleteAllSessions,
+  fetchHorses, chelDeleteAllSessions, chelCommentary,
   CheltenhamSession, CheltenhamSessionState, CheltenhamPool, CheltenhamRace,
   Horse, HorseInField,
 } from '../lib/api/api';
@@ -35,6 +35,24 @@ const fmtUsd = (n: number): string => {
   const s = `$${Math.abs(n).toFixed(2)}`;
   return n < 0 ? `-${s}` : s;
 };
+
+// ── Cheltenham audio assets ──────────────────────────────────────────
+// Crowd ambience: served by the backend's /horses/<file> static route.
+// The first ~2 minutes of the source MP3 is silence, so we seek the
+// audio element to 120 s the first time we play it.
+const CHEL_API_BASE = (import.meta as any).env?.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:4000';
+const CHEL_CROWD_FILENAME = 'Stadium Crowd Sound Effects _ One Hour _ HQ [-FLgShtdxQ8].mp3';
+const CHEL_CROWD_URL = `${CHEL_API_BASE}/horses/${encodeURIComponent(CHEL_CROWD_FILENAME)}`;
+const CHEL_CROWD_SKIP_SECONDS = 120;
+const CHEL_CROWD_VOLUME       = 0.45;
+const CHEL_COMMENTARY_VOLUME  = 1.0;
+
+function chelB64ToBlobUrl(b64: string, mime: string): string {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: mime }));
+}
 
 // Decimal odds → American odds string. <=1.0 collapses to +100 (push).
 function decimalToAmerican(dec: number | null | undefined): string {
@@ -368,6 +386,64 @@ function SessionView({
   const meBalance = participants.find((p) => p.user_id === myUid)?.balance ?? session.starting_balance;
   const meEntry   = participants.find((p) => p.user_id === myUid);
 
+  // ── Crowd noise during racing (all users, not just host) ──────────
+  const crowdRef = useRef<HTMLAudioElement | null>(null);
+  const crowdSeekedRef = useRef(false);
+  useEffect(() => {
+    const audio = crowdRef.current;
+    if (!audio) return;
+    const isRacing = current_race?.status === 'racing';
+    if (isRacing) {
+      try {
+        if (!crowdSeekedRef.current) {
+          audio.currentTime = CHEL_CROWD_SKIP_SECONDS;
+          crowdSeekedRef.current = true;
+        }
+        audio.volume = CHEL_CROWD_VOLUME;
+        audio.play().catch(() => { /* autoplay blocked — first user gesture will unblock */ });
+      } catch { /* noop */ }
+    } else {
+      try { audio.pause(); } catch { /* noop */ }
+    }
+  }, [current_race?.status]);
+
+  // ── One-shot pre-race commentary when betting opens ────────────────
+  // Fires per-race for every user. Cancelled cleanly if the race moves
+  // on (status flips off 'betting') before the audio finishes loading.
+  const commentaryRef    = useRef<HTMLAudioElement | null>(null);
+  const commentaryUrlRef = useRef<string | null>(null);
+  const commentaryFiredFor = useRef<number | null>(null);
+  useEffect(() => {
+    if (!current_race) return;
+    if (current_race.status !== 'betting') return;
+    if (commentaryFiredFor.current === current_race.race_id) return;
+    commentaryFiredFor.current = current_race.race_id;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const clip = await chelCommentary(current_race.field_json || []);
+        if (cancelled) return;
+        const url = chelB64ToBlobUrl(clip.audio_b64, clip.audio_mime || 'audio/mpeg');
+        if (commentaryUrlRef.current) URL.revokeObjectURL(commentaryUrlRef.current);
+        commentaryUrlRef.current = url;
+        const audio = commentaryRef.current;
+        if (!audio) { URL.revokeObjectURL(url); return; }
+        audio.src = url;
+        audio.volume = CHEL_COMMENTARY_VOLUME;
+        audio.play().catch(() => { /* autoplay blocked */ });
+      } catch { /* swallow — commentary is best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [current_race?.race_id, current_race?.status]);
+  // Free the blob when the component unmounts.
+  useEffect(() => () => {
+    if (commentaryUrlRef.current) {
+      URL.revokeObjectURL(commentaryUrlRef.current);
+      commentaryUrlRef.current = null;
+    }
+  }, []);
+
   // Host-local toggle: when true, render the full RaceDraft form instead
   // of the settled CurrentRace view. Set by the SettleView's "Draft
   // another race" button. Reset whenever the active race row changes
@@ -441,6 +517,13 @@ function SessionView({
           onRequestDraftAnother={() => setDraftAnotherRequested(true)}
         />
       )}
+
+      {/* Audio sinks — crowd loops while the race is on, commentary
+          plays one clip per race when betting opens. Loaded only when
+          a session is actually open (so the static MP3 isn't fetched
+          on the lobby page). */}
+      <audio ref={crowdRef} src={CHEL_CROWD_URL} loop preload="none" />
+      <audio ref={commentaryRef} preload="auto" />
     </div>
   );
 }

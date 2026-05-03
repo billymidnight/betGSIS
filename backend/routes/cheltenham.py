@@ -585,6 +585,98 @@ def join_session(session_id: int):
         return jsonify({'error': err}), 500
 
 
+@cheltenham_bp.route('/commentary', methods=['POST', 'OPTIONS'])
+def cheltenham_commentary():
+    """Lightweight pre-race patter for Cheltenham. Unlike the Churchill
+    Downs commentary, this one does NOT depend on odds — just the field.
+    Body: { field: HorseInField[] }
+    Returns: { text, audio_b64, audio_mime }
+    """
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _auth_uid(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    try:
+        data = request.get_json(force=True) or {}
+        field = data.get('field') or []
+        if not field:
+            return jsonify({'error': 'field is required'}), 400
+
+        # Build a compact context the LLM can riff on.
+        horses_blob = []
+        for h in field[:9]:
+            horses_blob.append({
+                'post_position': h.get('post_position'),
+                'full_name':     h.get('full_name'),
+                'saddle_name':   h.get('saddle_name'),
+                'country':       h.get('country'),
+            })
+
+        from services.commentary import _get_client, TTS_MODEL, TTS_VOICE, TTS_INSTRUCTIONS, TTS_SPEED
+        import base64 as _b64
+        import json as _json
+
+        SHARP_BETTORS_LINE = (
+            "Yaya, NigMerchant and PamMERCHANT are at the betting window doing "
+            "insane analysis. They are some of the greatest mathematicians since Euler."
+        )
+        SYSTEM = (
+            "You are the legendary track announcer at CHELTENHAM — refined, projecting, "
+            "British. NEVER say Churchill Downs. Always say Cheltenham. Crisp received "
+            "pronunciation, classic UK race-caller cadence — punchy short bursts and "
+            "rolling builds. About 25-35 seconds of patter. \n\n"
+            "Open with the venue and the size of the field. Mention 2-3 of the horses "
+            "by their FULL NAME (never just the saddle name). Reference national flavour "
+            "if any of them are non-British. End by hyping the betting window.\n\n"
+            "REQUIRED: weave the following sentence in VERBATIM at a natural moment in "
+            "the patter, before you sign off:\n"
+            f"  \"{SHARP_BETTORS_LINE}\"\n\n"
+            "Do NOT preface or explain. Just the spoken patter, plain text."
+        )
+        user_prompt = (
+            "FIELD:\n" + _json.dumps(horses_blob, ensure_ascii=False, indent=2)
+        )
+
+        client = _get_client()
+        chat = client.chat.completions.create(
+            model='gpt-4o-mini',
+            temperature=1.0,
+            max_tokens=420,
+            frequency_penalty=0.40,
+            presence_penalty=0.10,
+            messages=[
+                {'role': 'system', 'content': SYSTEM},
+                {'role': 'user',   'content': user_prompt},
+            ],
+        )
+        text = (chat.choices[0].message.content or '').strip()
+        # Belt-and-braces — if the LLM dropped the required line, append it.
+        if SHARP_BETTORS_LINE.split('.')[0] not in text:
+            text = text.rstrip('.! ') + '. ' + SHARP_BETTORS_LINE
+
+        speech_kwargs = {
+            'model': TTS_MODEL,
+            'voice': TTS_VOICE,
+            'input': text,
+            'speed': TTS_SPEED,
+            'response_format': 'mp3',
+        }
+        if 'gpt-4o' in TTS_MODEL and TTS_INSTRUCTIONS:
+            speech_kwargs['instructions'] = TTS_INSTRUCTIONS
+        audio_resp = client.audio.speech.create(**speech_kwargs)
+        audio_bytes = audio_resp.read() if hasattr(audio_resp, 'read') else bytes(audio_resp)
+        audio_b64 = _b64.b64encode(audio_bytes).decode('ascii')
+        return jsonify({
+            'text':       text,
+            'audio_b64':  audio_b64,
+            'audio_mime': 'audio/mpeg',
+        }), 200
+    except Exception as e:
+        logging.exception('cheltenham_commentary error')
+        return jsonify({'error': str(e)}), 500
+
+
 @cheltenham_bp.route('/sessions/delete-all', methods=['POST', 'OPTIONS'])
 def delete_all_sessions():
     """BOOKIE-only nuke. Deletes every cheltenham session (and via the
