@@ -180,17 +180,23 @@ def create_draw():
                 'success': False,
                 'error': 'Not enough characters in database'
             }), 400
-        
-        # Draw random characters
-        drawn = random.sample(characters, num_cards)
-        
+
+        # Shuffle the deck explicitly (was random.sample) so we can print
+        # the top of the shuffle to the Flask terminal — operator sanity
+        # check on what's about to be dealt this round.
+        from utils.deck_debug import print_top_of_deck
+        deck = list(characters)
+        random.shuffle(deck)
+        print_top_of_deck(deck, 'SOPRANOS')
+        drawn = deck[:num_cards]
+
         return jsonify({
             'success': True,
             'draw': drawn,
             'num_cards': num_cards,
             'draw_id': f"draw_{random.randint(100000, 999999)}"
         }), 200
-        
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
