@@ -518,6 +518,20 @@ function SessionView({
         />
       )}
 
+      {/* Conclude button — host-only, visible on EVERY page in the
+          session except during the live race playback. One click writes
+          one row per participant to the canonical bets table (aggregate
+          session PnL) and marks the session concluded. */}
+      {is_host
+        && session.status !== 'concluded'
+        && current_race?.status !== 'racing' && (
+        <ConcludeSessionButton
+          sessionId={session.session_id}
+          onAction={onAction}
+          setError={setError}
+        />
+      )}
+
       {/* Audio sinks — crowd loops while the race is on, commentary
           plays one clip per race when betting opens. Loaded only when
           a session is actually open (so the static MP3 isn't fetched
@@ -871,13 +885,6 @@ function CurrentRace({
               await settleWithRetry(current_race.race_id, onAction, setError);
             }}
           />
-          {is_host && (
-            <ForceSettleBar
-              raceId={current_race.race_id}
-              onAction={onAction}
-              setError={setError}
-            />
-          )}
           <LiveRacePoolsPanel
             pools={pools}
             fieldByHorseId={fieldByHorseId}
@@ -1396,81 +1403,71 @@ function SettleView({
         </table>
       </section>
 
+      {/* Host actions on the settled race — Refresh + "Draft another
+          race" only. The session-wide "Conclude" button lives at the
+          SessionView level so it's reachable from every screen, not
+          buried in the SettleView. */}
       {isHost && (
         <div className="chel-action-bar">
           <button className="chel-btn-primary" onClick={onAction}>Refresh</button>
-          {onRequestDraftAnother ? (
+          {onRequestDraftAnother && (
             <button
               className="chel-btn-secondary"
               onClick={onRequestDraftAnother}
             >
               + Draft another race →
             </button>
-          ) : (
-            <DraftAnotherInline sessionId={race.session_id} onAction={onAction} setError={setError} />
           )}
-          <ConcludeAndWriteInline sessionId={race.session_id} onAction={onAction} setError={setError} />
         </div>
       )}
     </div>
   );
 }
 
-function ConcludeAndWriteInline({
+// ─── Conclude session button ─────────────────────────────────────────
+// Lives at the SessionView level so the host can end the session from
+// ANY screen (lobby, draft, betting, closed, settled) — only hidden
+// during the live race playback. Writes one row per participant to
+// the canonical `bets` table (aggregate session PnL) and marks the
+// session concluded. Idempotent on the backend.
+function ConcludeSessionButton({
   sessionId, onAction, setError,
 }: { sessionId: number; onAction: () => void; setError: (m: string | null) => void; }) {
   const [busy, setBusy] = useState(false);
   return (
-    <button
-      className="chel-btn-conclude"
-      disabled={busy}
-      onClick={async () => {
-        if (!window.confirm(
-          'End this session and write each player\'s net P&L to the bets table? This cannot be undone.'
-        )) return;
-        setBusy(true);
-        try {
-          const r = await chelConcludeSession(sessionId);
-          onAction();
-          window.alert(
-            r?.bets_written != null
-              ? `Session concluded. ${r.bets_written} P&L row(s) written to the book.`
-              : 'Session concluded.'
-          );
-        } catch (e: any) {
-          setError(e?.response?.data?.error || 'Conclude failed');
-        }
-        setBusy(false);
-      }}
-    >
-      {busy ? 'Concluding…' : 'Conclude & Write P&L to Book'}
-    </button>
+    <div className="chel-action-bar" style={{ marginTop: 16 }}>
+      <button
+        className="chel-btn-conclude"
+        disabled={busy}
+        onClick={async () => {
+          if (!window.confirm(
+            'End this session and write each player\'s net session P&L to the bets table? This cannot be undone.'
+          )) return;
+          setBusy(true);
+          try {
+            const r = await chelConcludeSession(sessionId);
+            onAction();
+            window.alert(
+              r?.bets_written != null
+                ? `Session concluded. ${r.bets_written} P&L row(s) written to the book.`
+                : 'Session concluded.'
+            );
+          } catch (e: any) {
+            setError(e?.response?.data?.error || 'Conclude failed');
+          }
+          setBusy(false);
+        }}
+      >
+        {busy ? 'Concluding…' : 'Conclude session & write P&L to book'}
+      </button>
+    </div>
   );
 }
 
-function DraftAnotherInline({
-  sessionId, onAction, setError,
-}: { sessionId: number; onAction: () => void; setError: (m: string | null) => void; }) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <button className="chel-btn-secondary" disabled={busy} onClick={async () => {
-      setBusy(true);
-      try {
-        await chelDraftRace({ session_id: sessionId, field_size: 5, mode: 'random' });
-        onAction();
-      } catch (e: any) { setError(e?.response?.data?.error || 'Draft failed'); }
-      setBusy(false);
-    }}>+ Draft another race (random 5)</button>
-  );
-}
-
-// ─── Settle retry + force-settle escape hatch ────────────────────────
-// The host's animation onFinished used to call chelSettleRace exactly
-// once. If that single call hit a transient 500 (Render hiccup), the
-// race got stranded in 'racing' status forever — host couldn't move
-// on, bettors never saw their PnL. Now we retry with backoff and also
-// expose a manual "Force settle" button so the host always has an
-// escape hatch.
+// ─── Settle retry ────────────────────────────────────────────────────
+// Host's animation onFinished hits this. Retries with exponential
+// backoff so a single transient hiccup doesn't strand the race.
+// Backend is idempotent — "already settled" is treated as success.
 async function settleWithRetry(
   raceId: number,
   onAction: () => void,
@@ -1485,8 +1482,6 @@ async function settleWithRetry(
       return;
     } catch (e: any) {
       lastErr = e;
-      // Idempotent on the backend — if it's already settled by another
-      // attempt, treat that as success. Otherwise back off and retry.
       const msg = (e?.response?.data?.error || e?.message || '').toString().toLowerCase();
       if (msg.includes('already settled')) { onAction(); return; }
       const delay = Math.min(8000, 800 * Math.pow(2, i));
@@ -1498,38 +1493,7 @@ async function settleWithRetry(
   setError(
     `Settle failed after ${attempts} attempts: ${
       lastErr?.response?.data?.error || lastErr?.message || 'unknown'
-    }. Use the Force Settle button below the track.`
-  );
-}
-
-function ForceSettleBar({
-  raceId, onAction, setError,
-}: { raceId: number; onAction: () => void; setError: (m: string | null) => void; }) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <div className="chel-action-bar" style={{ marginTop: 12 }}>
-      <button
-        className="chel-btn-secondary"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            await chelSettleRace(raceId);
-            onAction();
-          } catch (e: any) {
-            const msg = (e?.response?.data?.error || e?.message || '').toString().toLowerCase();
-            if (msg.includes('already settled')) { onAction(); }
-            else { setError(e?.response?.data?.error || 'Force settle failed'); }
-          }
-          setBusy(false);
-        }}
-      >
-        {busy ? 'Settling…' : 'Force settle now →'}
-      </button>
-      <span style={{ marginLeft: 10, fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-        (Use this if the race appears stuck after the horses have crossed.)
-      </span>
-    </div>
+    }`
   );
 }
 

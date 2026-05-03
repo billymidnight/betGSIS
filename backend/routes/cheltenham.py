@@ -738,11 +738,14 @@ def begin_session(session_id: int):
 def conclude_session(session_id: int):
     """Host concludes the Cheltenham session.
 
-    Per-race PnL is now auto-written to the `bets` table at race-settle time
-    (see race_settle), so this endpoint only:
-      1. Sweeps any race that somehow didn't get its bets row (defence in
-         depth — shouldn't happen but cheap to check).
-      2. Marks the session 'concluded'.
+    Writes ONE row per participant to the canonical `bets` table —
+    aggregate PnL across the WHOLE session (every settled race summed
+    together). Idempotent: if the host concludes twice, only one bet
+    per user lands in the book.
+
+    Outcome is just the session name (e.g. "Derbyshire Derby") — never
+    a per-race row. The `bets` table tracks lifetime book PnL, not the
+    intra-session race log.
     """
     if request.method == 'OPTIONS':
         return ('', 200)
@@ -765,85 +768,106 @@ def conclude_session(session_id: int):
 
         session_name = sess.get('name') or f'Cheltenham #{session_id}'
 
-        # Sweep: for every settled race, ensure each participant with a
-        # non-zero settled-wager pnl has a `bets` row. Idempotent — keyed
-        # on (market='Cheltenham', outcome='<session> · Race <n>', user_id).
-        races_rc = (
-            client.table('cheltenham_races')
-            .select('race_id, race_number, status')
-            .eq('session_id', session_id)
-            .execute()
-        )
-        races = races_rc.data or []
-        now_str = datetime.now(timezone.utc).isoformat()
-        bets_written = 0
-
-        for race in races:
-            if race.get('status') != 'settled':
-                continue
-            race_outcome = f'{session_name} · Race {race.get("race_number")}'
-
-            # Who already has a bets row for this race?
-            already_written: set = set()
-            try:
-                existing_rc = (
-                    client.table('bets')
-                    .select('user_id')
-                    .eq('market', 'Cheltenham')
-                    .eq('outcome', race_outcome)
+        # ── Aggregate session PnL per user ──
+        # Pull every wager across every pool in every race of this session,
+        # sum pnl per user_id. NULL pnl (unsettled wagers) ignored.
+        pnl_by_user: Dict[str, float] = {}
+        try:
+            races_rc = (
+                client.table('cheltenham_races')
+                .select('race_id')
+                .eq('session_id', session_id)
+                .execute()
+            )
+            race_ids = [r['race_id'] for r in (races_rc.data or [])]
+            pool_ids: List[int] = []
+            if race_ids:
+                pools_rc = (
+                    client.table('cheltenham_pools')
+                    .select('pool_id')
+                    .in_('race_id', race_ids)
                     .execute()
                 )
-                for r in (existing_rc.data or []):
-                    already_written.add(str(r.get('user_id') or ''))
-            except Exception:
-                logging.exception('cheltenham conclude sweep: read existing bets failed')
+                pool_ids = [p['pool_id'] for p in (pools_rc.data or [])]
+            if pool_ids:
+                wc = (
+                    client.table('cheltenham_wagers')
+                    .select('user_id, pnl')
+                    .in_('pool_id', pool_ids)
+                    .execute()
+                )
+                for w in (wc.data or []):
+                    if w.get('pnl') is None:
+                        continue
+                    uid = str(w.get('user_id') or '')
+                    if not uid:
+                        continue
+                    pnl_by_user[uid] = pnl_by_user.get(uid, 0.0) + float(w['pnl'])
+        except Exception:
+            logging.exception('cheltenham conclude: pnl aggregate failed (continuing with empty map)')
 
-            # Sum each user's wager-pnl across all pools in this race.
-            pools_rc = client.table('cheltenham_pools').select('pool_id').eq('race_id', race['race_id']).execute()
-            pool_ids = [p['pool_id'] for p in (pools_rc.data or [])]
-            if not pool_ids:
+        # Also include EVERY participant — even ones who never bet
+        # should get a $0 Push row so the session shows up in their book.
+        try:
+            parts_rc = (
+                client.table('cheltenham_participants')
+                .select('user_id')
+                .eq('session_id', session_id)
+                .execute()
+            )
+            for p in (parts_rc.data or []):
+                uid = str(p.get('user_id') or '')
+                if uid and uid not in pnl_by_user:
+                    pnl_by_user[uid] = 0.0
+        except Exception:
+            logging.exception('cheltenham conclude: participants read failed')
+
+        # Idempotency: skip users who already have a bets row for THIS
+        # session (keyed on market + outcome + user_id).
+        already_written: set = set()
+        try:
+            existing_rc = (
+                client.table('bets')
+                .select('user_id')
+                .eq('market', 'Cheltenham')
+                .eq('outcome', session_name)
+                .execute()
+            )
+            for r in (existing_rc.data or []):
+                already_written.add(str(r.get('user_id') or ''))
+        except Exception:
+            logging.exception('cheltenham conclude: idempotency read failed (continuing)')
+
+        now_str = datetime.now(timezone.utc).isoformat()
+        bets_written = 0
+        for uid, net in pnl_by_user.items():
+            if uid in already_written:
                 continue
-            wc = client.table('cheltenham_wagers').select('user_id, pnl').in_('pool_id', pool_ids).execute()
-            pnl_by_user: Dict[str, float] = {}
-            for w in (wc.data or []):
-                if w.get('pnl') is None:
-                    continue
-                uid = str(w.get('user_id') or '')
-                if not uid:
-                    continue
-                pnl_by_user[uid] = pnl_by_user.get(uid, 0.0) + float(w['pnl'])
+            net = round(net, 2)
+            if net > 0:
+                result = 'Win'
+            elif net < 0:
+                result = 'Loss'
+            else:
+                result = 'Push'
+            bet_row = {
+                'user_id':       uid,
+                'market':        'Cheltenham',
+                'outcome':       session_name,        # session name only — no "Race N"
+                'bet_size':      round(abs(net), 2) if net != 0 else 0,
+                'odds_american': '+100',
+                'result':        result,
+                'game_id':       int(session_id),
+                'layeur':        'betgsis',
+                'placed_at':     now_str,
+            }
+            try:
+                client.table('bets').insert(bet_row).execute()
+                bets_written += 1
+            except Exception:
+                logging.exception('cheltenham conclude: bets insert failed for user %s', uid)
 
-            for uid, net in pnl_by_user.items():
-                if uid in already_written:
-                    continue
-                net = round(net, 2)
-                if net > 0:
-                    result = 'Win'
-                elif net < 0:
-                    result = 'Loss'
-                else:
-                    result = 'Push'
-                # Schema mirrors pari_session_conclude exactly — no bet_pnl
-                # (column may not exist on every deployed bets table).
-                bet_row = {
-                    'user_id':       uid,
-                    'market':        'Cheltenham',
-                    'outcome':       race_outcome,
-                    'bet_size':      round(abs(net), 2) if net != 0 else 0,
-                    'odds_american': '+100',
-                    'result':        result,
-                    'game_id':       int(race.get('race_number') or 0),
-                    'layeur':        'betgsis',
-                    'placed_at':     now_str,
-                }
-                try:
-                    client.table('bets').insert(bet_row).execute()
-                    bets_written += 1
-                except Exception:
-                    logging.exception('cheltenham conclude sweep: failed to write bets row for %s', uid)
-
-        # Always mark the session concluded — even if every bets-write
-        # above failed, the host's intent was to end the session.
+        # Mark concluded regardless of bets-write outcome — host's intent.
         try:
             client.table('cheltenham_sessions').update({
                 'status':       'concluded',
@@ -1350,80 +1374,18 @@ def race_settle(race_id: int):
                 'settled_at': datetime.utcnow().isoformat(),
             }).eq('pool_id', pool['pool_id']).execute()
 
-        # Flip the race to settled IMMEDIATELY — bets-table write is best-
-        # effort and must not block the SettleView from rendering for the
-        # host + bettors.
+        # Flip the race to settled. The wagers table now holds each
+        # bettor's pnl for THIS race; session_detail aggregates that
+        # across every settled race in the session into a running
+        # balance. The canonical `bets` table is NOT touched here —
+        # only `conclude_session` writes to it (one row per user per
+        # session, never per race).
         client.table('cheltenham_races').update({
             'status':     'settled',
             'settled_at': datetime.utcnow().isoformat(),
         }).eq('race_id', race_id).execute()
 
-        # ── PHASE 2 (BEST-EFFORT): mirror per-participant net pnl into the
-        # canonical `bets` table so other users' results land in the book
-        # the moment a race settles. ANY failure here is swallowed —
-        # session_detail / SettleView still work.
-        bets_written = 0
-        try:
-            sess_full_rc = (
-                client.table('cheltenham_sessions')
-                .select('name')
-                .eq('session_id', race['session_id'])
-                .limit(1)
-                .execute()
-            )
-            sess_name = ((sess_full_rc.data or [{}])[0]).get('name') or f'Cheltenham #{race["session_id"]}'
-            race_outcome = f'{sess_name} · Race {race.get("race_number")}'
-            now_iso = datetime.now(timezone.utc).isoformat()
-
-            already_written: set = set()
-            try:
-                existing_rc = (
-                    client.table('bets')
-                    .select('user_id')
-                    .eq('market', 'Cheltenham')
-                    .eq('outcome', race_outcome)
-                    .execute()
-                )
-                for r in (existing_rc.data or []):
-                    already_written.add(str(r.get('user_id') or ''))
-            except Exception:
-                logging.exception('cheltenham settle: idempotency read failed (continuing)')
-
-            for uid, net in pnl_by_user.items():
-                if not uid or uid in already_written:
-                    continue
-                net = round(net, 2)
-                if net > 0:
-                    result = 'Win'
-                elif net < 0:
-                    result = 'Loss'
-                else:
-                    result = 'Push'
-                # Schema mirrors pari_session_conclude exactly — only
-                # columns guaranteed to exist on the deployed `bets`
-                # table. Do NOT add `bet_pnl` (column may be absent).
-                bet_row = {
-                    'user_id':       uid,
-                    'market':        'Cheltenham',
-                    'outcome':       race_outcome,
-                    'bet_size':      round(abs(net), 2) if net != 0 else 0,
-                    'odds_american': '+100',
-                    'result':        result,
-                    'game_id':       int(race.get('race_number') or 0),
-                    'layeur':        'betgsis',
-                    'placed_at':     now_iso,
-                }
-                try:
-                    client.table('bets').insert(bet_row).execute()
-                    bets_written += 1
-                except Exception:
-                    logging.exception('cheltenham settle: bets insert failed for user %s', uid)
-        except Exception:
-            # The race is already settled in the DB at this point — never
-            # re-raise from the bets mirror block.
-            logging.exception('cheltenham settle: bets-mirror phase failed (race still settled)')
-
-        return jsonify({'success': True, 'bets_written': bets_written}), 200
+        return jsonify({'success': True}), 200
     except Exception as e:
         logging.exception('cheltenham race_settle error')
         traceback.print_exc()
