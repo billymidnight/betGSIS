@@ -505,6 +505,7 @@ def session_detail(session_id: int):
                 logging.exception('cheltenham aggregate pool fetch failed')
 
         pnl_by_user: Dict[str, float] = {}
+        pnl_aggregate_failed = False
         if all_pool_ids:
             try:
                 wc_all = (
@@ -519,20 +520,32 @@ def session_detail(session_id: int):
                     uid = str(w.get('user_id', ''))
                     pnl_by_user[uid] = pnl_by_user.get(uid, 0.0) + float(w['pnl'])
             except Exception:
+                # CRITICAL: do NOT silently zero everyone's pnl here. The frontend
+                # used to see balance=starting on every poll-glitch and flicker
+                # to "$100 for all". Surface the failure so the frontend can
+                # preserve its previous state.
+                pnl_aggregate_failed = True
                 logging.exception('cheltenham wager pnl aggregate failed')
 
         for p in parts:
             uid = str(p.get('user_id', ''))
-            pnl = pnl_by_user.get(uid, 0.0)
-            p['balance']      = round(starting + pnl, 2)
-            p['computed_pnl'] = round(pnl, 2)
+            if pnl_aggregate_failed:
+                # Don't lie. Leave balance as-is (the frontend will detect the
+                # flag and discard this read in favour of the previous state).
+                p['computed_pnl'] = None
+                p['balance']      = None
+            else:
+                pnl = pnl_by_user.get(uid, 0.0)
+                p['balance']      = round(starting + pnl, 2)
+                p['computed_pnl'] = round(pnl, 2)
 
         return jsonify({
-            'session':       sess,
-            'participants':  parts,
-            'is_host':       is_host,
-            'current_race':  current_race,
-            'pools':         pools,
+            'session':              sess,
+            'participants':         parts,
+            'is_host':              is_host,
+            'current_race':         current_race,
+            'pools':                pools,
+            'pnl_aggregate_failed': pnl_aggregate_failed,
         }), 200
     except Exception as e:
         logging.exception('cheltenham session_detail error')

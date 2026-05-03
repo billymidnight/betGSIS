@@ -94,9 +94,35 @@ export default function Cheltenham() {
   const reloadState = useCallback(async (sid: number) => {
     try {
       const s = await chelSessionDetail(sid);
-      setState(s);
+      // Guard against a degraded read. Two layers:
+      //   1) Backend signal — `pnl_aggregate_failed: true` when the
+      //      wager-pnl Supabase query failed (Render hiccup).
+      //   2) Heuristic — if we previously saw real PnL on at least one
+      //      participant and the new read suddenly shows everyone at
+      //      starting balance again, treat the new read as stale even
+      //      if the backend didn't tell us. Covers the window where the
+      //      backend hasn't been redeployed with the new flag yet.
+      // In both cases we KEEP the previous state so balances don't
+      // flicker to $100 for everyone.
+      setState((prev) => {
+        if (!prev) return s;
+        if ((s as any)?.pnl_aggregate_failed) return prev;
+        const start = Number(prev.session?.starting_balance ?? 100);
+        const prevHadRealPnl = (prev.participants || []).some(
+          (p: any) => Math.abs(Number(p?.balance ?? start) - start) > 0.01
+        );
+        const nextAllAtStart = (s.participants || []).every(
+          (p: any) => Math.abs(Number(p?.balance ?? start) - start) < 0.01
+        );
+        if (prevHadRealPnl && nextAllAtStart && (s.participants || []).length > 0) {
+          return prev;
+        }
+        return s;
+      });
     } catch (e: any) {
-      setError(e?.response?.data?.error || e?.message || 'Failed to load session');
+      // Swallow background polling failures so transient 500s don't
+      // spam the toast bar. The next successful poll will recover.
+      console.warn('[cheltenham] session reload failed:', e?.response?.data?.error || e?.message);
     }
   }, []);
 
@@ -124,7 +150,9 @@ export default function Cheltenham() {
     channelRef.current = ch;
     reloadState(activeId);
     // Polling backstop in case Realtime isn't enabled on the project.
-    const id = setInterval(() => reloadState(activeId), 4000);
+    // 8s gives Render free-tier breathing room — Supabase Realtime is
+    // the primary trigger, this just catches dropped notifications.
+    const id = setInterval(() => reloadState(activeId), 8000);
     return () => {
       supabase.removeChannel(ch);
       clearInterval(id);
@@ -340,6 +368,30 @@ function SessionView({
   const meBalance = participants.find((p) => p.user_id === myUid)?.balance ?? session.starting_balance;
   const meEntry   = participants.find((p) => p.user_id === myUid);
 
+  // Host-local toggle: when true, render the full RaceDraft form instead
+  // of the settled CurrentRace view. Set by the SettleView's "Draft
+  // another race" button. Reset whenever the active race row changes
+  // (i.e., the host has actually drafted a new one and the backend
+  // surfaces it as the new current_race).
+  const [draftAnotherRequested, setDraftAnotherRequested] = useState(false);
+  const lastSeenRaceId = useRef<number | null>(current_race?.race_id ?? null);
+  useEffect(() => {
+    const id = current_race?.race_id ?? null;
+    if (id !== lastSeenRaceId.current) {
+      lastSeenRaceId.current = id;
+      setDraftAnotherRequested(false);
+    }
+  }, [current_race?.race_id]);
+
+  // Show full RaceDraft when:
+  //  • host has no current race yet (first race)
+  //  • OR host explicitly clicked "Draft another race" on a settled race.
+  const showDraftFormForHost =
+    is_host
+    && session.status === 'active'
+    && (!current_race
+        || (current_race.status === 'settled' && draftAnotherRequested));
+
   return (
     <div className="chel-session">
       <header className="chel-session-head">
@@ -371,7 +423,7 @@ function SessionView({
         <LobbyState session={session} isHost={is_host} onAction={onAction} setError={setError} />
       )}
 
-      {session.status === 'active' && !current_race && is_host && (
+      {showDraftFormForHost && (
         <RaceDraft session={session} horses={horses} onAction={onAction} setError={setError} />
       )}
 
@@ -379,13 +431,14 @@ function SessionView({
         <div className="chel-waiting">Waiting for the host to draft a race…</div>
       )}
 
-      {current_race && (
+      {current_race && !showDraftFormForHost && (
         <CurrentRace
           state={state}
           myUid={myUid}
           horses={horses}
           onAction={onAction}
           setError={setError}
+          onRequestDraftAnother={() => setDraftAnotherRequested(true)}
         />
       )}
     </div>
@@ -598,13 +651,14 @@ function RaceDraft({
 // Current race — branches on status
 // ═══════════════════════════════════════════════════════════════════════
 function CurrentRace({
-  state, myUid, horses, onAction, setError,
+  state, myUid, horses, onAction, setError, onRequestDraftAnother,
 }: {
   state: CheltenhamSessionState;
   myUid: string;
   horses: Horse[];
   onAction: () => void;
   setError: (m: string | null) => void;
+  onRequestDraftAnother?: () => void;
 }) {
   const { session, current_race, is_host, pools } = state;
   if (!current_race) return null;
@@ -751,6 +805,7 @@ function CurrentRace({
           isHost={is_host}
           onAction={onAction}
           setError={setError}
+          onRequestDraftAnother={onRequestDraftAnother}
         />
       )}
     </section>
@@ -1136,7 +1191,7 @@ function LiveRacePoolsPanel({
 // Settle view (status === 'settled')
 // ═══════════════════════════════════════════════════════════════════════
 function SettleView({
-  race, pools, fieldByHorseId, myUid, isHost, onAction, setError,
+  race, pools, fieldByHorseId, myUid, isHost, onAction, setError, onRequestDraftAnother,
 }: {
   race: CheltenhamRace;
   pools: CheltenhamPool[];
@@ -1145,6 +1200,7 @@ function SettleView({
   isHost: boolean;
   onAction: () => void;
   setError: (m: string | null) => void;
+  onRequestDraftAnother?: () => void;
 }) {
   const traj = race.trajectory_json!;
   const finishOrder: number[] = traj.finish_order || [];
@@ -1246,7 +1302,16 @@ function SettleView({
       {isHost && (
         <div className="chel-action-bar">
           <button className="chel-btn-primary" onClick={onAction}>Refresh</button>
-          <DraftAnotherInline sessionId={race.session_id} onAction={onAction} setError={setError} />
+          {onRequestDraftAnother ? (
+            <button
+              className="chel-btn-secondary"
+              onClick={onRequestDraftAnother}
+            >
+              + Draft another race →
+            </button>
+          ) : (
+            <DraftAnotherInline sessionId={race.session_id} onAction={onAction} setError={setError} />
+          )}
           <ConcludeAndWriteInline sessionId={race.session_id} onAction={onAction} setError={setError} />
         </div>
       )}
