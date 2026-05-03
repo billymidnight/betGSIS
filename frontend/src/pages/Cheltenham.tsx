@@ -857,7 +857,9 @@ function CurrentRace({
           bettor screens (trajectory is deterministic, so playback is
           independent + identical). The host's RAF callback also fires
           chelSettleRace when the last horse crosses, which flips race
-          status → 'settled' and lands the SettleView for everyone. */}
+          status → 'settled' and lands the SettleView for everyone.
+          Wrapped with retry + a manual "Force settle" button so a
+          single transient failure never strands the host. */}
       {current_race.status === 'racing' && current_race.trajectory_json && (
         <>
           <RaceAnimation
@@ -866,10 +868,16 @@ function CurrentRace({
             eyebrow={`Cheltenham · Race ${current_race.race_number} · ${current_race.distance.toLocaleString()} lengths`}
             onFinished={async () => {
               if (!is_host) return;          // bettors don't fire settle
-              try { await chelSettleRace(current_race.race_id); onAction(); }
-              catch (e: any) { setError(e?.response?.data?.error || 'Settle failed'); }
+              await settleWithRetry(current_race.race_id, onAction, setError);
             }}
           />
+          {is_host && (
+            <ForceSettleBar
+              raceId={current_race.race_id}
+              onAction={onAction}
+              setError={setError}
+            />
+          )}
           <LiveRacePoolsPanel
             pools={pools}
             fieldByHorseId={fieldByHorseId}
@@ -878,7 +886,10 @@ function CurrentRace({
         </>
       )}
 
-      {/* SETTLED — settlement view. */}
+      {/* SETTLED — settlement view. Belt-and-braces fallback if
+          trajectory_json is briefly missing (e.g. between the status
+          flip and the next session_detail poll) so the user sees a
+          clear "Loading results…" instead of a blank screen. */}
       {current_race.status === 'settled' && current_race.trajectory_json && (
         <SettleView
           race={current_race}
@@ -890,6 +901,9 @@ function CurrentRace({
           setError={setError}
           onRequestDraftAnother={onRequestDraftAnother}
         />
+      )}
+      {current_race.status === 'settled' && !current_race.trajectory_json && (
+        <div className="chel-waiting">Loading race results…</div>
       )}
     </section>
   );
@@ -1447,6 +1461,75 @@ function DraftAnotherInline({
       } catch (e: any) { setError(e?.response?.data?.error || 'Draft failed'); }
       setBusy(false);
     }}>+ Draft another race (random 5)</button>
+  );
+}
+
+// ─── Settle retry + force-settle escape hatch ────────────────────────
+// The host's animation onFinished used to call chelSettleRace exactly
+// once. If that single call hit a transient 500 (Render hiccup), the
+// race got stranded in 'racing' status forever — host couldn't move
+// on, bettors never saw their PnL. Now we retry with backoff and also
+// expose a manual "Force settle" button so the host always has an
+// escape hatch.
+async function settleWithRetry(
+  raceId: number,
+  onAction: () => void,
+  setError: (m: string | null) => void,
+  attempts: number = 5,
+): Promise<void> {
+  let lastErr: any = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await chelSettleRace(raceId);
+      onAction();
+      return;
+    } catch (e: any) {
+      lastErr = e;
+      // Idempotent on the backend — if it's already settled by another
+      // attempt, treat that as success. Otherwise back off and retry.
+      const msg = (e?.response?.data?.error || e?.message || '').toString().toLowerCase();
+      if (msg.includes('already settled')) { onAction(); return; }
+      const delay = Math.min(8000, 800 * Math.pow(2, i));
+      // eslint-disable-next-line no-console
+      console.warn(`[cheltenham] settle attempt ${i + 1}/${attempts} failed, retrying in ${delay}ms`, msg);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  setError(
+    `Settle failed after ${attempts} attempts: ${
+      lastErr?.response?.data?.error || lastErr?.message || 'unknown'
+    }. Use the Force Settle button below the track.`
+  );
+}
+
+function ForceSettleBar({
+  raceId, onAction, setError,
+}: { raceId: number; onAction: () => void; setError: (m: string | null) => void; }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="chel-action-bar" style={{ marginTop: 12 }}>
+      <button
+        className="chel-btn-secondary"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await chelSettleRace(raceId);
+            onAction();
+          } catch (e: any) {
+            const msg = (e?.response?.data?.error || e?.message || '').toString().toLowerCase();
+            if (msg.includes('already settled')) { onAction(); }
+            else { setError(e?.response?.data?.error || 'Force settle failed'); }
+          }
+          setBusy(false);
+        }}
+      >
+        {busy ? 'Settling…' : 'Force settle now →'}
+      </button>
+      <span style={{ marginLeft: 10, fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+        (Use this if the race appears stuck after the horses have crossed.)
+      </span>
+    </div>
   );
 }
 
