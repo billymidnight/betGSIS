@@ -21,20 +21,26 @@ from typing import Any, Dict, Iterable, List
 
 
 _NAME_KEYS = ('character_name', 'full_name', 'name', 'student_name', 'title')
+# In order — first one present wins. roll_number is the goodshepherd
+# identifier the operator wants to see; the other games don't carry it
+# but the helper falls through cleanly.
+_ID_KEYS   = ('roll_number', 'id', 'character_id')
 _DESCRIPTOR_KEYS = ('house', 'family', 'role', 'sport', 'married_s1', 'season')
 
 
 def _card_label(card: Dict[str, Any]) -> str:
-    name = next((str(card[k]) for k in _NAME_KEYS if card.get(k)), None)
-    if not name:
-        name = str(card.get('id') or card.get('character_id') or '?')
+    # ASCII-only — Windows cp1252 console rejects en/em dashes and unicode
+    # box characters, which would silently swallow the whole line.
+    rid  = next((str(card[k]) for k in _ID_KEYS   if card.get(k) is not None), '?')
+    name = next((str(card[k]) for k in _NAME_KEYS if card.get(k)), '?')
     extras: List[str] = []
     for k in _DESCRIPTOR_KEYS:
         v = card.get(k)
         if v is None or v == '':
             continue
         extras.append(f'{k}={v}')
-    return f'{name}' + (f' ({", ".join(extras)})' if extras else '')
+    base = f'#{rid} - {name}' if name != '?' else f'#{rid}'
+    return base + (f' ({", ".join(extras)})' if extras else '')
 
 
 def print_top_of_deck(
@@ -42,12 +48,30 @@ def print_top_of_deck(
     game_label: str,
     n: int = 5,
 ) -> None:
-    """Print the top `n` cards of `deck` to stdout. No-op on empty."""
+    """Print the top `n` cards of `deck` to stdout, surrounded by a
+    visible banner so it pops in the werkzeug request-log noise.
+    No-op on empty."""
+    import sys
     deck_list = list(deck)
     if not deck_list:
-        print(f'[{game_label} deck] empty deck')
+        print(f'\n>>> [{game_label} deck] EMPTY DECK\n', flush=True)
         return
     take = min(n, len(deck_list))
-    print(f'[{game_label} deck] top {take} of {len(deck_list)} after shuffle:')
+    # ASCII-only banner — Windows console (cp1252) chokes on unicode
+    # box-drawing characters. Logs from gunicorn/Render handle ASCII fine.
+    bar = '=' * 60
+    lines = [
+        '',
+        bar,
+        f'  [{game_label}] TOP {take} OF {len(deck_list)} - fresh shuffle',
+        bar,
+    ]
     for i, c in enumerate(deck_list[:take], 1):
-        print(f'  {i}. {_card_label(c)}')
+        lines.append(f'   {i}.  {_card_label(c)}')
+    lines.append(bar)
+    lines.append('')
+    # `flush=True` so the banner shows immediately even when stdout is
+    # buffered (Render, gunicorn, etc.).
+    print('\n'.join(lines), flush=True)
+    try: sys.stdout.flush()
+    except Exception: pass
