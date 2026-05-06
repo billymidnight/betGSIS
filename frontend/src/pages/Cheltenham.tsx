@@ -109,7 +109,14 @@ export default function Cheltenham() {
     }
   }, []);
 
+  // Lock so concurrent polls (realtime + interval + manual onAction)
+  // don't pile up on top of each other. On Render's free tier each
+  // session_detail call costs ~1-3 s of worker time; if we let polls
+  // stack the worker exhausts and every endpoint starts 500ing.
+  const reloadInFlightRef = useRef(false);
   const reloadState = useCallback(async (sid: number) => {
+    if (reloadInFlightRef.current) return;     // already polling — skip
+    reloadInFlightRef.current = true;
     try {
       const s = await chelSessionDetail(sid);
       // Guard against a degraded read. Two layers:
@@ -141,6 +148,8 @@ export default function Cheltenham() {
       // Swallow background polling failures so transient 500s don't
       // spam the toast bar. The next successful poll will recover.
       console.warn('[cheltenham] session reload failed:', e?.response?.data?.error || e?.message);
+    } finally {
+      reloadInFlightRef.current = false;
     }
   }, []);
 
@@ -168,9 +177,11 @@ export default function Cheltenham() {
     channelRef.current = ch;
     reloadState(activeId);
     // Polling backstop in case Realtime isn't enabled on the project.
-    // 8s gives Render free-tier breathing room — Supabase Realtime is
-    // the primary trigger, this just catches dropped notifications.
-    const id = setInterval(() => reloadState(activeId), 8000);
+    // 15 s — gives Render free-tier breathing room. Supabase Realtime
+    // pushes the actual state changes; this interval just catches the
+    // rare dropped notification. Combined with the in-flight lock
+    // above, four-user sessions no longer overwhelm the worker.
+    const id = setInterval(() => reloadState(activeId), 15000);
     return () => {
       supabase.removeChannel(ch);
       clearInterval(id);

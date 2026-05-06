@@ -128,10 +128,11 @@ export default function Navbar({ pnlValue = 0 }: NavbarProps) {
     const onBetsUpdated = () => computePnl();
     window.addEventListener('bets-updated', onBetsUpdated as EventListener);
 
-    // Periodic refresh — 15s (was 5s) so we don't hammer Render's free-tier
-    // worker. The `bets-updated` event still fires immediately when a bet
-    // is placed/settled, so latency-sensitive updates are unaffected.
-    const iv = setInterval(() => computePnl(), 15000);
+    // Periodic refresh — 30s (was 15s) so we don't hammer Render's
+    // free-tier worker. The `bets-updated` event still fires immediately
+    // when a bet is placed/settled, so latency-sensitive updates are
+    // unaffected.
+    const iv = setInterval(() => computePnl(), 30000);
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);

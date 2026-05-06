@@ -1220,37 +1220,45 @@ def race_close_wagering(race_id: int):
             return jsonify({'error': f'race is {race.get("status")} — cannot close'}), 400
 
         # Compute implied odds for every wager (visible after close).
-        plc = client.table('cheltenham_pools').select('*').eq('race_id', race_id).execute()
+        plc = client.table('cheltenham_pools').select('pool_id').eq('race_id', race_id).execute()
         pools = plc.data or []
         pool_ids = [p['pool_id'] for p in pools]
         wagers_by_pool: Dict[int, List[Dict]] = {}
         if pool_ids:
-            wc = client.table('cheltenham_wagers').select('*').in_('pool_id', pool_ids).execute()
+            wc = client.table('cheltenham_wagers').select('pool_id, selection_key, stake').in_('pool_id', pool_ids).execute()
             for w in (wc.data or []):
                 wagers_by_pool.setdefault(w['pool_id'], []).append(w)
 
+        # CRITICAL — implied_odds is uniform across every wager on the
+        # same side of the same pool, so issue ONE batch update per
+        # (pool_id, selection_key) instead of one per wager. With 4
+        # pools × 4 users that's ~12 calls instead of ~16+, and on
+        # Render free-tier each saved Supabase round-trip matters.
+        now_iso = datetime.utcnow().isoformat()
         for pool in pools:
-            wagers = wagers_by_pool.get(pool['pool_id'], [])
+            pool_id = pool['pool_id']
+            wagers = wagers_by_pool.get(pool_id, [])
             pool_total = sum(float(w.get('stake') or 0) for w in wagers)
-            if pool_total <= 0:
-                continue
-            # Side-aggregate totals (one number per selection_key).
-            side_totals: Dict[str, float] = {}
-            for w in wagers:
-                k = str(w.get('selection_key') or '')
-                side_totals[k] = side_totals.get(k, 0.0) + float(w.get('stake') or 0)
-            # Implied odds for each wager — pool_total / side_total.
-            for w in wagers:
-                k = str(w.get('selection_key') or '')
-                side = side_totals.get(k, 0.0)
-                if side <= 0:
-                    continue
-                implied = round(pool_total / side, 3)
-                client.table('cheltenham_wagers').update({'implied_odds': implied}).eq('wager_id', w['wager_id']).execute()
+            if pool_total > 0:
+                side_totals: Dict[str, float] = {}
+                for w in wagers:
+                    k = str(w.get('selection_key') or '')
+                    side_totals[k] = side_totals.get(k, 0.0) + float(w.get('stake') or 0)
+                for k, side in side_totals.items():
+                    if side <= 0:
+                        continue
+                    implied = round(pool_total / side, 3)
+                    # ONE update covering every wager on this side of
+                    # this pool (PostgREST `eq+eq` filter).
+                    client.table('cheltenham_wagers') \
+                        .update({'implied_odds': implied}) \
+                        .eq('pool_id', pool_id) \
+                        .eq('selection_key', k) \
+                        .execute()
             client.table('cheltenham_pools').update({
                 'status':    'closed',
-                'closed_at': datetime.utcnow().isoformat(),
-            }).eq('pool_id', pool['pool_id']).execute()
+                'closed_at': now_iso,
+            }).eq('pool_id', pool_id).execute()
 
         client.table('cheltenham_races').update({'status': 'closed'}).eq('race_id', race_id).execute()
         return jsonify({'success': True}), 200
@@ -1351,7 +1359,17 @@ def race_settle(race_id: int):
         # mark every pool settled, mark the race settled. If anything in
         # this phase throws we surface 500 — the race state must not be
         # left in 'racing' limbo.
+        # Parallelise the per-wager updates across a small thread pool —
+        # supabase-py is built on httpx, which releases the GIL on I/O,
+        # so threads cut wall-clock latency on Render's tiny worker
+        # without exhausting connections (max_workers=4 stays well under
+        # the per-process limit).
+        from concurrent.futures import ThreadPoolExecutor
         pnl_by_user: Dict[str, float] = {}
+        wager_updates: List[Dict[str, Any]] = []   # rows to update in parallel
+        pool_updates:  List[int]           = []   # pool_ids to flip to settled
+        pool_winner_keys: Dict[int, str]   = {}
+
         for pool in pools:
             wagers = wagers_by_pool.get(pool['pool_id'], [])
             updates = _settle_pool(pool, wagers, trajectory)
@@ -1360,19 +1378,42 @@ def race_settle(race_id: int):
                 u = updates_by_id.get(w.get('wager_id'))
                 if not u:
                     continue
-                client.table('cheltenham_wagers').update({
+                wager_updates.append({
+                    'wager_id':     w['wager_id'],
                     'payout':       u['payout'],
                     'pnl':          u['pnl'],
                     'implied_odds': u['implied_odds'],
-                }).eq('wager_id', w['wager_id']).execute()
+                })
                 uid = str(w.get('user_id') or '')
                 if uid:
                     pnl_by_user[uid] = pnl_by_user.get(uid, 0.0) + float(u['pnl'] or 0.0)
+            pool_updates.append(pool['pool_id'])
+            pool_winner_keys[pool['pool_id']] = pool.get('winner_key')
+
+        # Fire all wager updates concurrently (still per-row because
+        # payout/pnl differ per stake, but parallel cuts wall time).
+        def _push_wager(row: Dict[str, Any]) -> None:
+            client.table('cheltenham_wagers').update({
+                'payout':       row['payout'],
+                'pnl':          row['pnl'],
+                'implied_odds': row['implied_odds'],
+            }).eq('wager_id', row['wager_id']).execute()
+
+        if wager_updates:
+            with ThreadPoolExecutor(max_workers=4) as ex:
+                list(ex.map(_push_wager, wager_updates))
+
+        # Flip the pools too, in parallel.
+        now_iso = datetime.utcnow().isoformat()
+        def _push_pool(pid: int) -> None:
             client.table('cheltenham_pools').update({
                 'status':     'settled',
-                'winner_key': pool.get('winner_key'),
-                'settled_at': datetime.utcnow().isoformat(),
-            }).eq('pool_id', pool['pool_id']).execute()
+                'winner_key': pool_winner_keys.get(pid),
+                'settled_at': now_iso,
+            }).eq('pool_id', pid).execute()
+        if pool_updates:
+            with ThreadPoolExecutor(max_workers=4) as ex:
+                list(ex.map(_push_pool, pool_updates))
 
         # Flip the race to settled. The wagers table now holds each
         # bettor's pnl for THIS race; session_detail aggregates that
