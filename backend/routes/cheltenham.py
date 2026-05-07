@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import logging
 import random
+import threading
+import time
 import traceback
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -38,6 +40,47 @@ supabase = get_supabase_client()
 # the same request batch). Lost on process restart — apply
 # `add_enabled_pools_to_races.sql` to make this persistent.
 _ENABLED_POOLS_FALLBACK: Dict[int, List[str]] = {}
+
+
+# ─── Session-detail response cache ────────────────────────────────────
+#
+# Every Cheltenham client (4 players + realtime herd) hits
+# /session/<id> on every state change AND on a polling backstop. Each
+# call costs ~9 sequential Supabase round-trips. With 4 users that's
+# ~36 round-trips per "tick" for data that's IDENTICAL for everyone
+# (the per-user filtering at the end is cheap).
+#
+# Cache the heavy raw-fetch blob keyed by session_id with a tiny TTL
+# (2 s) so a thundering-herd reload coalesces into ONE Supabase fetch.
+# Per-user visibility filtering still runs on every request — only the
+# Supabase fetch is shared. Invalidate the cache on every write
+# endpoint (wager, close, send-off, settle, draft, release, conclude)
+# so users see their own actions immediately.
+#
+# Cleared on a process restart — that's fine, cache only matters
+# while the worker is busy.
+_SESSION_CACHE: Dict[int, Dict[str, Any]] = {}        # session_id -> {expires_at, raw}
+_SESSION_CACHE_TTL = 2.0                              # seconds
+_SESSION_CACHE_LOCKS: Dict[int, threading.Lock] = {}  # per-session single-flight guard
+_SESSION_CACHE_MASTER_LOCK = threading.Lock()         # protects the locks dict itself
+
+
+def _get_session_lock(session_id: int) -> threading.Lock:
+    """Return the per-session lock used to single-flight cache misses
+    so a 4-user thundering herd produces ONE Supabase fetch rather
+    than four."""
+    with _SESSION_CACHE_MASTER_LOCK:
+        lk = _SESSION_CACHE_LOCKS.get(session_id)
+        if lk is None:
+            lk = threading.Lock()
+            _SESSION_CACHE_LOCKS[session_id] = lk
+        return lk
+
+
+def _invalidate_session_cache(session_id: int) -> None:
+    """Drop the cached blob for this session so the next read goes
+    fresh. Call this from EVERY write endpoint."""
+    _SESSION_CACHE.pop(int(session_id), None)
 
 
 def _is_missing_column_error(err: Exception) -> bool:
@@ -392,164 +435,220 @@ def session_detail(session_id: int):
     if client is None:
         return jsonify({'error': 'supabase admin client unavailable'}), 500
     try:
-        # Session
-        rc = client.table('cheltenham_sessions').select('*').eq('session_id', session_id).limit(1).execute()
-        rows = rc.data or []
-        if not rows:
+        raw = _get_session_raw_with_cache(session_id, client)
+        if raw is None:
             return jsonify({'error': 'session not found'}), 404
-        sess = rows[0]
-        is_host = str(user) == str(sess.get('host_id', ''))
+        if isinstance(raw, dict) and raw.get('_error'):
+            return jsonify({'error': raw.get('_error')}), 500
 
-        # Participants
-        pc = client.table('cheltenham_participants').select('*').eq('session_id', session_id).order('joined_at').execute()
-        parts = pc.data or []
-        all_uids = [str(p.get('user_id')) for p in parts] + [str(sess.get('host_id', ''))]
-        names = _resolve_screennames(client, all_uids)
-        for p in parts:
-            p['screenname'] = names.get(str(p.get('user_id', '')), '')
-        sess['host_screenname'] = names.get(str(sess.get('host_id', '')), '')
-
-        # Latest race (the one you'd act on right now). When the session has
-        # never run a race, this is null and the host is in "draft a race"
-        # mode.
-        rrc = (
-            client.table('cheltenham_races')
-            .select('*')
-            .eq('session_id', session_id)
-            .order('race_number', desc=True)
-            .limit(1)
-            .execute()
-        )
-        rrows = rrc.data or []
-        current_race = rrows[0] if rrows else None
-
-        pools: List[Dict] = []
-        wagers_by_pool: Dict[int, List[Dict]] = {}
-        if current_race:
-            plc = (
-                client.table('cheltenham_pools')
-                .select('*')
-                .eq('race_id', current_race['race_id'])
-                .order('pool_id')
-                .execute()
-            )
-            pools = plc.data or []
-            pool_ids = [p['pool_id'] for p in pools]
-            if pool_ids:
-                wc = client.table('cheltenham_wagers').select('*').in_('pool_id', pool_ids).execute()
-                for w in (wc.data or []):
-                    wagers_by_pool.setdefault(w['pool_id'], []).append(w)
-
-            # Visibility filter — see docstring up top.
-            race_status = current_race.get('status')
-            for pool in pools:
-                bucket = wagers_by_pool.get(pool['pool_id'], [])
-                if race_status == 'betting' and not is_host:
-                    own = [w for w in bucket if str(w.get('user_id', '')) == str(user)]
-                    for w in own:
-                        w['screenname'] = names.get(str(w.get('user_id', '')), '')
-                    pool['wagers'] = own
-                    pool['wager_count'] = len(bucket)
-                else:
-                    for w in bucket:
-                        w['screenname'] = names.get(str(w.get('user_id', '')), '')
-                    pool['wagers'] = bucket
-                    pool['wager_count'] = len(bucket)
-
-            # `has_bet_all_pools` indicator per participant — host's
-            # ✓-board uses this.
-            if pools:
-                pool_ids_set = {p['pool_id'] for p in pools}
-                user_to_pools_bet: Dict[str, set] = {}
-                for plist in wagers_by_pool.values():
-                    for w in plist:
-                        uid = str(w.get('user_id', ''))
-                        user_to_pools_bet.setdefault(uid, set()).add(w.get('pool_id'))
-                for p in parts:
-                    bets_for_user = user_to_pools_bet.get(str(p.get('user_id', '')), set())
-                    p['has_bet_all_pools'] = len(bets_for_user & pool_ids_set) == len(pool_ids_set)
-                    p['pools_bet_count']   = len(bets_for_user & pool_ids_set)
-                    p['pools_total']       = len(pool_ids_set)
-            else:
-                for p in parts:
-                    p['has_bet_all_pools'] = False
-                    p['pools_bet_count']   = 0
-                    p['pools_total']       = 0
-
-        # Update participant balance from wager pnl history (single-source-
-        # of-truth — same pattern as the parimutuel detail endpoint).
-        starting = float(sess.get('starting_balance', 100))
-        # Pull all settled wagers for this user list across the session's
-        # races (we already have current_race wagers; for prior races we
-        # need a wider query).
-        all_pool_ids: List[int] = []
-        if current_race:
-            # Prior races' pools too.
-            try:
-                prc = (
-                    client.table('cheltenham_races')
-                    .select('race_id')
-                    .eq('session_id', session_id)
-                    .execute()
-                )
-                race_ids = [r['race_id'] for r in (prc.data or [])]
-                if race_ids:
-                    plc_all = (
-                        client.table('cheltenham_pools')
-                        .select('pool_id')
-                        .in_('race_id', race_ids)
-                        .execute()
-                    )
-                    all_pool_ids = [p['pool_id'] for p in (plc_all.data or [])]
-            except Exception:
-                logging.exception('cheltenham aggregate pool fetch failed')
-
-        pnl_by_user: Dict[str, float] = {}
-        pnl_aggregate_failed = False
-        if all_pool_ids:
-            try:
-                wc_all = (
-                    client.table('cheltenham_wagers')
-                    .select('user_id, pnl')
-                    .in_('pool_id', all_pool_ids)
-                    .execute()
-                )
-                for w in (wc_all.data or []):
-                    if w.get('pnl') is None:
-                        continue
-                    uid = str(w.get('user_id', ''))
-                    pnl_by_user[uid] = pnl_by_user.get(uid, 0.0) + float(w['pnl'])
-            except Exception:
-                # CRITICAL: do NOT silently zero everyone's pnl here. The frontend
-                # used to see balance=starting on every poll-glitch and flicker
-                # to "$100 for all". Surface the failure so the frontend can
-                # preserve its previous state.
-                pnl_aggregate_failed = True
-                logging.exception('cheltenham wager pnl aggregate failed')
-
-        for p in parts:
-            uid = str(p.get('user_id', ''))
-            if pnl_aggregate_failed:
-                # Don't lie. Leave balance as-is (the frontend will detect the
-                # flag and discard this read in favour of the previous state).
-                p['computed_pnl'] = None
-                p['balance']      = None
-            else:
-                pnl = pnl_by_user.get(uid, 0.0)
-                p['balance']      = round(starting + pnl, 2)
-                p['computed_pnl'] = round(pnl, 2)
-
-        return jsonify({
-            'session':              sess,
-            'participants':         parts,
-            'is_host':              is_host,
-            'current_race':         current_race,
-            'pools':                pools,
-            'pnl_aggregate_failed': pnl_aggregate_failed,
-        }), 200
+        # Per-user filtering happens AFTER cache lookup so the cache
+        # (one entry per session_id) is shared by all viewers.
+        return jsonify(_filter_session_for_user(raw, str(user))), 200
     except Exception as e:
         logging.exception('cheltenham session_detail error')
         return jsonify({'error': str(e)}), 500
+
+
+# ─── Session-detail fetch + cache + per-user filter ──────────────────
+
+def _get_session_raw_with_cache(session_id: int, client) -> Optional[Dict[str, Any]]:
+    """Return the cached raw blob, fetching from Supabase if the cache
+    has expired. Single-flight: a thundering 4-user herd produces ONE
+    Supabase fetch. None means session not found."""
+    sid = int(session_id)
+    now = time.monotonic()
+
+    # Fast path — cache hit, no lock needed.
+    cached = _SESSION_CACHE.get(sid)
+    if cached and cached.get('expires_at', 0) > now:
+        return cached.get('raw')
+
+    lock = _get_session_lock(sid)
+    with lock:
+        # Re-check after acquiring the lock — another thread may have
+        # populated the cache while we were waiting.
+        cached = _SESSION_CACHE.get(sid)
+        if cached and cached.get('expires_at', 0) > now:
+            return cached.get('raw')
+
+        raw = _fetch_session_raw(sid, client)
+        # Cache even sentinels (None / errors) briefly so a missing
+        # session doesn't cause a 4-thread storm of identical 404s.
+        _SESSION_CACHE[sid] = {
+            'expires_at': time.monotonic() + _SESSION_CACHE_TTL,
+            'raw':        raw,
+        }
+        return raw
+
+
+def _fetch_session_raw(session_id: int, client) -> Optional[Dict[str, Any]]:
+    """All the Supabase round-trips, executed once and cached. Builds
+    a viewer-agnostic blob: session, participants, name map, latest
+    race, pools, ALL wagers (not yet filtered for visibility), the
+    pnl-by-user aggregate, and the computed has_bet_all_pools indicator
+    per participant. Per-user filtering is applied later."""
+    # Session
+    rc = client.table('cheltenham_sessions').select('*').eq('session_id', session_id).limit(1).execute()
+    rows = rc.data or []
+    if not rows:
+        return None
+    sess = rows[0]
+
+    # Participants
+    pc = client.table('cheltenham_participants').select('*').eq('session_id', session_id).order('joined_at').execute()
+    parts = pc.data or []
+    all_uids = [str(p.get('user_id')) for p in parts] + [str(sess.get('host_id', ''))]
+    names = _resolve_screennames(client, all_uids)
+    for p in parts:
+        p['screenname'] = names.get(str(p.get('user_id', '')), '')
+    sess['host_screenname'] = names.get(str(sess.get('host_id', '')), '')
+
+    # Latest race
+    rrc = (
+        client.table('cheltenham_races')
+        .select('*')
+        .eq('session_id', session_id)
+        .order('race_number', desc=True)
+        .limit(1)
+        .execute()
+    )
+    rrows = rrc.data or []
+    current_race = rrows[0] if rrows else None
+
+    pools: List[Dict] = []
+    wagers_by_pool: Dict[int, List[Dict]] = {}
+    if current_race:
+        plc = (
+            client.table('cheltenham_pools')
+            .select('*')
+            .eq('race_id', current_race['race_id'])
+            .order('pool_id')
+            .execute()
+        )
+        pools = plc.data or []
+        pool_ids = [p['pool_id'] for p in pools]
+        if pool_ids:
+            wc = client.table('cheltenham_wagers').select('*').in_('pool_id', pool_ids).execute()
+            for w in (wc.data or []):
+                w['screenname'] = names.get(str(w.get('user_id', '')), '')
+                wagers_by_pool.setdefault(w['pool_id'], []).append(w)
+
+        # has_bet_all_pools per participant — same data for everyone.
+        if pools:
+            pool_ids_set = {p['pool_id'] for p in pools}
+            user_to_pools_bet: Dict[str, set] = {}
+            for plist in wagers_by_pool.values():
+                for w in plist:
+                    uid = str(w.get('user_id', ''))
+                    user_to_pools_bet.setdefault(uid, set()).add(w.get('pool_id'))
+            for p in parts:
+                bets_for_user = user_to_pools_bet.get(str(p.get('user_id', '')), set())
+                p['has_bet_all_pools'] = len(bets_for_user & pool_ids_set) == len(pool_ids_set)
+                p['pools_bet_count']   = len(bets_for_user & pool_ids_set)
+                p['pools_total']       = len(pool_ids_set)
+        else:
+            for p in parts:
+                p['has_bet_all_pools'] = False
+                p['pools_bet_count']   = 0
+                p['pools_total']       = 0
+
+    # Aggregate pnl across all settled wagers in the session.
+    starting = float(sess.get('starting_balance', 100))
+    all_pool_ids: List[int] = []
+    if current_race:
+        try:
+            prc = (
+                client.table('cheltenham_races')
+                .select('race_id')
+                .eq('session_id', session_id)
+                .execute()
+            )
+            race_ids = [r['race_id'] for r in (prc.data or [])]
+            if race_ids:
+                plc_all = (
+                    client.table('cheltenham_pools')
+                    .select('pool_id')
+                    .in_('race_id', race_ids)
+                    .execute()
+                )
+                all_pool_ids = [p['pool_id'] for p in (plc_all.data or [])]
+        except Exception:
+            logging.exception('cheltenham aggregate pool fetch failed')
+
+    pnl_by_user: Dict[str, float] = {}
+    pnl_aggregate_failed = False
+    if all_pool_ids:
+        try:
+            wc_all = (
+                client.table('cheltenham_wagers')
+                .select('user_id, pnl')
+                .in_('pool_id', all_pool_ids)
+                .execute()
+            )
+            for w in (wc_all.data or []):
+                if w.get('pnl') is None:
+                    continue
+                uid = str(w.get('user_id', ''))
+                pnl_by_user[uid] = pnl_by_user.get(uid, 0.0) + float(w['pnl'])
+        except Exception:
+            pnl_aggregate_failed = True
+            logging.exception('cheltenham wager pnl aggregate failed')
+
+    for p in parts:
+        uid = str(p.get('user_id', ''))
+        if pnl_aggregate_failed:
+            p['computed_pnl'] = None
+            p['balance']      = None
+        else:
+            pnl = pnl_by_user.get(uid, 0.0)
+            p['balance']      = round(starting + pnl, 2)
+            p['computed_pnl'] = round(pnl, 2)
+
+    return {
+        'session':              sess,
+        'participants':         parts,
+        'host_id':              str(sess.get('host_id', '')),
+        'current_race':         current_race,
+        'pools':                pools,
+        'wagers_by_pool':       wagers_by_pool,
+        'pnl_aggregate_failed': pnl_aggregate_failed,
+    }
+
+
+def _filter_session_for_user(raw: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+    """Apply per-viewer wager visibility on top of the cached raw blob.
+    During 'betting' status, non-host bettors see ONLY their own wagers
+    in each pool. In every other status, everyone sees everything.
+    Cheap (in-memory list filtering) so we run it on every request."""
+    is_host = (user_id == raw.get('host_id', ''))
+    current_race = raw.get('current_race')
+    wagers_by_pool: Dict[int, List[Dict]] = raw.get('wagers_by_pool', {}) or {}
+    pools_in = list(raw.get('pools') or [])
+
+    pools_out: List[Dict] = []
+    if current_race:
+        race_status = current_race.get('status')
+        for pool in pools_in:
+            # Don't mutate the cached pool dicts — clone the shallow
+            # fields we need to overwrite (wagers list, wager_count).
+            p = dict(pool)
+            bucket = wagers_by_pool.get(pool['pool_id'], [])
+            if race_status == 'betting' and not is_host:
+                p['wagers']      = [w for w in bucket if str(w.get('user_id', '')) == user_id]
+                p['wager_count'] = len(bucket)
+            else:
+                p['wagers']      = list(bucket)
+                p['wager_count'] = len(bucket)
+            pools_out.append(p)
+
+    return {
+        'session':              raw['session'],
+        'participants':         raw['participants'],
+        'is_host':              is_host,
+        'current_race':         current_race,
+        'pools':                pools_out,
+        'pnl_aggregate_failed': raw.get('pnl_aggregate_failed', False),
+    }
 
 
 @cheltenham_bp.route('/session/<int:session_id>/join', methods=['POST', 'OPTIONS'])
@@ -576,6 +675,7 @@ def join_session(session_id: int):
             'user_id':    str(user),
             'balance':    starting,
         }).execute()
+        _invalidate_session_cache(session_id)
         return jsonify({'success': True}), 200
     except Exception as e:
         err = str(e)
@@ -704,6 +804,8 @@ def delete_all_sessions():
         # Drop the in-memory enabled_pools fallback for those races too.
         for rid in list(_ENABLED_POOLS_FALLBACK.keys()):
             _ENABLED_POOLS_FALLBACK.pop(rid, None)
+        # Nuke the entire session-detail cache.
+        _SESSION_CACHE.clear()
         return jsonify({'success': True, 'deleted': len(ids)}), 200
     except Exception as e:
         logging.exception('cheltenham delete_all_sessions error')
@@ -728,6 +830,7 @@ def begin_session(session_id: int):
         if str(rows[0].get('host_id')) != str(user):
             return jsonify({'error': 'only the host can begin the session'}), 403
         client.table('cheltenham_sessions').update({'status': 'active'}).eq('session_id', session_id).execute()
+        _invalidate_session_cache(session_id)
         return jsonify({'success': True}), 200
     except Exception as e:
         logging.exception('cheltenham begin_session error')
@@ -875,6 +978,7 @@ def conclude_session(session_id: int):
             }).eq('session_id', session_id).execute()
         except Exception:
             logging.exception('cheltenham conclude: session status update failed')
+        _invalidate_session_cache(session_id)
         return jsonify({'success': True, 'bets_written': bets_written}), 200
     except Exception as e:
         logging.exception('cheltenham conclude_session error')
@@ -1032,6 +1136,7 @@ def race_draft(session_id: int):
             if race_id is not None:
                 _ENABLED_POOLS_FALLBACK[int(race_id)] = list(enabled_pools)
                 race['enabled_pools'] = enabled_pools  # echo back to client
+        _invalidate_session_cache(session_id)
         return jsonify({'success': True, 'race': race}), 200
     except Exception as e:
         logging.exception('cheltenham race_draft error')
@@ -1099,6 +1204,7 @@ def race_release_pools(race_id: int):
             }).execute()
 
         client.table('cheltenham_races').update({'status': 'betting'}).eq('race_id', race_id).execute()
+        _invalidate_session_cache(race['session_id'])
         return jsonify({'success': True, 'pool_count': len(pools)}), 200
     except Exception as e:
         logging.exception('cheltenham release_pools error')
@@ -1189,6 +1295,7 @@ def pool_wager(pool_id: int):
             client.table('cheltenham_wagers').update(row).eq('wager_id', existing[0]['wager_id']).execute()
         else:
             client.table('cheltenham_wagers').insert(row).execute()
+        _invalidate_session_cache(session_id)
         return jsonify({'success': True}), 200
     except Exception as e:
         logging.exception('cheltenham pool_wager error')
@@ -1261,6 +1368,7 @@ def race_close_wagering(race_id: int):
             }).eq('pool_id', pool_id).execute()
 
         client.table('cheltenham_races').update({'status': 'closed'}).eq('race_id', race_id).execute()
+        _invalidate_session_cache(race['session_id'])
         return jsonify({'success': True}), 200
     except Exception as e:
         logging.exception('cheltenham close_wagering error')
@@ -1309,6 +1417,7 @@ def race_send_off(race_id: int):
             'trajectory_json': trajectory,
             'sent_off_at':     datetime.utcnow().isoformat(),
         }).eq('race_id', race_id).execute()
+        _invalidate_session_cache(race['session_id'])
         return jsonify({'success': True, 'trajectory': trajectory}), 200
     except Exception as e:
         logging.exception('cheltenham send_off error')
@@ -1425,6 +1534,7 @@ def race_settle(race_id: int):
             'status':     'settled',
             'settled_at': datetime.utcnow().isoformat(),
         }).eq('race_id', race_id).execute()
+        _invalidate_session_cache(race['session_id'])
 
         return jsonify({'success': True}), 200
     except Exception as e:
