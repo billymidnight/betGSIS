@@ -4350,3 +4350,68 @@
   color: #fff;
 }
 
+/* ─── Manual horse-picker (Churchill Downs setup view) ──────────────── */
+.hr-manual-picker {
+  margin-top: 18px;
+  padding: 18px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 12px;
+  background: rgba(8, 18, 12, 0.55);
+}
+.hr-manual-hint {
+  margin: 0 0 14px;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 14px;
+}
+.hr-manual-hint strong { color: #f5e8c2; }
+.hr-manual-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.hr-manual-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  text-align: left;
+  font: inherit;
+}
+.hr-manual-tile:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(228, 168, 48, 0.35);
+}
+.hr-manual-tile.is-selected {
+  background: rgba(228, 168, 48, 0.12);
+  border-color: var(--hr-amber, #e4a830);
+  color: #f5e8c2;
+}
+.hr-manual-tile:disabled { opacity: 0.55; cursor: not-allowed; }
+.hr-manual-saddle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 800;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+}
+.hr-manual-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+

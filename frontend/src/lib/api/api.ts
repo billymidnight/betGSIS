@@ -707,8 +707,14 @@ export async function fetchHorses(): Promise<Horse[]> {
   return r.data?.horses || [];
 }
 
-export async function setupRace(numHorses: 5 | 7): Promise<HorseInField[]> {
-  const r = await api.post('/racing/setup-race', { num_horses: numHorses });
+export async function setupRace(
+  numHorses: 3 | 5 | 7,
+  opts?: { mode?: 'random' | 'manual'; horse_ids?: number[] },
+): Promise<HorseInField[]> {
+  const body: Record<string, any> = { num_horses: numHorses };
+  if (opts?.mode)       body.mode       = opts.mode;
+  if (opts?.horse_ids)  body.horse_ids  = opts.horse_ids;
+  const r = await api.post('/racing/setup-race', body);
   return r.data?.field || [];
 }
 

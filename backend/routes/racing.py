@@ -191,12 +191,20 @@ def list_horses():
 
 @racing_bp.route('/setup-race', methods=['POST'])
 def setup_race():
-    """Pick N horses at random from the catalogue and assign post positions 1..N."""
+    """Build a Churchill Downs field. Body:
+        { num_horses: 3 | 5 | 7,
+          mode?: 'random' | 'manual',          # defaults to 'random'
+          horse_ids?: [int, int, ...] }         # required when mode='manual'
+    Returns N horses with post_position 1..N.
+    """
     try:
         data = request.json or {}
         num_horses = int(data.get('num_horses', 5))
-        if num_horses not in (5, 7):
-            return jsonify({'success': False, 'error': 'num_horses must be 5 or 7'}), 400
+        if num_horses not in (3, 5, 7):
+            return jsonify({'success': False, 'error': 'num_horses must be 3, 5, or 7'}), 400
+        mode = (data.get('mode') or 'random').lower()
+        if mode not in ('random', 'manual'):
+            return jsonify({'success': False, 'error': 'mode must be random or manual'}), 400
 
         resp = supabase.table('horses').select('*').execute()
         all_horses = resp.data or []
@@ -206,7 +214,23 @@ def setup_race():
                 'error': f'Need {num_horses} horses in catalogue, have {len(all_horses)}'
             }), 400
 
-        chosen = random.sample(all_horses, num_horses)
+        if mode == 'manual':
+            ids = data.get('horse_ids') or []
+            if len(ids) != num_horses:
+                return jsonify({
+                    'success': False,
+                    'error': f'manual mode requires exactly {num_horses} horse_ids'
+                }), 400
+            by_id = {int(h['horse_id']): h for h in all_horses}
+            chosen = []
+            for hid in ids:
+                h = by_id.get(int(hid))
+                if not h:
+                    return jsonify({'success': False, 'error': f'unknown horse_id {hid}'}), 400
+                chosen.append(h)
+        else:
+            chosen = random.sample(all_horses, num_horses)
+
         random.shuffle(chosen)
         field: List[Dict] = []
         for i, h in enumerate(chosen):

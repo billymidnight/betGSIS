@@ -739,17 +739,37 @@ function SetupView({
   onHelp: () => void;
   horses: Horse[];
 }) {
-  const [count, setCount] = useState<5 | 7>(5);
+  const [count, setCount] = useState<3 | 5 | 7>(5);
+  const [mode, setMode]   = useState<'random' | 'manual'>('random');
+  const [selected, setSelected] = useState<number[]>([]);
   const [field, setField] = useState<HorseInField[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const toggleHorse = (hid: number) => {
+    setSelected((prev) => {
+      if (prev.includes(hid)) return prev.filter((x) => x !== hid);
+      if (prev.length >= count) return prev;
+      return [...prev, hid];
+    });
+  };
 
   const drawField = async () => {
     setLoading(true);
     setErr(null);
     try {
-      const f = await setupRace(count);
-      setField(f);
+      if (mode === 'manual') {
+        if (selected.length !== count) {
+          setErr(`Pick exactly ${count} horses.`);
+          setLoading(false);
+          return;
+        }
+        const f = await setupRace(count, { mode: 'manual', horse_ids: selected });
+        setField(f);
+      } else {
+        const f = await setupRace(count, { mode: 'random' });
+        setField(f);
+      }
     } catch (e: any) {
       setErr(e?.response?.data?.error || e?.message || 'Failed to draw field');
     } finally {
@@ -773,21 +793,67 @@ function SetupView({
       <div className="hr-setup-controls">
         <div className="hr-count-toggle">
           <span className="hr-count-toggle-label">Field size</span>
+          {[3, 5, 7].map((n) => (
+            <button
+              key={n}
+              className={`hr-count-pill ${count === n ? 'is-active' : ''}`}
+              onClick={() => { setCount(n as 3 | 5 | 7); setSelected([]); }}
+              disabled={loading}
+            >{n} horses</button>
+          ))}
+        </div>
+        <div className="hr-count-toggle">
+          <span className="hr-count-toggle-label">Selection</span>
           <button
-            className={`hr-count-pill ${count === 5 ? 'is-active' : ''}`}
-            onClick={() => setCount(5)}
+            className={`hr-count-pill ${mode === 'random' ? 'is-active' : ''}`}
+            onClick={() => setMode('random')}
             disabled={loading}
-          >5 horses</button>
+          >Random</button>
           <button
-            className={`hr-count-pill ${count === 7 ? 'is-active' : ''}`}
-            onClick={() => setCount(7)}
+            className={`hr-count-pill ${mode === 'manual' ? 'is-active' : ''}`}
+            onClick={() => setMode('manual')}
             disabled={loading}
-          >7 horses</button>
+          >Manual</button>
         </div>
         <button className="hr-btn-primary" onClick={drawField} disabled={loading}>
-          {loading ? 'Drawing field…' : field.length ? 'Re-draw field' : 'Set Up Race'}
+          {loading
+            ? 'Drawing field…'
+            : field.length
+              ? (mode === 'manual' ? 'Re-draw with picks' : 'Re-draw field')
+              : (mode === 'manual' ? `Draw the field (${selected.length}/${count}) →` : 'Set Up Race')}
         </button>
       </div>
+
+      {mode === 'manual' && (
+        <div className="hr-manual-picker">
+          <p className="hr-manual-hint">
+            Click {count} horses to include in this race. Selected: <strong>{selected.length}/{count}</strong>
+          </p>
+          <div className="hr-manual-grid">
+            {horses.map((h) => {
+              const idx = selected.indexOf(h.horse_id);
+              const sel = idx >= 0;
+              return (
+                <button
+                  key={h.horse_id}
+                  className={`hr-manual-tile ${sel ? 'is-selected' : ''}`}
+                  onClick={() => toggleHorse(h.horse_id)}
+                  disabled={loading}
+                  type="button"
+                >
+                  <span className="hr-manual-saddle" style={{ background: h.silks_color }}>
+                    {sel ? idx + 1 : ' '}
+                  </span>
+                  <span className="hr-manual-name">
+                    {h.full_name}
+                    <CountryFlag iso={h.country} />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {err && <div className="hr-error">{err}</div>}
 
