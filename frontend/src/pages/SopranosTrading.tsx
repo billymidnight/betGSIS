@@ -485,7 +485,7 @@ export default function SopranosTrading() {
                 <div className="rules-section">
                   <h3>Rules</h3>
                   <ul>
-                    <li>Choose your starting bankroll: $25, $50, $100, or $200</li>
+                    <li>Choose your starting bankroll: $10, $15, $25, $50, $100, or $200</li>
                     <li>Each draw shows 3 random characters face-down</li>
                     <li>You have 2 minutes to place bets on various markets</li>
                     <li>Cards are revealed after 2 minutes or when you click SUBMIT</li>
@@ -622,7 +622,7 @@ export default function SopranosTrading() {
               <div className="modal-content" style={{ maxWidth: '500px' }}>
                 <h2 className="modal-title" style={{ textAlign: 'center' }}>Select Bankroll</h2>
                 <div className="bankroll-grid">
-                  {[25, 50, 100, 200].map(amount => (
+                  {[10, 15, 25, 50, 100, 200].map(amount => (
                     <button key={amount} onClick={() => startSession(amount)} className="bankroll-option">${amount}</button>
                   ))}
                 </div>
