@@ -523,15 +523,71 @@ export async function endHarryPotterSession(data: EndSessionPayload) {
   // Get JWT token from Supabase session
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
-  
+
   if (!token) {
     throw new Error('No authentication token found');
   }
-  
+
   const r = await api.post('/trading/harrypotter/end-session', data, {
     headers: {
       'Authorization': `Bearer ${token}`
     }
+  });
+  return r.data;
+}
+
+// ====== Game of Thrones Trading API ======
+export async function fetchGameOfThronesCharacters() {
+  const r = await api.get('/trading/gameofthrones/characters');
+  return r.data;
+}
+
+export async function fetchGameOfThronesStats() {
+  const r = await api.get('/trading/gameofthrones/stats');
+  return r.data;
+}
+
+export async function drawGameOfThronesCards(numCards: number) {
+  const r = await api.post('/trading/gameofthrones/draw', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchGameOfThronesGeneralMarkets(numCards: number) {
+  const r = await api.post('/trading/gameofthrones/markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchGameOfThronesCharacterMarkets(numCards: number) {
+  const r = await api.post('/trading/gameofthrones/character-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchGameOfThronesHouseMarkets(numCards: number) {
+  const r = await api.post('/trading/gameofthrones/house-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function fetchGameOfThronesSpecialMarkets(numCards: number) {
+  const r = await api.post('/trading/gameofthrones/special-markets', { num_cards: numCards });
+  return r.data;
+}
+
+export async function settleGameOfThronesBets(drawnCharacters: any[], bets: any[]) {
+  const r = await api.post('/trading/gameofthrones/settle', {
+    drawn_characters: drawnCharacters,
+    bets: bets
+  });
+  return r.data;
+}
+
+export async function endGameOfThronesSession(data: EndSessionPayload) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) {
+    throw new Error('No authentication token found');
+  }
+  const r = await api.post('/trading/gameofthrones/end-session', data, {
+    headers: { 'Authorization': `Bearer ${token}` }
   });
   return r.data;
 }

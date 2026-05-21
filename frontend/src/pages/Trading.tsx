@@ -143,8 +143,8 @@ export default function Trading() {
           </Link>
 
           {/* Good Shepherd Trading */}
-          <Link 
-            to="/trading/good-shepherd" 
+          <Link
+            to="/trading/good-shepherd"
             className={`trading-card good-shepherd-card ${locks.master ? 'disabled' : ''}`}
             onClick={(e) => {
               if (locks.master) {
@@ -166,6 +166,35 @@ export default function Trading() {
               <div className="trading-card-features">
                 <span className="feature-item">• Student Cards</span>
                 <span className="feature-item">• Multiple Markets</span>
+                <span className="feature-item">• Real-time Odds</span>
+              </div>
+            </div>
+          </Link>
+
+          {/* Game of Thrones Trading */}
+          <Link
+            to="/trading/game-of-thrones"
+            className={`trading-card game-of-thrones-card ${locks.master ? 'disabled' : ''}`}
+            onClick={(e) => {
+              if (locks.master) {
+                e.preventDefault();
+                alert('🔒 betGSIS traders have locked all trading games');
+              }
+            }}
+          >
+            <div className="trading-card-content">
+              <div className="trading-card-header">
+                <h2 className="trading-card-title">
+                  Game of Thrones {locks.master && '🔒'}
+                </h2>
+                <span className="badge badge-active">ACTIVE</span>
+              </div>
+              <p className="trading-card-description">
+                Trade character cards from Westeros. Bet on great houses, kings &amp; queens, and survival of the realm.
+              </p>
+              <div className="trading-card-features">
+                <span className="feature-item">• 28 Characters</span>
+                <span className="feature-item">• Houses · Kings · Survivors</span>
                 <span className="feature-item">• Real-time Odds</span>
               </div>
             </div>

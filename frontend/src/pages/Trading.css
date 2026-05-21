@@ -227,6 +227,51 @@
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
 }
 
+/* ─── Game of Thrones ───────────────────────────────────────────── */
+.game-of-thrones-card {
+  background-image: url('http://localhost:4000/gameofthrones/gotmainbg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+}
+
+.game-of-thrones-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.70) 0%, rgba(0, 0, 0, 0.55) 100%);
+  z-index: 1;
+}
+
+.game-of-thrones-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.18) 0%, rgba(139, 0, 0, 0.18) 100%);
+  z-index: 2;
+}
+
+.game-of-thrones-card .trading-card-content {
+  position: relative;
+  z-index: 3;
+}
+
+.game-of-thrones-card:hover {
+  border-color: #d4af37;
+  transform: scale(1.02);
+  box-shadow: 0 10px 30px rgba(212, 175, 55, 0.3);
+}
+
+.game-of-thrones-card:hover::before {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.40) 100%);
+}
+
+.game-of-thrones-card .trading-card-title {
+  color: #d4af37;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.85);
+}
+
 .good-shepherd-card .feature-item {
   color: #6ee7b7;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);

@@ -83,6 +83,36 @@ def create_app():
             "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Name", "X-User-Role"],
             "supports_credentials": False
         },
+        r"/api/trading/gameofthrones/*": {
+            "origins": [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://betgsis2.vercel.app",
+                "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app",
+                "https://betgsis-backend.onrender.com"
+            ],
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Name", "X-User-Role"],
+            "supports_credentials": False
+        },
+        r"/gameofthrones/*": {
+            "origins": [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://betgsis2.vercel.app",
+                "https://betgsis2-qfq97111j-priteshs-projects-d318466e.vercel.app",
+                "https://betgsis-backend.onrender.com"
+            ],
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": False
+        },
         r"/breakingbad/*": {
             "origins": [
                 "http://localhost:3000",
@@ -150,6 +180,10 @@ def create_app():
     from routes.goodshepherd import goodshepherd_bp
     app.register_blueprint(goodshepherd_bp)
 
+    # Register game of thrones trading blueprint
+    from routes.gameofthrones import gameofthrones_bp
+    app.register_blueprint(gameofthrones_bp)
+
     # Register leaderboard blueprint (access-key gated stats pages)
     from routes.leaderboard import leaderboard_bp
     app.register_blueprint(leaderboard_bp)
@@ -186,6 +220,12 @@ def create_app():
     def serve_goodshepherd_image(filename):
         goodshepherd_dir = os.path.join(os.path.dirname(__file__), 'goodshepherd')
         return send_from_directory(goodshepherd_dir, filename)
+
+    # Serve Game of Thrones character images (+ gotmainbg.jpg thumbnail)
+    @app.route('/gameofthrones/<path:filename>')
+    def serve_gameofthrones_image(filename):
+        gameofthrones_dir = os.path.join(os.path.dirname(__file__), 'gameofthrones')
+        return send_from_directory(gameofthrones_dir, filename)
 
     # Serve Horse Racing assets (track bg + venue thumbnails + horse art)
     @app.route('/horses/<path:filename>')
