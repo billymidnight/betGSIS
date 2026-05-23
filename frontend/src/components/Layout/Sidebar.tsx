@@ -8,6 +8,12 @@ export default function Sidebar() {
       <div className="brand">betGSIS</div>
       <nav>
         <Link to="/home">Home</Link>
+        <div style={{height:8}} />
+        <Link to="/dammox" className="sidebar-dammox-link">
+          <span className="sidebar-dammox-emoji">🎂</span>
+          <span className="sidebar-dammox-text">Yaya Bday</span>
+          <span className="sidebar-dammox-emoji">🎉</span>
+        </Link>
         <div style={{height:12}} />
         <div className="sidebar-section-title">Odds Screens</div>
         <Link to="/geoguessr">GeoGuessr Odds</Link>

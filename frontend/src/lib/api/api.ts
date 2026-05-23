@@ -1275,6 +1275,65 @@ export async function fetchSpecialsLeaderboard(key: string): Promise<Leaderboard
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// Dammox Birthday Tribute API
+// ═══════════════════════════════════════════════════════════════════
+
+export interface DammoxBet {
+  bet_id: number;
+  market: string;
+  outcome: string;
+  bet_size: number;
+  odds_american: string;
+  result: string | null;
+  placed_at: string;
+  est_date: string | null;
+  pnl: number;
+  point: number | null;
+}
+
+export interface DammoxDay {
+  date: string;
+  pnl: number;
+}
+
+export interface DammoxMarketAgg {
+  market: string;
+  volume: number;
+  bets: number;
+}
+
+export interface DammoxMarketBreakdown {
+  market: string;
+  days_bet: number;
+  volume: number;
+  bets: number;
+  pnl: number;
+}
+
+export interface DammoxStats {
+  user_id: string;
+  total_bets: number;
+  total_volume: number;
+  most_wagered_market: DammoxMarketAgg | null;
+  least_wagered_market: DammoxMarketAgg | null;
+  top_winning_days: DammoxDay[];
+  top_losing_days: DammoxDay[];
+  top_winning_bets: DammoxBet[];
+  top_losing_bets: DammoxBet[];
+  markets_breakdown: DammoxMarketBreakdown[];
+}
+
+export async function fetchDammoxStats(): Promise<DammoxStats> {
+  const r = await api.get('/dammox/stats');
+  return r.data;
+}
+
+export async function fetchDammoxMemes(): Promise<string[]> {
+  const r = await api.get('/dammox/memes');
+  return r.data?.files || [];
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Exchange / P2P Offerings API
 // ═══════════════════════════════════════════════════════════════════
 

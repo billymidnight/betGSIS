@@ -188,6 +188,10 @@ def create_app():
     from routes.leaderboard import leaderboard_bp
     app.register_blueprint(leaderboard_bp)
 
+    # Register Dammox birthday tribute blueprint
+    from routes.dammox import dammox_bp
+    app.register_blueprint(dammox_bp)
+
     # Register racing blueprint (Horse Racing — offline / Churchill Downs)
     from routes.racing import racing_bp
     app.register_blueprint(racing_bp)
@@ -232,6 +236,12 @@ def create_app():
     def serve_horse_image(filename):
         horses_dir = os.path.join(os.path.dirname(__file__), 'horses')
         return send_from_directory(horses_dir, filename)
+
+    # Serve Dammox birthday tribute assets
+    @app.route('/yayabday/<path:filename>')
+    def serve_yayabday_image(filename):
+        yayabday_dir = os.path.join(os.path.dirname(__file__), 'yayabday')
+        return send_from_directory(yayabday_dir, filename)
 
     @app.route('/health', methods=['GET'])
     def health():

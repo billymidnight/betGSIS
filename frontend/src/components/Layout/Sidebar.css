@@ -12,3 +12,58 @@
 .sidebar nav a { display:block; color: var(--color-text-primary); text-decoration:none; padding:8px 0; font-weight:600 }
 .sidebar nav a:hover { color: var(--color-accent); }
 .sidebar-section-title { color: var(--color-text-muted); font-size: 0.85rem; margin: 8px 0 6px; font-weight:700; text-transform:uppercase }
+
+/* Dammox Birthday link — extremely visible, different font + style */
+.sidebar .sidebar-dammox-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 6px 0 2px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  font-family: 'Brush Script MT', 'Lucida Handwriting', cursive;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-align: center;
+  color: #fff !important;
+  background: linear-gradient(135deg, #ff4f8b 0%, #ffd24c 50%, #a35cff 100%);
+  background-size: 200% 200%;
+  border: 2px dashed rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 18px rgba(255, 79, 139, 0.45), 0 4px 14px rgba(0,0,0,0.4);
+  text-decoration: none;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  animation: sidebar-dammox-shimmer 4s ease-in-out infinite, sidebar-dammox-wiggle 5s ease-in-out infinite;
+}
+.sidebar .sidebar-dammox-link:hover {
+  transform: scale(1.04);
+  color: #fff !important;
+  box-shadow: 0 0 28px rgba(255, 210, 76, 0.7), 0 6px 18px rgba(0,0,0,0.5);
+}
+.sidebar-dammox-text {
+  display: inline-block;
+  background: linear-gradient(180deg, #fff 0%, #fffadc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4));
+}
+.sidebar-dammox-emoji {
+  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif;
+  font-size: 1.15rem;
+  display: inline-block;
+  animation: sidebar-dammox-bounce 1.8s ease-in-out infinite;
+}
+@keyframes sidebar-dammox-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+@keyframes sidebar-dammox-wiggle {
+  0%, 100% { transform: rotate(-0.6deg); }
+  50%      { transform: rotate(0.6deg); }
+}
+@keyframes sidebar-dammox-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ProtectedRoute, PublicRoute, RootRedirect, BookRoute, UserRoute } from './router'
 import Login from './pages/Login'
 import Home from './pages/Home'
+import Dammox from './pages/Dammox'
 import Portfolio from './pages/Portfolio'
 import GeoGuessr from './pages/GeoGuessr'
 import Zetamac from './pages/Zetamac'
@@ -73,6 +74,17 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/dammox"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <Dammox />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/portfolio"
           element={
