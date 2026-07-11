@@ -150,6 +150,14 @@ export default function BetSlip() {
           payloadOutcome = sel.outcome; // "Poker Cash Game" or "Poker Tournament"
           payloadPoint = null;
         }
+
+        // FIFA: stored outcome = "<matchup>: <top line>", e.g. "Pam vs. Sohan FIFA: Pam ML".
+        // sel.threshold carries the matchup sub-line, sel.playerName the bold top line.
+        if (String(sel.market) === 'fifa') {
+          payloadMarket = 'FIFA';
+          payloadOutcome = `${sel.threshold}: ${sel.playerName}`;
+          payloadPoint = null;
+        }
         
         const payload = {
           market: payloadMarket,

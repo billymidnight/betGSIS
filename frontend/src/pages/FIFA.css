@@ -1,0 +1,161 @@
+.fifa-board {
+  padding: 6px 4px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fifa-matchup-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 2px;
+}
+.fifa-mt-screen {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: #7a7a7a;
+}
+.fifa-mt-vs {
+  color: #888;
+  font-weight: 600;
+}
+
+.fifa-market {
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 8px 12px 10px;
+}
+.fifa-market-title {
+  font-size: 0.72rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #9a9a9a;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+/* horizontal price boxes (ML / DNB / O-U) */
+.fifa-price-row {
+  display: flex;
+  gap: 8px;
+}
+.fifa-price-row + .fifa-price-row {
+  margin-top: 8px;
+}
+
+.fifa-price-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 8px;
+  min-height: 58px;
+  border: 1px solid #2f8f5b;
+  border-radius: 8px;
+  background: rgba(0, 255, 128, 0.04);
+  color: #eaeaea;
+  cursor: pointer;
+  transition: transform 0.12s, background 0.12s;
+}
+.fifa-price-btn:hover {
+  transform: scale(1.02);
+  background: rgba(0, 255, 128, 0.1);
+}
+.fifa-price-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
+}
+.fifa-price-american {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #35e08a;
+}
+.fifa-price-decimal {
+  font-size: 0.7rem;
+  color: #9a9a9a;
+}
+
+/* locked box */
+.fifa-locked {
+  border-color: #3a3a3a;
+  background: #1b1b1b;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+.fifa-locked:hover { transform: none; background: #1b1b1b; }
+.fifa-lock { font-size: 1.15rem; }
+.fifa-price-empty {
+  border-style: dashed;
+  border-color: #2a2a2a;
+  background: transparent;
+  cursor: default;
+}
+
+/* rowwise (Double Chance): label left, price right */
+.fifa-rowwise {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fifa-line-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid #2f8f5b;
+  border-radius: 8px;
+  background: rgba(0, 255, 128, 0.04);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.fifa-line-row:hover { background: rgba(0, 255, 128, 0.1); }
+.fifa-line-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #eaeaea;
+}
+.fifa-line-price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.fifa-line-american {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #35e08a;
+}
+.fifa-line-decimal {
+  font-size: 0.72rem;
+  color: #9a9a9a;
+}
+.fifa-locked-row {
+  border-color: #3a3a3a;
+  background: #1b1b1b;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+.fifa-locked-row:hover { background: #1b1b1b; }
+
+/* spread: stacked line rows */
+.fifa-spread {
+  display: flex;
+  flex-direction: column;
+}
+
+/* empty / placeholder state */
+.fifa-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 64px 16px;
+  text-align: center;
+}
+.fifa-empty-emoji { font-size: 40px; }
+.fifa-empty-text { font-size: 16px; font-weight: 600; }

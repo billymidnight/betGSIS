@@ -97,6 +97,8 @@ export default function BetslipItem({ selection }: Props) {
               {' '}
               <span style={{fontWeight: 700}}>{selection.threshold}</span>
             </>
+          ) : String(selection.market) === 'fifa' ? (
+            <div style={{fontWeight: 700}}>{String(selection.threshold)}</div>
           ) : (
             <>{selection.side.toUpperCase()} @ {selection.threshold}</>
           )}

@@ -7,6 +7,7 @@ import Dammox from './pages/Dammox'
 import Portfolio from './pages/Portfolio'
 import GeoGuessr from './pages/GeoGuessr'
 import Zetamac from './pages/Zetamac'
+import FIFA from './pages/FIFA'
 import Trading from './pages/Trading'
 import SopranosTrading from './pages/SopranosTrading'
 import BreakingBadTrading from './pages/BreakingBadTrading'
@@ -113,6 +114,17 @@ export default function App() {
             <ProtectedRoute>
               <AppShell>
                 <Zetamac />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/fifa"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <FIFA />
               </AppShell>
             </ProtectedRoute>
           }

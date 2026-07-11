@@ -131,6 +131,13 @@ export async function fetchZetamacMoneylines(marginBps = 700) {
   return data || { matchups: [] };
 }
 
+export async function fetchFifaBoard() {
+  const headers = { 'Content-Type': 'application/json' } as Record<string, string>;
+  const r = await api.get('/fifa/board', { headers });
+  const data = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
+  return data || { games: [] };
+}
+
 export async function fetchPricingContinentProps(rounds = 5) {
   const headers = { 'Content-Type': 'application/json', 'x-user-role': 'book' } as Record<string, string>;
   const r = await api.get(`/pricing/continent-props?rounds=${rounds}`, { headers });

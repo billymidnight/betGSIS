@@ -377,6 +377,9 @@ def bets_place():
         # Monopoly: use verbatim outcome from frontend
         elif pm == 'monopoly' or mnorm == 'monopoly':
             outcome_str = payload.get('outcome') or None
+        # FIFA: use verbatim outcome ("Pam vs. Pritesh FIFA: Pritesh DNB") — never rebuild
+        elif pm == 'fifa' or mnorm == 'fifa':
+            outcome_str = payload.get('outcome') or None
         else:
             # Fallback: keep previous behavior but constructed safely. This covers other markets.
             try:

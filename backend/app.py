@@ -200,6 +200,9 @@ def create_app():
     from routes.cheltenham import cheltenham_bp
     app.register_blueprint(cheltenham_bp)
 
+    from routes.fifa import fifa_bp
+    app.register_blueprint(fifa_bp)
+
 
     # Serve Sopranos character images
     @app.route('/sopranos/<path:filename>')
