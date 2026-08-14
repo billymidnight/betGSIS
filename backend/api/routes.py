@@ -1373,6 +1373,98 @@ def bets_recent():
         return jsonify({'error': str(e)}), 500
 
 
+@api_bp.route('/bookkeeping/accounting', methods=['GET', 'OPTIONS'])
+def bookkeeping_accounting():
+    """Per-player P&L breakdown for the Market Locker accounting table.
+
+    P&L is ALWAYS computed from bet_size + odds_american + result — never the
+    persisted bet_pnl column. Mirrors the navbar logic exactly:
+      bettor side: win -> +stake*(dec-1), loss -> -stake
+      layeur side: win -> -stake*(dec-1), loss -> +stake   (inverted)
+
+    Columns returned per player:
+      net_pnl_all    = bettor P&L + layeur P&L   (matches their navbar figure)
+      pnl_vs_betgsis = bettor P&L on bets laid by the house only
+      pnl_bets       = bettor P&L across all their bets
+      pnl_lays       = layeur P&L across everything they laid
+    """
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        def amer_to_dec(amer):
+            try:
+                a = int(str(amer).replace('+', '').strip())
+            except Exception:
+                return None
+            if a > 0:
+                return 1.0 + (a / 100.0)
+            if a < 0:
+                return 1.0 + (100.0 / abs(a))
+            return 1.0
+
+        def side_pnl(row, as_layeur=False):
+            try:
+                stake = float(row.get('bet_size') or 0.0)
+            except Exception:
+                stake = 0.0
+            res = str(row.get('result') or '').strip().lower()
+            if res == 'win':
+                dec = amer_to_dec(row.get('odds_american'))
+                if dec is None:
+                    return 0.0
+                profit = stake * (dec - 1.0)
+                return -profit if as_layeur else profit
+            if res == 'loss':
+                return stake if as_layeur else -stake
+            return 0.0  # push / unsettled
+
+        urc = client.table('users').select('user_id,screenname').execute()
+        urows = urc.data if hasattr(urc, 'data') else (urc.get('data') if isinstance(urc, dict) else None)
+        users = urows or []
+
+        brc = client.table('bets').select('user_id,bet_size,odds_american,result,layeur').execute()
+        brows = brc.data if hasattr(brc, 'data') else (brc.get('data') if isinstance(brc, dict) else None)
+        bets = brows or []
+
+        agg = {}
+        for u in users:
+            uid = str(u.get('user_id'))
+            agg[uid] = {
+                'user_id': uid,
+                'screenname': u.get('screenname') or uid,
+                'pnl_bets': 0.0,
+                'pnl_lays': 0.0,
+                'pnl_vs_betgsis': 0.0,
+            }
+
+        for b in bets:
+            uid = str(b.get('user_id') or '')
+            layeur = str(b.get('layeur') or 'betgsis')
+            # bettor side
+            if uid in agg:
+                p = side_pnl(b, as_layeur=False)
+                agg[uid]['pnl_bets'] += p
+                if layeur == 'betgsis':
+                    agg[uid]['pnl_vs_betgsis'] += p
+            # layeur side (exchange lays store the layeur's user_id)
+            if layeur != 'betgsis' and layeur in agg:
+                agg[layeur]['pnl_lays'] += side_pnl(b, as_layeur=True)
+
+        out = []
+        for v in agg.values():
+            v['net_pnl_all'] = v['pnl_bets'] + v['pnl_lays']
+            out.append({k: (round(x, 2) if isinstance(x, float) else x) for k, x in v.items()})
+        out.sort(key=lambda r: r['net_pnl_all'], reverse=True)
+
+        return jsonify({'accounting': out}), 200
+    except Exception as e:
+        logging.exception('bookkeeping_accounting error')
+        return jsonify({'error': str(e)}), 500
+
+
 @api_bp.route('/bookkeeping/all-bets', methods=['GET', 'OPTIONS'])
 def bookkeeping_all_bets():
     if request.method == 'OPTIONS':
@@ -4077,6 +4169,639 @@ def pari_pool_void(pool_id):
         return jsonify({'success': True}), 200
     except Exception as e:
         logging.exception('pari_pool_void/delete error')
+        return jsonify({'error': str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════════
+#  THE MEL BROOKS GAME  — live first-price auction betting
+# ═══════════════════════════════════════════════════════════════
+#
+#  Flow: host creates session -> players join lobby -> host begins ->
+#  host posts a round (event text + prize $) -> everyone submits ONE
+#  sealed bid (2dp) -> host closes (bids reveal, highest = auction winner)
+#  -> host settles bidder_win / bidder_lose via a native game (coin / dice
+#  / cards / gspoker) -> P&L booked per bid. Host may conclude any time and
+#  the (balance - starting) is written to `bets` as market 'Mel Brooks'.
+#
+#  Settlement (bidder bid B, prize P, k = number of OTHER bidders):
+#    bidder_win :  bidder = P - B ,  each other = (B - P)/k
+#    bidder_lose:  bidder = -B     ,  each other = B/k
+#  Zero-sum across the table in both cases.
+
+def _mb_round_state(client, session_id):
+    """All rounds for a session with their bids attached, ordered."""
+    rc = (client.table('melbrooks_rounds').select('*')
+          .eq('session_id', session_id).order('round_number').execute())
+    rounds = (rc.data if hasattr(rc, 'data') else None) or []
+    rids = [r['round_id'] for r in rounds]
+    bids_by_round = {}
+    if rids:
+        bc = client.table('melbrooks_bids').select('*').in_('round_id', rids).execute()
+        for b in ((bc.data if hasattr(bc, 'data') else None) or []):
+            bids_by_round.setdefault(b['round_id'], []).append(b)
+    for r in rounds:
+        r['bids'] = sorted(bids_by_round.get(r['round_id'], []),
+                           key=lambda x: (-float(x.get('amount') or 0), x.get('created_at') or ''))
+    return rounds
+
+
+@api_bp.route('/melbrooks/session/create', methods=['POST', 'OPTIONS'])
+def mb_session_create():
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only a BOOKIE can host'}), 403
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'name required'}), 400
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        row = {
+            'name': name,
+            'host_id': str(user),
+            'status': 'lobby',
+            'starting_balance': float(data.get('starting_balance') or 100),
+            'bids_visible': bool(data.get('bids_visible', False)),
+            'liquidity_provider': (data.get('liquidity_provider') or 'players'),
+        }
+        ins = client.table('melbrooks_sessions').insert(row).execute()
+        sid = (ins.data or [{}])[0].get('session_id')
+        return jsonify({'success': True, 'session_id': sid}), 200
+    except Exception as e:
+        logging.exception('mb_session_create error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/sessions', methods=['GET', 'OPTIONS'])
+def mb_sessions():
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('melbrooks_sessions').select('*').order('created_at', desc=True).execute()
+        sessions = (rc.data if hasattr(rc, 'data') else None) or []
+        # participant counts
+        sids = [s['session_id'] for s in sessions]
+        counts = {}
+        if sids:
+            pc = client.table('melbrooks_participants').select('session_id,user_id').in_('session_id', sids).execute()
+            for p in ((pc.data if hasattr(pc, 'data') else None) or []):
+                counts[p['session_id']] = counts.get(p['session_id'], 0) + 1
+        host_ids = list({str(s.get('host_id')) for s in sessions})
+        name_map, _ = _resolve_screennames(client, host_ids)
+        for s in sessions:
+            s['player_count'] = counts.get(s['session_id'], 0)
+            s['host_screenname'] = name_map.get(str(s.get('host_id')), '')
+        return jsonify({'sessions': sessions}), 200
+    except Exception as e:
+        logging.exception('mb_sessions error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/session/<int:session_id>', methods=['GET', 'OPTIONS'])
+def mb_session_detail(session_id):
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('melbrooks_sessions').select('*').eq('session_id', session_id).limit(1).execute()
+        rows = (rc.data if hasattr(rc, 'data') else None) or []
+        if not rows:
+            return jsonify({'error': 'session not found'}), 404
+        session = rows[0]
+        is_host = str(user) == str(session.get('host_id'))
+        bids_visible = bool(session.get('bids_visible'))
+
+        pc = (client.table('melbrooks_participants').select('*')
+              .eq('session_id', session_id).order('joined_at').execute())
+        parts = (pc.data if hasattr(pc, 'data') else None) or []
+        uids = [str(p['user_id']) for p in parts] + [str(session.get('host_id'))]
+        name_map, avatar_map = _resolve_screennames(client, uids)
+        for p in parts:
+            p['screenname'] = name_map.get(str(p['user_id']), '')
+            p['avatar_url'] = avatar_map.get(str(p['user_id']), '')
+        session['host_screenname'] = name_map.get(str(session.get('host_id')), '')
+
+        rounds = _mb_round_state(client, session_id)
+        starting = float(session.get('starting_balance', 100))
+
+        # attach screennames to bids; hide others' bid amounts while bidding (sealed)
+        for r in rounds:
+            live_sealed = (r['status'] == 'bidding' and not bids_visible and not is_host)
+            for b in r['bids']:
+                b['screenname'] = name_map.get(str(b['user_id']), '')
+                b['avatar_url'] = avatar_map.get(str(b['user_id']), '')
+            r['bid_count'] = len(r['bids'])
+            # last 7 bids (newest first) for the live-auction ladder
+            if bids_visible:
+                log = r.get('bid_log') or []
+                r['recent_bids'] = [
+                    {'user_id': str(e.get('u')), 'amount': e.get('a'),
+                     'screenname': name_map.get(str(e.get('u')), ''),
+                     'avatar_url': avatar_map.get(str(e.get('u')), '')}
+                    for e in reversed(log[-7:])
+                ]
+            r.pop('bid_log', None)  # don't ship the full log
+            if live_sealed:
+                r['bids'] = [b for b in r['bids'] if str(b['user_id']) == str(user)]
+
+        # balances from settled-round pnl (single source of truth)
+        pnl_by_user = {}
+        for r in rounds:
+            if r['status'] == 'settled':
+                for b in r['bids']:
+                    if b.get('pnl') is not None:
+                        uid = str(b['user_id'])
+                        pnl_by_user[uid] = pnl_by_user.get(uid, 0.0) + float(b['pnl'])
+        for p in parts:
+            uid = str(p['user_id'])
+            p['balance'] = round(starting + pnl_by_user.get(uid, 0.0), 2)
+            p['computed_pnl'] = round(pnl_by_user.get(uid, 0.0), 2)
+
+        resp = jsonify({'session': session, 'participants': parts, 'rounds': rounds, 'is_host': is_host})
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return resp, 200
+    except Exception as e:
+        logging.exception('mb_session_detail error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/session/<int:session_id>/join', methods=['POST', 'OPTIONS'])
+def mb_session_join(session_id):
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('melbrooks_sessions').select('*').eq('session_id', session_id).limit(1).execute()
+        rows = (rc.data if hasattr(rc, 'data') else None) or []
+        if not rows:
+            return jsonify({'error': 'session not found'}), 404
+        if rows[0].get('status') != 'lobby':
+            return jsonify({'error': 'session is no longer accepting players'}), 400
+        starting = float(rows[0].get('starting_balance', 100))
+        client.table('melbrooks_participants').insert(
+            {'session_id': session_id, 'user_id': str(user), 'balance': starting}).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        err = str(e)
+        if 'duplicate' in err.lower() or '23505' in err:
+            return jsonify({'error': 'already joined'}), 409
+        logging.exception('mb_session_join error')
+        return jsonify({'error': err}), 500
+
+
+def _mb_require_host(client, session_id, user):
+    rc = client.table('melbrooks_sessions').select('*').eq('session_id', session_id).limit(1).execute()
+    rows = (rc.data if hasattr(rc, 'data') else None) or []
+    if not rows:
+        return None, (jsonify({'error': 'session not found'}), 404)
+    if str(rows[0].get('host_id')) != str(user):
+        return None, (jsonify({'error': 'not your session'}), 403)
+    return rows[0], None
+
+
+@api_bp.route('/melbrooks/session/<int:session_id>/begin', methods=['POST', 'OPTIONS'])
+def mb_session_begin(session_id):
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can begin'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        sess, err = _mb_require_host(client, session_id, user)
+        if err:
+            return err
+        if sess.get('status') != 'lobby':
+            return jsonify({'error': 'session already started'}), 400
+        client.table('melbrooks_sessions').update({'status': 'active'}).eq('session_id', session_id).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('mb_session_begin error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/session/<int:session_id>/round/create', methods=['POST', 'OPTIONS'])
+def mb_round_create(session_id):
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can post rounds'}), 403
+    data = request.get_json(silent=True) or {}
+    description = (data.get('description') or '').strip()
+    if not description:
+        return jsonify({'error': 'description required'}), 400
+    try:
+        prize = round(float(data.get('prize')), 2)
+    except Exception:
+        return jsonify({'error': 'prize must be a number'}), 400
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        sess, err = _mb_require_host(client, session_id, user)
+        if err:
+            return err
+        if sess.get('status') != 'active':
+            return jsonify({'error': 'session not active'}), 400
+        # next round number
+        rc = (client.table('melbrooks_rounds').select('round_number')
+              .eq('session_id', session_id).order('round_number', desc=True).limit(1).execute())
+        prev = (rc.data if hasattr(rc, 'data') else None) or []
+        rnum = (int(prev[0]['round_number']) + 1) if prev else 1
+        ins = client.table('melbrooks_rounds').insert({
+            'session_id': session_id, 'round_number': rnum,
+            'description': description, 'prize': prize, 'status': 'bidding',
+        }).execute()
+        return jsonify({'success': True, 'round_id': (ins.data or [{}])[0].get('round_id')}), 200
+    except Exception as e:
+        logging.exception('mb_round_create error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/round/<int:round_id>/bid', methods=['POST', 'OPTIONS'])
+def mb_round_bid(round_id):
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    try:
+        amount = round(float(data.get('amount')), 2)
+    except Exception:
+        return jsonify({'error': 'amount must be a number'}), 400
+    if amount < 0:
+        return jsonify({'error': 'amount must be >= 0'}), 400
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('melbrooks_rounds').select('*').eq('round_id', round_id).limit(1).execute()
+        rows = (rc.data if hasattr(rc, 'data') else None) or []
+        if not rows:
+            return jsonify({'error': 'round not found'}), 404
+        rnd = rows[0]
+        if rnd.get('status') != 'bidding':
+            return jsonify({'error': 'bidding is closed'}), 400
+        # must be a participant
+        pc = (client.table('melbrooks_participants').select('id')
+              .eq('session_id', rnd['session_id']).eq('user_id', str(user)).limit(1).execute())
+        if not ((pc.data if hasattr(pc, 'data') else None) or []):
+            return jsonify({'error': 'you are not in this session'}), 403
+
+        # Max wagerable is always the prize — can never bid more than the prize.
+        prize = float(rnd.get('prize') or 0)
+        if amount > prize + 1e-9:
+            return jsonify({'error': f'max bid is the prize (${prize:.2f})'}), 400
+
+        # Is this a live (visible) ascending auction?
+        sc = client.table('melbrooks_sessions').select('bids_visible').eq('session_id', rnd['session_id']).limit(1).execute()
+        s_rows = (sc.data if hasattr(sc, 'data') else None) or []
+        bids_visible = bool(s_rows[0].get('bids_visible')) if s_rows else False
+
+        # Current bids on this round
+        allb = client.table('melbrooks_bids').select('bid_id,user_id,amount').eq('round_id', round_id).execute()
+        all_bids = (allb.data if hasattr(allb, 'data') else None) or []
+        current_high = max([float(b.get('amount') or 0) for b in all_bids], default=0.0)
+
+        # Live auction: a new bid MUST outbid the current high (ascending, no lowering)
+        if bids_visible and all_bids and amount <= current_high + 1e-9:
+            return jsonify({'error': f'must outbid the current high of ${current_high:.2f}'}), 400
+
+        existing = next((b for b in all_bids if str(b['user_id']) == str(user)), None)
+        if existing:
+            client.table('melbrooks_bids').update({'amount': amount}).eq('bid_id', existing['bid_id']).execute()
+        else:
+            client.table('melbrooks_bids').insert({
+                'round_id': round_id, 'session_id': rnd['session_id'],
+                'user_id': str(user), 'amount': amount,
+            }).execute()
+
+        # Append to the round's bid log (display-only history, last 7 shown in the ladder)
+        try:
+            log = rnd.get('bid_log') or []
+            log.append({'u': str(user), 'a': amount})
+            client.table('melbrooks_rounds').update({'bid_log': log[-50:]}).eq('round_id', round_id).execute()
+        except Exception:
+            pass
+
+        return jsonify({'success': True, 'high': max(current_high, amount)}), 200
+    except Exception as e:
+        logging.exception('mb_round_bid error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/round/<int:round_id>/close', methods=['POST', 'OPTIONS'])
+def mb_round_close(round_id):
+    """Host closes bidding: reveal all bids, pick highest (earliest breaks ties) as winner."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can close'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('melbrooks_rounds').select('*').eq('round_id', round_id).limit(1).execute()
+        rows = (rc.data if hasattr(rc, 'data') else None) or []
+        if not rows:
+            return jsonify({'error': 'round not found'}), 404
+        rnd = rows[0]
+        _, err = _mb_require_host(client, rnd['session_id'], user)
+        if err:
+            return err
+        if rnd.get('status') != 'bidding':
+            return jsonify({'error': 'round is not in bidding'}), 400
+        bc = client.table('melbrooks_bids').select('*').eq('round_id', round_id).execute()
+        bids = (bc.data if hasattr(bc, 'data') else None) or []
+        if not bids:
+            return jsonify({'error': 'no bids submitted'}), 400
+        # highest amount, earliest created_at breaks ties
+        bids_sorted = sorted(bids, key=lambda x: (-float(x.get('amount') or 0), x.get('created_at') or ''))
+        winner = bids_sorted[0]
+        # reset winner flags then set
+        client.table('melbrooks_bids').update({'is_winner': False}).eq('round_id', round_id).execute()
+        client.table('melbrooks_bids').update({'is_winner': True}).eq('bid_id', winner['bid_id']).execute()
+        client.table('melbrooks_rounds').update({
+            'status': 'closed', 'winner_id': str(winner['user_id']),
+            'closed_at': datetime.now(timezone.utc).isoformat(),
+        }).eq('round_id', round_id).execute()
+        return jsonify({'success': True, 'winner_id': str(winner['user_id'])}), 200
+    except Exception as e:
+        logging.exception('mb_round_close error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/round/<int:round_id>/draw', methods=['POST', 'OPTIONS'])
+def mb_round_draw(round_id):
+    """Host publishes a native-game draw so every player sees the same result.
+    Body: { kind: 'coin'|'dice'|'cards'|'gspoker', payload: {...} }"""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can draw'}), 403
+    data = request.get_json(silent=True) or {}
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('melbrooks_rounds').select('session_id,status').eq('round_id', round_id).limit(1).execute()
+        rows = (rc.data if hasattr(rc, 'data') else None) or []
+        if not rows:
+            return jsonify({'error': 'round not found'}), 404
+        _, err = _mb_require_host(client, rows[0]['session_id'], user)
+        if err:
+            return err
+        client.table('melbrooks_rounds').update({
+            'draw_kind': data.get('kind'), 'draw_state': data.get('payload'),
+        }).eq('round_id', round_id).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('mb_round_draw error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/round/<int:round_id>/settle', methods=['POST', 'OPTIONS'])
+def mb_round_settle(round_id):
+    """Host settles: result 'bidder_win' or 'bidder_lose'. Computes zero-sum P&L per bid."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can settle'}), 403
+    data = request.get_json(silent=True) or {}
+    result = data.get('result')
+    if result not in ('bidder_win', 'bidder_lose'):
+        return jsonify({'error': "result must be 'bidder_win' or 'bidder_lose'"}), 400
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('melbrooks_rounds').select('*').eq('round_id', round_id).limit(1).execute()
+        rows = (rc.data if hasattr(rc, 'data') else None) or []
+        if not rows:
+            return jsonify({'error': 'round not found'}), 404
+        rnd = rows[0]
+        _, err = _mb_require_host(client, rnd['session_id'], user)
+        if err:
+            return err
+        if rnd.get('status') not in ('closed',):
+            return jsonify({'error': 'round must be closed before settling'}), 400
+
+        prize = float(rnd.get('prize') or 0)
+        bc = client.table('melbrooks_bids').select('*').eq('round_id', round_id).execute()
+        bids = (bc.data if hasattr(bc, 'data') else None) or []
+        winner = next((b for b in bids if b.get('is_winner')), None)
+        if not winner:
+            return jsonify({'error': 'no auction winner set'}), 400
+        B = float(winner.get('amount') or 0)
+        others = [b for b in bids if not b.get('is_winner')]
+        k = len(others)
+
+        for b in bids:
+            if b.get('is_winner'):
+                pnl = (prize - B) if result == 'bidder_win' else (-B)
+            else:
+                if k == 0:
+                    pnl = 0.0
+                elif result == 'bidder_win':
+                    pnl = (B - prize) / k
+                else:
+                    pnl = B / k
+            client.table('melbrooks_bids').update({'pnl': round(pnl, 2)}).eq('bid_id', b['bid_id']).execute()
+
+        client.table('melbrooks_rounds').update({
+            'status': 'settled', 'result': result,
+            'settled_at': datetime.now(timezone.utc).isoformat(),
+        }).eq('round_id', round_id).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('mb_round_settle error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/round/<int:round_id>/void', methods=['POST', 'OPTIONS'])
+def mb_round_void(round_id):
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can delete rounds'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('melbrooks_rounds').select('*').eq('round_id', round_id).limit(1).execute()
+        rows = (rc.data if hasattr(rc, 'data') else None) or []
+        if not rows:
+            return jsonify({'success': True, 'note': 'already gone'}), 200
+        rnd = rows[0]
+        _, err = _mb_require_host(client, rnd['session_id'], user)
+        if err:
+            return err
+        if rnd.get('status') == 'settled':
+            return jsonify({'error': 'settled round cannot be deleted'}), 400
+        client.table('melbrooks_bids').delete().eq('round_id', round_id).execute()
+        client.table('melbrooks_rounds').delete().eq('round_id', round_id).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('mb_round_void error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/session/<int:session_id>/conclude', methods=['POST', 'OPTIONS'])
+def mb_session_conclude(session_id):
+    """Host concludes: writes each player's (balance - starting) to bets as 'Mel Brooks'."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can conclude'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        sess, err = _mb_require_host(client, session_id, user)
+        if err:
+            return err
+        if sess.get('status') != 'active':
+            return jsonify({'error': 'session not active'}), 400
+        starting = float(sess.get('starting_balance', 100))
+        session_name = sess.get('name', f'Mel Brooks #{session_id}')
+
+        pc = client.table('melbrooks_participants').select('*').eq('session_id', session_id).execute()
+        parts = (pc.data if hasattr(pc, 'data') else None) or []
+
+        rounds = _mb_round_state(client, session_id)
+        pnl_by_user = {}
+        for r in rounds:
+            if r['status'] == 'settled':
+                for b in r['bids']:
+                    if b.get('pnl') is not None:
+                        uid = str(b['user_id'])
+                        pnl_by_user[uid] = pnl_by_user.get(uid, 0.0) + float(b['pnl'])
+
+        now_str = datetime.now(timezone.utc).isoformat()
+        for p in parts:
+            uid = str(p['user_id'])
+            net = round(pnl_by_user.get(uid, 0.0), 2)
+            result = 'Win' if net > 0 else ('Loss' if net < 0 else 'Push')
+            client.table('bets').insert({
+                'user_id': uid, 'market': 'Mel Brooks', 'outcome': session_name,
+                'bet_size': round(abs(net), 2) if net != 0 else 0,
+                'odds_american': '+100', 'result': result, 'game_id': 0,
+                'layeur': 'betgsis', 'placed_at': now_str,
+            }).execute()
+
+        client.table('melbrooks_sessions').update(
+            {'status': 'concluded', 'concluded_at': now_str}).eq('session_id', session_id).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('mb_session_conclude error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/session/<int:session_id>/delete', methods=['POST', 'OPTIONS'])
+def mb_session_delete(session_id):
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can delete'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        sess, err = _mb_require_host(client, session_id, user)
+        if err:
+            return err
+        client.table('melbrooks_sessions').delete().eq('session_id', session_id).execute()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logging.exception('mb_session_delete error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/sessions/delete-all', methods=['POST', 'OPTIONS'])
+def mb_sessions_delete_all():
+    """Host wipes all sessions they host (children cascade). Never touches bets."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    user = _get_user_from_header(request)
+    if not user:
+        return jsonify({'error': 'unauthorized'}), 401
+    if not _is_bookie(user):
+        return jsonify({'error': 'only host can delete'}), 403
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        res = client.table('melbrooks_sessions').delete().eq('host_id', str(user)).execute()
+        deleted = len((res.data if hasattr(res, 'data') else None) or [])
+        return jsonify({'success': True, 'deleted': deleted}), 200
+    except Exception as e:
+        logging.exception('mb_sessions_delete_all error')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/melbrooks/gspoker-deck', methods=['GET', 'OPTIONS'])
+def mb_gspoker_deck():
+    """The 16-card Good Shepherd deck for the gspoker native draw."""
+    if request.method == 'OPTIONS':
+        return ('', 200)
+    client = _get_admin_client()
+    if not client:
+        return jsonify({'error': 'supabase client missing'}), 500
+    try:
+        rc = client.table('goodshepherd_trading').select(
+            'character_id,roll_number,name,img_filename,house,height,sport,year_joined,was_404').execute()
+        cards = (rc.data if hasattr(rc, 'data') else None) or []
+        return jsonify({'cards': cards}), 200
+    except Exception as e:
+        logging.exception('mb_gspoker_deck error')
         return jsonify({'error': str(e)}), 500
 
 

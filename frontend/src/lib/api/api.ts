@@ -203,6 +203,11 @@ export async function fetchBookkeepingAccounts() {
   return r.data;
 }
 
+export async function fetchBookkeepingAccounting() {
+  const r = await api.get('/bookkeeping/accounting');
+  return r.data;
+}
+
 export async function fetchAllBets(layeur: string = 'betgsis') {
   const r = await api.get(`/bookkeeping/all-bets?layeur=${layeur}`);
   return r.data;
@@ -1686,6 +1691,102 @@ export interface RecentBet {
 export async function fetchRecentBets(limit = 15): Promise<RecentBet[]> {
   const r = await api.get(`/bets/recent?limit=${limit}`);
   return r.data.bets || [];
+}
+
+// ── The Mel Brooks Game ──
+export async function mbCreateSession(payload: {
+  name: string;
+  bids_visible: boolean;
+  liquidity_provider: 'players' | 'host';
+  starting_balance?: number;
+}): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/melbrooks/session/create', payload, { headers });
+  return r.data;
+}
+
+export async function mbListSessions(): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.get(`/melbrooks/sessions?_t=${Date.now()}`, { headers });
+  return r.data;
+}
+
+export async function mbSessionDetail(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.get(`/melbrooks/session/${sessionId}?_t=${Date.now()}`, { headers });
+  return r.data;
+}
+
+export async function mbJoin(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/melbrooks/session/${sessionId}/join`, {}, { headers });
+  return r.data;
+}
+
+export async function mbBegin(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/melbrooks/session/${sessionId}/begin`, {}, { headers });
+  return r.data;
+}
+
+export async function mbCreateRound(sessionId: number, description: string, prize: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/melbrooks/session/${sessionId}/round/create`, { description, prize }, { headers });
+  return r.data;
+}
+
+export async function mbBid(roundId: number, amount: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/melbrooks/round/${roundId}/bid`, { amount }, { headers });
+  return r.data;
+}
+
+export async function mbCloseRound(roundId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/melbrooks/round/${roundId}/close`, {}, { headers });
+  return r.data;
+}
+
+export async function mbDraw(roundId: number, kind: string, payload: any): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/melbrooks/round/${roundId}/draw`, { kind, payload }, { headers });
+  return r.data;
+}
+
+export async function mbSettle(roundId: number, result: 'bidder_win' | 'bidder_lose'): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/melbrooks/round/${roundId}/settle`, { result }, { headers });
+  return r.data;
+}
+
+export async function mbVoidRound(roundId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/melbrooks/round/${roundId}/void`, {}, { headers });
+  return r.data;
+}
+
+export async function mbConclude(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/melbrooks/session/${sessionId}/conclude`, {}, { headers });
+  return r.data;
+}
+
+export async function mbDeleteSession(sessionId: number): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post(`/melbrooks/session/${sessionId}/delete`, {}, { headers });
+  return r.data;
+}
+
+export async function mbDeleteAllSessions(): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.post('/melbrooks/sessions/delete-all', {}, { headers });
+  return r.data;
+}
+
+export async function mbGsPokerDeck(): Promise<any> {
+  const headers = await _getAuthHeaders();
+  const r = await api.get('/melbrooks/gspoker-deck', { headers });
+  return r.data;
 }
 
 export default api;

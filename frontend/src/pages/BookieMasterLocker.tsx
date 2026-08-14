@@ -3,6 +3,7 @@ import BookieLockManager from '../components/Bookie/BookieLockManager';
 import BookkeepingStats from '../components/Bookie/BookkeepingStats';
 import GameCounterPanel from '../components/Bookie/GameCounterPanel';
 import AccountsOverview from '../components/Bookie/AccountsOverview';
+import AccountingPanel from '../components/Bookie/AccountingPanel';
 import './BookieMasterLocker.css';
 
 export default function BookieMasterLocker() {
@@ -11,6 +12,7 @@ export default function BookieMasterLocker() {
       <div className="bookie-hub-main">
         <div className="hub-left">
           <BookieLockManager />
+          <AccountingPanel />
         </div>
         <div className="hub-right">
           <BookkeepingStats />

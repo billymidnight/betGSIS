@@ -32,6 +32,7 @@ import Exchange from './pages/Exchange'
 import ExchangePortfolio from './pages/ExchangePortfolio'
 import Parimutuel from './pages/Parimutuel'
 import GSPoker from './pages/GSPoker'
+import MelBrooks from './pages/MelBrooks'
 import ChessTemplate from './pages/templates/Chess'
 import ZetamacTemplate from './pages/templates/Zetamac'
 import MonopolyTemplate from './pages/templates/Monopoly'
@@ -301,6 +302,17 @@ export default function App() {
             <ProtectedRoute>
               <AppShell>
                 <GSPoker />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/mel-brooks"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <MelBrooks />
               </AppShell>
             </ProtectedRoute>
           }
